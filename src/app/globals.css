@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #f4f6f4;
+  color: #1e2d1b;
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6;
+  }
+  .btn-primary {
+    @apply bg-nice-500 hover:bg-nice-600 text-white font-medium px-4 py-2 rounded-xl transition-colors duration-150 flex items-center gap-2;
+  }
+  .btn-secondary {
+    @apply bg-white hover:bg-gray-50 text-gray-700 font-medium px-4 py-2 rounded-xl border border-gray-200 transition-colors duration-150 flex items-center gap-2;
+  }
+  .btn-ghost {
+    @apply hover:bg-nice-50 text-nice-700 font-medium px-3 py-2 rounded-xl transition-colors duration-150 flex items-center gap-2;
+  }
+  .input {
+    @apply w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-nice-400 focus:border-transparent transition-all bg-white;
+  }
+  .label {
+    @apply block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150;
+  }
+}
