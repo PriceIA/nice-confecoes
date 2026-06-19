@@ -4,13 +4,14 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
   LayoutDashboard, ClipboardList, PlusCircle,
-  Factory, Users, BarChart3, Scissors, Menu, X
+  Factory, Users, Users2, BarChart3, Scissors, Menu, X
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const NAV = [
   { href: '/dashboard',       label: 'Dashboard',       icon: LayoutDashboard },
   { href: '/pedidos',         label: 'Pedidos',         icon: ClipboardList },
+  { href: '/clientes',        label: 'Clientes',        icon: Users2 },
   { href: '/novo-pedido',     label: 'Novo Pedido',     icon: PlusCircle },
   { href: '/producao',        label: 'Produção',        icon: Factory },
   { href: '/terceirizadas',   label: 'Terceirizadas',   icon: Users },

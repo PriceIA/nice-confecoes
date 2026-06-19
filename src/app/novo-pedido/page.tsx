@@ -1,13 +1,13 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { PlusCircle, Trash2, ChevronDown } from 'lucide-react'
-import { criarPedido, calcularDataEntrega } from '@/lib/store'
+import { PlusCircle, Trash2, Search, UserPlus } from 'lucide-react'
+import { criarPedido, calcularDataEntrega, getClientes } from '@/lib/store'
 import {
   CATALOGO, PERSONALIZACOES, TAMANHOS,
   calcularComplexidade, COMPLEXIDADE_CONFIG, formatarTelefone
 } from '@/lib/helpers'
-import { Peca, TamanhoQuantidade, Personalizacao, TipoPedido } from '@/types'
+import { Cliente, Peca, TamanhoQuantidade, Personalizacao, TipoPedido } from '@/types'
 import clsx from 'clsx'
 
 function novaPeca(): Peca {
@@ -27,6 +27,10 @@ export default function NovoPedidoPage() {
   const router = useRouter()
 
   const [cliente, setCliente] = useState({ nome: '', empresa: '', telefone: '', email: '' })
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [buscaCliente, setBuscaCliente] = useState('')
+  const [sugestoesAbertas, setSugestoesAbertas] = useState(false)
+  const [clienteSelecionado, setClienteSelecionado] = useState(false)
   const [tipo, setTipo] = useState<TipoPedido>('normal')
   const [dataEntrega, setDataEntrega] = useState(calcularDataEntrega(25))
   const [pecas, setPecas] = useState<Peca[]>([novaPeca()])
@@ -34,6 +38,32 @@ export default function NovoPedidoPage() {
   const [valorTotal, setValorTotal] = useState('')
   const [valorPago, setValorPago] = useState('')
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setClientes(getClientes()) }, [])
+
+  const sugestoes = useMemo(() => {
+    const q = buscaCliente.trim().toLowerCase()
+    if (!q) return []
+    return clientes.filter(c =>
+      c.nome.toLowerCase().includes(q) ||
+      c.empresa?.toLowerCase().includes(q) ||
+      c.telefone?.includes(q)
+    ).slice(0, 6)
+  }, [buscaCliente, clientes])
+
+  function selecionarCliente(c: Cliente) {
+    setCliente({ nome: c.nome, empresa: c.empresa, telefone: c.telefone, email: c.email })
+    setBuscaCliente(c.nome)
+    setSugestoesAbertas(false)
+    setClienteSelecionado(true)
+  }
+
+  function handleBuscaChange(valor: string) {
+    setBuscaCliente(valor)
+    setCliente(c => ({ ...c, nome: valor }))
+    setSugestoesAbertas(true)
+    setClienteSelecionado(false)
+  }
 
   function updatePeca(id: string, campo: Partial<Peca>) {
     setPecas(prev => prev.map(p => {
@@ -107,9 +137,38 @@ export default function NovoPedidoPage() {
           <div className="card space-y-4">
             <h2 className="font-semibold text-nice-800 text-base">Dados do Cliente</h2>
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="label">Nome *</label>
-                <input className="input" placeholder="Nome completo" value={cliente.nome} onChange={e => setCliente(c => ({ ...c, nome: e.target.value }))} />
+              <div className="col-span-2 relative">
+                <label className="label">Buscar Cliente *</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input className="input pl-9" placeholder="Digite o nome para buscar ou cadastrar..."
+                    value={buscaCliente}
+                    onChange={e => handleBuscaChange(e.target.value)}
+                    onFocus={() => setSugestoesAbertas(true)}
+                    onBlur={() => setTimeout(() => setSugestoesAbertas(false), 150)}
+                  />
+                </div>
+                {sugestoesAbertas && buscaCliente && (
+                  <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    {sugestoes.length > 0 ? sugestoes.map(c => (
+                      <button key={c.id} type="button" onClick={() => selecionarCliente(c)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-nice-50 transition-colors flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-medium text-gray-800">{c.nome}</div>
+                          {c.empresa && <div className="text-xs text-gray-400">{c.empresa}</div>}
+                        </div>
+                        <span className="text-xs text-gray-400">{c.telefone}</span>
+                      </button>
+                    )) : (
+                      <div className="px-4 py-2.5 text-xs text-gray-400 flex items-center gap-2">
+                        <UserPlus className="w-3.5 h-3.5" /> Nenhum cliente encontrado — será cadastrado um novo
+                      </div>
+                    )}
+                  </div>
+                )}
+                {clienteSelecionado && (
+                  <p className="text-xs text-nice-600 mt-1.5">Cliente cadastrado selecionado.</p>
+                )}
               </div>
               <div>
                 <label className="label">Empresa</label>

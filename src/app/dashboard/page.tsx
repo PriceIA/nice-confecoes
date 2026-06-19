@@ -5,21 +5,23 @@ import { format, isAfter, addDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
   Factory, AlertTriangle, Clock, ClipboardCheck,
-  PlusCircle, ArrowRight, TrendingUp
+  PlusCircle, ArrowRight, TrendingUp, Users2
 } from 'lucide-react'
-import { getPedidos, pedidosStats } from '@/lib/store'
+import { getPedidos, getClientes, pedidosStats } from '@/lib/store'
 import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, totalPecas } from '@/lib/helpers'
 import { Pedido } from '@/types'
 import clsx from 'clsx'
 
 export default function DashboardPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([])
+  const [totalClientes, setTotalClientes] = useState(0)
   const [stats, setStats] = useState({ emProducao: 0, urgentes: 0, entregaEm7dias: 0, aguardandoProducao: 0 })
 
   useEffect(() => {
     const data = getPedidos()
     setPedidos(data)
     setStats(pedidosStats(data))
+    setTotalClientes(getClientes().length)
   }, [])
 
   const ativos = pedidos.filter(p => !['entregue', 'cancelado'].includes(p.status))
@@ -30,6 +32,7 @@ export default function DashboardPage() {
     { label: 'Urgentes', value: stats.urgentes, icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' },
     { label: 'Entrega em 7 dias', value: stats.entregaEm7dias, icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' },
     { label: 'Aguardando Produção', value: stats.aguardandoProducao, icon: ClipboardCheck, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
+    { label: 'Total de Clientes', value: totalClientes, icon: Users2, color: 'text-purple-500', bg: 'bg-purple-50', border: 'border-purple-200' },
   ]
 
   return (
@@ -49,7 +52,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
         {CARDS.map(({ label, value, icon: Icon, color, bg, border }) => (
           <div key={label} className={clsx('card flex items-center gap-4 border', border)}>
             <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center shrink-0', bg)}>

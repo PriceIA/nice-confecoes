@@ -53,6 +53,15 @@ export interface Pedido {
   valorPago: number
 }
 
+export interface Cliente {
+  id: string
+  nome: string
+  empresa: string
+  telefone: string
+  email: string
+  dataCadastro: string
+}
+
 export interface Terceirizada {
   id: string
   nome: string

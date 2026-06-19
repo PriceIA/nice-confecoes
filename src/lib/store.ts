@@ -1,8 +1,9 @@
-import { Pedido, Terceirizada } from '@/types'
+import { Cliente, Pedido, Terceirizada } from '@/types'
 import { addBusinessDays, format } from 'date-fns'
 
 const PEDIDOS_KEY = 'nice_pedidos'
 const TERCEIRIZADAS_KEY = 'nice_terceirizadas'
+const CLIENTES_KEY = 'nice_clientes'
 
 function gerarNumero(): string {
   const ano = new Date().getFullYear()
@@ -44,6 +45,7 @@ export function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEntrada' 
     }
   }
   savePedidos([...pedidos, novo])
+  buscarOuCriarCliente(dados.cliente)
   return novo
 }
 
@@ -86,6 +88,59 @@ export function atualizarTerceirizada(id: string, dados: Partial<Terceirizada>) 
     lista[idx] = { ...lista[idx], ...dados }
     saveTerceirizadas(lista)
   }
+}
+
+// Clientes
+export function getClientes(): Cliente[] {
+  if (typeof window === 'undefined') return []
+  const raw = localStorage.getItem(CLIENTES_KEY)
+  return raw ? JSON.parse(raw) : []
+}
+
+export function saveClientes(clientes: Cliente[]) {
+  localStorage.setItem(CLIENTES_KEY, JSON.stringify(clientes))
+}
+
+export function criarCliente(dados: Omit<Cliente, 'id' | 'dataCadastro'>): Cliente {
+  const clientes = getClientes()
+  const novo: Cliente = {
+    ...dados,
+    id: crypto.randomUUID(),
+    dataCadastro: new Date().toISOString(),
+  }
+  saveClientes([...clientes, novo])
+  return novo
+}
+
+export function atualizarCliente(id: string, dados: Partial<Cliente>) {
+  const clientes = getClientes()
+  const idx = clientes.findIndex(c => c.id === id)
+  if (idx >= 0) {
+    clientes[idx] = { ...clientes[idx], ...dados }
+    saveClientes(clientes)
+  }
+}
+
+export function buscarOuCriarCliente(dados: Omit<Cliente, 'id' | 'dataCadastro'>): Cliente {
+  const clientes = getClientes()
+  const existente = dados.telefone ? clientes.find(c => c.telefone === dados.telefone) : undefined
+  if (existente) {
+    const atualizado: Cliente = {
+      ...existente,
+      nome: dados.nome || existente.nome,
+      empresa: dados.empresa || existente.empresa,
+      email: dados.email || existente.email,
+    }
+    atualizarCliente(existente.id, atualizado)
+    return atualizado
+  }
+  return criarCliente(dados)
+}
+
+export function pedidosDoCliente(cliente: Cliente, pedidos: Pedido[]): Pedido[] {
+  return pedidos.filter(p => cliente.telefone
+    ? p.cliente.telefone === cliente.telefone
+    : p.cliente.nome.toLowerCase() === cliente.nome.toLowerCase())
 }
 
 // Helpers
