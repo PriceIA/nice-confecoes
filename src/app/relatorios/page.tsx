@@ -12,7 +12,7 @@ export default function RelatoriosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [mes, setMes] = useState(format(new Date(), 'yyyy-MM'))
 
-  useEffect(() => { setPedidos(getPedidos()) }, [])
+  useEffect(() => { (async () => setPedidos(await getPedidos()))() }, [])
 
   const inicio = startOfMonth(new Date(`${mes}-01`))
   const fim = endOfMonth(new Date(`${mes}-01`))

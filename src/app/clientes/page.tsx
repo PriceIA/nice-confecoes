@@ -14,8 +14,11 @@ export default function ClientesPage() {
   const [selecionado, setSelecionado] = useState<Cliente | null>(null)
 
   useEffect(() => {
-    setClientes(getClientes())
-    setPedidos(getPedidos())
+    (async () => {
+      const [cli, ped] = await Promise.all([getClientes(), getPedidos()])
+      setClientes(cli)
+      setPedidos(ped)
+    })()
   }, [])
 
   const historico = selecionado

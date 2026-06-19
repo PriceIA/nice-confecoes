@@ -18,10 +18,12 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({ emProducao: 0, urgentes: 0, entregaEm7dias: 0, aguardandoProducao: 0 })
 
   useEffect(() => {
-    const data = getPedidos()
-    setPedidos(data)
-    setStats(pedidosStats(data))
-    setTotalClientes(getClientes().length)
+    (async () => {
+      const [data, clientes] = await Promise.all([getPedidos(), getClientes()])
+      setPedidos(data)
+      setStats(pedidosStats(data))
+      setTotalClientes(clientes.length)
+    })()
   }, [])
 
   const ativos = pedidos.filter(p => !['entregue', 'cancelado'].includes(p.status))

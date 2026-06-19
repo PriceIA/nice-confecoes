@@ -39,7 +39,7 @@ export default function NovoPedidoPage() {
   const [valorPago, setValorPago] = useState('')
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { setClientes(getClientes()) }, [])
+  useEffect(() => { (async () => setClientes(await getClientes()))() }, [])
 
   const sugestoes = useMemo(() => {
     const q = buscaCliente.trim().toLowerCase()
@@ -109,17 +109,22 @@ export default function NovoPedidoPage() {
   async function handleSubmit() {
     if (!cliente.nome) return alert('Informe o nome do cliente.')
     setSaving(true)
-    criarPedido({
-      cliente,
-      tipo,
-      status: 'orcamento',
-      pecas,
-      dataEntrega,
-      observacoes: obs,
-      valorTotal: parseFloat(valorTotal) || 0,
-      valorPago: parseFloat(valorPago) || 0,
-    })
-    router.push('/pedidos')
+    try {
+      await criarPedido({
+        cliente,
+        tipo,
+        status: 'orcamento',
+        pecas,
+        dataEntrega,
+        observacoes: obs,
+        valorTotal: parseFloat(valorTotal) || 0,
+        valorPago: parseFloat(valorPago) || 0,
+      })
+      router.push('/pedidos')
+    } catch {
+      alert('Erro ao salvar o pedido. Tente novamente.')
+      setSaving(false)
+    }
   }
 
   return (

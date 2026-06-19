@@ -32,24 +32,25 @@ export default function TerceirizadasPage() {
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState<Omit<Terceirizada, 'id'>>(VAZIO)
 
-  const carregar = () => {
-    setLista(getTerceirizadas())
-    setPedidos(getPedidos().filter(p => !['entregue', 'cancelado'].includes(p.status)))
+  const carregar = async () => {
+    const [lista, pedidosData] = await Promise.all([getTerceirizadas(), getPedidos()])
+    setLista(lista)
+    setPedidos(pedidosData.filter(p => !['entregue', 'cancelado'].includes(p.status)))
   }
 
   useEffect(() => { carregar() }, [])
 
-  function handleSalvar() {
+  async function handleSalvar() {
     if (!form.nome || !form.dataEnvio) return alert('Preencha os campos obrigatórios.')
-    criarTerceirizada(form)
+    await criarTerceirizada(form)
     setModal(false)
     setForm(VAZIO)
     carregar()
   }
 
-  function avancarStatus(id: string, atual: Terceirizada['status']) {
+  async function avancarStatus(id: string, atual: Terceirizada['status']) {
     const prox = atual === 'enviado' ? 'retornado' : atual === 'retornado' ? 'pago' : 'pago'
-    atualizarTerceirizada(id, { status: prox, ...(prox === 'retornado' ? { dataRetornoReal: new Date().toISOString().slice(0, 10) } : {}) })
+    await atualizarTerceirizada(id, { status: prox, ...(prox === 'retornado' ? { dataRetornoReal: new Date().toISOString().slice(0, 10) } : {}) })
     carregar()
   }
 

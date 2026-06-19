@@ -16,8 +16,8 @@ export default function DetalhePedidoPage() {
   const router = useRouter()
   const [pedido, setPedido] = useState<Pedido | null>(null)
 
-  const carregar = () => {
-    const p = getPedidoById(id as string)
+  const carregar = async () => {
+    const p = await getPedidoById(id as string)
     if (!p) router.push('/pedidos')
     else setPedido(p)
   }
@@ -28,17 +28,17 @@ export default function DetalhePedidoPage() {
 
   const sc = STATUS_CONFIG[pedido.status]
 
-  function mudarStatus(status: StatusPedido) {
-    atualizarPedido(pedido!.id, { status })
+  async function mudarStatus(status: StatusPedido) {
+    await atualizarPedido(pedido!.id, { status })
     carregar()
   }
 
-  function ciclarSetor(setor: keyof ProgressoSetor) {
+  async function ciclarSetor(setor: keyof ProgressoSetor) {
     const ciclo: StatusSetor[] = ['pendente', 'em_andamento', 'concluido']
     const atual = pedido!.progresso[setor]
     const proximo = ciclo[(ciclo.indexOf(atual) + 1) % ciclo.length]
     const progresso = { ...pedido!.progresso, [setor]: proximo }
-    atualizarPedido(pedido!.id, { progresso })
+    await atualizarPedido(pedido!.id, { progresso })
     carregar()
   }
 

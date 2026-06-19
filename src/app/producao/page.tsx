@@ -12,20 +12,20 @@ const SETORES = Object.keys(SETOR_LABELS) as (keyof ProgressoSetor)[]
 export default function ProducaoPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([])
 
-  const carregar = () => {
-    const data = getPedidos().filter(p => ['aprovado', 'em_producao'].includes(p.status))
+  const carregar = async () => {
+    const data = (await getPedidos()).filter(p => ['aprovado', 'em_producao'].includes(p.status))
     setPedidos(data)
   }
 
   useEffect(() => { carregar() }, [])
 
-  function ciclarSetor(pedidoId: string, setor: keyof ProgressoSetor) {
+  async function ciclarSetor(pedidoId: string, setor: keyof ProgressoSetor) {
     const p = pedidos.find(x => x.id === pedidoId)
     if (!p) return
     const ciclo: StatusSetor[] = ['pendente', 'em_andamento', 'concluido']
     const atual = p.progresso[setor]
     const proximo = ciclo[(ciclo.indexOf(atual) + 1) % ciclo.length]
-    atualizarPedido(pedidoId, { progresso: { ...p.progresso, [setor]: proximo } })
+    await atualizarPedido(pedidoId, { progresso: { ...p.progresso, [setor]: proximo } })
     carregar()
   }
 

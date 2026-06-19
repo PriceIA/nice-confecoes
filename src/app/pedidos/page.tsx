@@ -23,7 +23,7 @@ export default function PedidosPage() {
   const [filtro, setFiltro] = useState<StatusPedido | 'todos'>('todos')
   const [busca, setBusca] = useState('')
 
-  const carregar = () => setPedidos(getPedidos())
+  const carregar = async () => setPedidos(await getPedidos())
 
   useEffect(() => { carregar() }, [])
 
@@ -34,9 +34,9 @@ export default function PedidosPage() {
     return matchStatus && matchBusca
   })
 
-  function handleDeletar(id: string) {
+  async function handleDeletar(id: string) {
     if (confirm('Deseja excluir este pedido?')) {
-      deletarPedido(id)
+      await deletarPedido(id)
       carregar()
     }
   }
