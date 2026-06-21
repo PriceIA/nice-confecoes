@@ -12,6 +12,7 @@ const FILTROS: { value: StatusPedido | 'todos'; label: string }[] = [
   { value: 'todos', label: 'Todos' },
   { value: 'orcamento', label: 'Orçamento' },
   { value: 'aprovado', label: 'Aprovado' },
+  { value: 'aguardando_pagamento', label: 'Ag. Pagamento' },
   { value: 'em_producao', label: 'Em Produção' },
   { value: 'finalizado', label: 'Finalizado' },
   { value: 'entregue', label: 'Entregue' },
@@ -110,6 +111,7 @@ export default function PedidosPage() {
                       <td className="px-6 py-4">
                         <div className="font-medium text-gray-800">{p.cliente.nome}</div>
                         {p.cliente.empresa && <div className="text-xs text-gray-400">{p.cliente.empresa}</div>}
+                        {p.consultor && <div className="text-xs text-nice-500">Consultor: {p.consultor}</div>}
                       </td>
                       <td className="px-6 py-4">
                         {p.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600">urgente</span>}

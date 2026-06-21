@@ -14,7 +14,7 @@ export const PERSONALIZACOES: { value: Personalizacao; label: string }[] = [
   { value: 'sublimacao', label: 'Sublimação' },
 ]
 
-export const TAMANHOS = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'UNICO'] as const
+export const TAMANHOS = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'UNICO', '01', '02', '04', '06', '08', '10', '12', '14', 'SOB_MEDIDA'] as const
 
 export function calcularComplexidade(tipo: string, personalizacoes: Personalizacao[]): Complexidade {
   const qtdPerson = personalizacoes.length
@@ -36,12 +36,13 @@ export const COMPLEXIDADE_CONFIG: Record<Complexidade, { label: string; color: s
 }
 
 export const STATUS_CONFIG = {
-  orcamento:    { label: 'Orçamento',      color: 'text-gray-600',   bg: 'bg-gray-100' },
-  aprovado:     { label: 'Aprovado',       color: 'text-blue-600',   bg: 'bg-blue-100' },
-  em_producao:  { label: 'Em Produção',    color: 'text-nice-600',   bg: 'bg-nice-100' },
-  finalizado:   { label: 'Finalizado',     color: 'text-purple-600', bg: 'bg-purple-100' },
-  entregue:     { label: 'Entregue',       color: 'text-green-700',  bg: 'bg-green-100' },
-  cancelado:    { label: 'Cancelado',      color: 'text-red-600',    bg: 'bg-red-100' },
+  orcamento:            { label: 'Orçamento',           color: 'text-gray-600',    bg: 'bg-gray-100' },
+  aprovado:             { label: 'Aprovado',            color: 'text-blue-600',    bg: 'bg-blue-100' },
+  aguardando_pagamento: { label: 'Aguardando Pagamento', color: 'text-yellow-700',  bg: 'bg-yellow-100' },
+  em_producao:          { label: 'Em Produção',         color: 'text-nice-600',    bg: 'bg-nice-100' },
+  finalizado:           { label: 'Finalizado',          color: 'text-purple-600',  bg: 'bg-purple-100' },
+  entregue:             { label: 'Entregue',            color: 'text-green-700',   bg: 'bg-green-100' },
+  cancelado:            { label: 'Cancelado',           color: 'text-red-600',     bg: 'bg-red-100' },
 }
 
 export const SETOR_LABELS: Record<string, string> = {

@@ -1,4 +1,4 @@
-import { Cliente, Pedido, ProgressoSetor, Terceirizada } from '@/types'
+import { Cliente, Parcela, Pedido, ProgressoSetor, Terceirizada } from '@/types'
 import { addBusinessDays, format } from 'date-fns'
 import { supabase } from './supabase'
 
@@ -7,6 +7,7 @@ function mapCliente(row: any): Cliente {
     id: row.id,
     nome: row.nome,
     empresa: row.empresa ?? '',
+    responsavelEmpresa: row.responsavel_empresa ?? undefined,
     telefone: row.telefone ?? '',
     email: row.email ?? '',
     dataCadastro: row.data_cadastro,
@@ -15,6 +16,13 @@ function mapCliente(row: any): Cliente {
 
 function mapPedido(row: any): Pedido {
   const c = row.clientes
+  const parcelas: Parcela[] = row.parcelas ?? []
+  const valorTotal = parcelas.length > 0
+    ? parcelas.reduce((a: number, p: Parcela) => a + (p.valor || 0), 0)
+    : Number(row.valor_total) || 0
+  const valorPago = parcelas.length > 0
+    ? parcelas.filter((p: Parcela) => p.pago).reduce((a: number, p: Parcela) => a + (p.valor || 0), 0)
+    : Number(row.valor_pago) || 0
   return {
     id: row.id,
     numero: row.numero,
@@ -24,15 +32,17 @@ function mapPedido(row: any): Pedido {
       telefone: c?.telefone ?? '',
       email: c?.email ?? '',
     },
+    consultor: row.consultor ?? '',
     tipo: row.tipo,
     status: row.status,
     pecas: row.pecas ?? [],
+    parcelas,
     dataEntrada: row.data_entrada,
     dataEntrega: row.data_entrega,
     progresso: row.progresso,
     observacoes: row.observacoes ?? '',
-    valorTotal: Number(row.valor_total) || 0,
-    valorPago: Number(row.valor_pago) || 0,
+    valorTotal,
+    valorPago,
   }
 }
 
@@ -96,18 +106,28 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
     acabamento: 'pendente',
   }
 
+  const parcelas = dados.parcelas ?? []
+  const vTotal = parcelas.length > 0
+    ? parcelas.reduce((a, p) => a + (p.valor || 0), 0)
+    : dados.valorTotal
+  const vPago = parcelas.length > 0
+    ? parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
+    : dados.valorPago
+
   const { data, error } = await supabase
     .from('pedidos')
     .insert({
       numero,
       cliente_id: cliente.id,
+      consultor: dados.consultor ?? '',
       tipo: dados.tipo,
       status: dados.status,
       data_entrega: dados.dataEntrega,
-      valor_total: dados.valorTotal,
-      valor_pago: dados.valorPago,
+      valor_total: vTotal,
+      valor_pago: vPago,
       observacoes: dados.observacoes,
       pecas: dados.pecas,
+      parcelas,
       progresso,
     })
     .select('*, clientes(*)')
@@ -118,14 +138,21 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
 
 export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promise<void> {
   const update: Record<string, unknown> = {}
+  if (dados.consultor !== undefined) update.consultor = dados.consultor
   if (dados.tipo !== undefined) update.tipo = dados.tipo
   if (dados.status !== undefined) update.status = dados.status
   if (dados.dataEntrega !== undefined) update.data_entrega = dados.dataEntrega
-  if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal
-  if (dados.valorPago !== undefined) update.valor_pago = dados.valorPago
   if (dados.observacoes !== undefined) update.observacoes = dados.observacoes
   if (dados.pecas !== undefined) update.pecas = dados.pecas
   if (dados.progresso !== undefined) update.progresso = dados.progresso
+  if (dados.parcelas !== undefined) {
+    update.parcelas = dados.parcelas
+    update.valor_total = dados.parcelas.reduce((a, p) => a + (p.valor || 0), 0)
+    update.valor_pago = dados.parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
+  } else {
+    if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal
+    if (dados.valorPago !== undefined) update.valor_pago = dados.valorPago
+  }
   if (dados.cliente !== undefined) {
     const cliente = await buscarOuCriarCliente(dados.cliente)
     update.cliente_id = cliente.id
@@ -208,6 +235,7 @@ export async function criarCliente(dados: Omit<Cliente, 'id' | 'dataCadastro'>):
     .insert({
       nome: dados.nome,
       empresa: dados.empresa,
+      responsavel_empresa: dados.responsavelEmpresa ?? null,
       telefone: dados.telefone,
       email: dados.email,
     })
@@ -221,6 +249,7 @@ export async function atualizarCliente(id: string, dados: Partial<Cliente>): Pro
   const update: Record<string, unknown> = {}
   if (dados.nome !== undefined) update.nome = dados.nome
   if (dados.empresa !== undefined) update.empresa = dados.empresa
+  if (dados.responsavelEmpresa !== undefined) update.responsavel_empresa = dados.responsavelEmpresa
   if (dados.telefone !== undefined) update.telefone = dados.telefone
   if (dados.email !== undefined) update.email = dados.email
 

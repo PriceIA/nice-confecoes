@@ -1,8 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { Users2, X, ArrowRight, Phone, Mail } from 'lucide-react'
+import { Users2, X, ArrowRight, Phone, Mail, Search, Building2 } from 'lucide-react'
 import { getClientes, getPedidos, pedidosDoCliente } from '@/lib/store'
 import { STATUS_CONFIG } from '@/lib/helpers'
 import { Cliente, Pedido } from '@/types'
@@ -12,6 +12,7 @@ export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [selecionado, setSelecionado] = useState<Cliente | null>(null)
+  const [busca, setBusca] = useState('')
 
   useEffect(() => {
     (async () => {
@@ -21,9 +22,24 @@ export default function ClientesPage() {
     })()
   }, [])
 
+  const clientesFiltrados = useMemo(() => {
+    const q = busca.trim().toLowerCase()
+    if (!q) return clientes
+    return clientes.filter(c =>
+      c.nome.toLowerCase().includes(q) ||
+      c.empresa?.toLowerCase().includes(q) ||
+      c.responsavelEmpresa?.toLowerCase().includes(q) ||
+      c.telefone?.includes(q)
+    )
+  }, [busca, clientes])
+
   const historico = selecionado
     ? pedidosDoCliente(selecionado, pedidos).sort((a, b) => new Date(b.dataEntrada).getTime() - new Date(a.dataEntrada).getTime())
     : []
+
+  const historicoTotal = historico.reduce((a, p) => a + p.valorTotal, 0)
+  const historicoTotalPago = historico.reduce((a, p) => a + p.valorPago, 0)
+  const historicoSaldo = historicoTotal - historicoTotalPago
 
   return (
     <div className="space-y-6">
@@ -32,16 +48,31 @@ export default function ClientesPage() {
         <p className="text-sm text-gray-500 mt-0.5">{clientes.length} cliente(s) cadastrado(s)</p>
       </div>
 
-      {clientes.length === 0 ? (
+      {/* Busca */}
+      <div className="card py-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            className="input pl-9"
+            placeholder="Buscar por nome, empresa, responsável ou telefone..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {clientesFiltrados.length === 0 ? (
         <div className="card py-20 text-center text-gray-400">
           <Users2 className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">Nenhum cliente cadastrado ainda.</p>
+          <p className="text-sm">{busca ? 'Nenhum cliente encontrado para essa busca.' : 'Nenhum cliente cadastrado ainda.'}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {clientes.map(c => {
+          {clientesFiltrados.map(c => {
             const pedidosCliente = pedidosDoCliente(c, pedidos)
             const valorTotal = pedidosCliente.reduce((a, p) => a + p.valorTotal, 0)
+            const valorPago = pedidosCliente.reduce((a, p) => a + p.valorPago, 0)
+            const saldo = valorTotal - valorPago
             const ultimoPedido = pedidosCliente.reduce<Pedido | null>((mais, p) =>
               !mais || new Date(p.dataEntrada) > new Date(mais.dataEntrada) ? p : mais, null)
 
@@ -55,6 +86,11 @@ export default function ClientesPage() {
                   <div className="min-w-0">
                     <div className="font-semibold text-nice-800 truncate">{c.nome}</div>
                     {c.empresa && <div className="text-xs text-gray-400 truncate">{c.empresa}</div>}
+                    {c.responsavelEmpresa && (
+                      <div className="text-xs text-gray-400 truncate flex items-center gap-1">
+                        <Building2 className="w-3 h-3" />{c.responsavelEmpresa}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -70,9 +106,21 @@ export default function ClientesPage() {
                     <div className="text-xs text-gray-400">pedido(s)</div>
                   </div>
                   <div>
-                    <div className="text-lg font-bold text-nice-700">R$ {valorTotal.toFixed(2)}</div>
-                    <div className="text-xs text-gray-400">gasto total</div>
+                    <div className="text-base font-bold text-nice-700">R$ {valorTotal.toFixed(2)}</div>
+                    <div className="text-xs text-gray-400">total gasto</div>
                   </div>
+                  {valorPago > 0 && (
+                    <div>
+                      <div className="text-sm font-bold text-green-600">R$ {valorPago.toFixed(2)}</div>
+                      <div className="text-xs text-gray-400">total pago</div>
+                    </div>
+                  )}
+                  {saldo > 0 && (
+                    <div>
+                      <div className="text-sm font-bold text-orange-600">R$ {saldo.toFixed(2)}</div>
+                      <div className="text-xs text-gray-400">em aberto</div>
+                    </div>
+                  )}
                 </div>
 
                 {ultimoPedido && (
@@ -95,6 +143,11 @@ export default function ClientesPage() {
               <div>
                 <h2 className="font-bold text-nice-800 text-lg">{selecionado.nome}</h2>
                 {selecionado.empresa && <p className="text-sm text-gray-400">{selecionado.empresa}</p>}
+                {selecionado.responsavelEmpresa && (
+                  <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                    <Building2 className="w-3 h-3" />Resp.: {selecionado.responsavelEmpresa}
+                  </p>
+                )}
               </div>
               <button onClick={() => setSelecionado(null)} aria-label="Fechar" className="text-gray-400 hover:text-gray-600 p-1">
                 <X className="w-5 h-5" />
@@ -110,6 +163,24 @@ export default function ClientesPage() {
               {selecionado.email && (
                 <div className="text-sm text-gray-600 flex items-center gap-2">
                   <Mail className="w-4 h-4 text-gray-400" />{selecionado.email}
+                </div>
+              )}
+              {historico.length > 0 && (
+                <div className="pt-2 grid grid-cols-3 gap-2 text-xs">
+                  <div className="bg-gray-50 rounded-lg p-2 text-center">
+                    <div className="font-bold text-nice-700">R$ {historicoTotal.toFixed(2)}</div>
+                    <div className="text-gray-400">Total</div>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-2 text-center">
+                    <div className="font-bold text-green-600">R$ {historicoTotalPago.toFixed(2)}</div>
+                    <div className="text-gray-400">Pago</div>
+                  </div>
+                  <div className={clsx('rounded-lg p-2 text-center', historicoSaldo > 0 ? 'bg-orange-50' : 'bg-gray-50')}>
+                    <div className={clsx('font-bold', historicoSaldo > 0 ? 'text-orange-600' : 'text-gray-400')}>
+                      R$ {historicoSaldo.toFixed(2)}
+                    </div>
+                    <div className="text-gray-400">Em aberto</div>
+                  </div>
                 </div>
               )}
             </div>
@@ -134,6 +205,12 @@ export default function ClientesPage() {
                       <span>{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</span>
                       <span className="font-medium text-gray-700">R$ {p.valorTotal.toFixed(2)}</span>
                     </div>
+                    {p.valorPago > 0 && p.valorPago < p.valorTotal && (
+                      <div className="flex items-center justify-between mt-1 text-xs">
+                        <span className="text-green-600">Pago: R$ {p.valorPago.toFixed(2)}</span>
+                        <span className="text-orange-500">Aberto: R$ {(p.valorTotal - p.valorPago).toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-end mt-1">
                       <ArrowRight className="w-3.5 h-3.5 text-gray-300" />
                     </div>

@@ -4,11 +4,14 @@ import { useRouter } from 'next/navigation'
 import { PlusCircle, Trash2, Search, UserPlus } from 'lucide-react'
 import { criarPedido, calcularDataEntrega, getClientes } from '@/lib/store'
 import {
-  CATALOGO, PERSONALIZACOES, TAMANHOS,
+  CATALOGO, PERSONALIZACOES,
   calcularComplexidade, COMPLEXIDADE_CONFIG, formatarTelefone
 } from '@/lib/helpers'
-import { Cliente, Peca, TamanhoQuantidade, Personalizacao, TipoPedido } from '@/types'
+import { Cliente, Parcela, Peca, TamanhoQuantidade, Personalizacao, TipoPedido } from '@/types'
 import clsx from 'clsx'
+
+const TAMANHOS_ADULTO = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'UNICO'] as const
+const TAMANHOS_INFANTIL = ['01', '02', '04', '06', '08', '10', '12', '14'] as const
 
 function novaPeca(): Peca {
   return {
@@ -18,8 +21,19 @@ function novaPeca(): Peca {
     cor: '',
     tamanhos: [{ tamanho: 'M', quantidade: 1 }],
     personalizacoes: [],
+    corPersonalizacao: '',
     complexidade: 'P1',
     observacoes: '',
+  }
+}
+
+function novaParcela(): Parcela {
+  return {
+    id: crypto.randomUUID(),
+    descricao: '',
+    valor: 0,
+    dataPrevista: '',
+    pago: false,
   }
 }
 
@@ -27,6 +41,7 @@ export default function NovoPedidoPage() {
   const router = useRouter()
 
   const [cliente, setCliente] = useState({ nome: '', empresa: '', telefone: '', email: '' })
+  const [clienteResponsavel, setClienteResponsavel] = useState('')
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [buscaCliente, setBuscaCliente] = useState('')
   const [sugestoesAbertas, setSugestoesAbertas] = useState(false)
@@ -35,8 +50,9 @@ export default function NovoPedidoPage() {
   const [dataEntrega, setDataEntrega] = useState(calcularDataEntrega(25))
   const [pecas, setPecas] = useState<Peca[]>([novaPeca()])
   const [obs, setObs] = useState('')
-  const [valorTotal, setValorTotal] = useState('')
-  const [valorPago, setValorPago] = useState('')
+  const [parcelas, setParcelas] = useState<Parcela[]>([novaParcela()])
+  const [consultor, setConsultor] = useState('Pedro')
+  const [consultorCustom, setConsultorCustom] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { (async () => setClientes(await getClientes()))() }, [])
@@ -53,6 +69,7 @@ export default function NovoPedidoPage() {
 
   function selecionarCliente(c: Cliente) {
     setCliente({ nome: c.nome, empresa: c.empresa, telefone: c.telefone, email: c.email })
+    setClienteResponsavel(c.responsavelEmpresa ?? '')
     setBuscaCliente(c.nome)
     setSugestoesAbertas(false)
     setClienteSelecionado(true)
@@ -63,6 +80,7 @@ export default function NovoPedidoPage() {
     setCliente(c => ({ ...c, nome: valor }))
     setSugestoesAbertas(true)
     setClienteSelecionado(false)
+    setClienteResponsavel('')
   }
 
   function updatePeca(id: string, campo: Partial<Peca>) {
@@ -104,7 +122,23 @@ export default function NovoPedidoPage() {
     }))
   }
 
+  function addParcela() {
+    setParcelas(prev => [...prev, novaParcela()])
+  }
+
+  function updateParcela(id: string, campo: Partial<Parcela>) {
+    setParcelas(prev => prev.map(p => p.id === id ? { ...p, ...campo } : p))
+  }
+
+  function removeParcela(id: string) {
+    setParcelas(prev => prev.filter(p => p.id !== id))
+  }
+
   const totalUnidades = pecas.reduce((acc, p) => acc + p.tamanhos.reduce((a, t) => a + t.quantidade, 0), 0)
+  const totalParcelas = parcelas.reduce((a, p) => a + (p.valor || 0), 0)
+  const totalPago = parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
+  const saldo = totalParcelas - totalPago
+  const consultorFinal = consultor === 'Outro' ? consultorCustom : consultor
 
   async function handleSubmit() {
     if (!cliente.nome) return alert('Informe o nome do cliente.')
@@ -112,13 +146,15 @@ export default function NovoPedidoPage() {
     try {
       await criarPedido({
         cliente,
+        consultor: consultorFinal,
         tipo,
         status: 'orcamento',
         pecas,
+        parcelas,
         dataEntrega,
         observacoes: obs,
-        valorTotal: parseFloat(valorTotal) || 0,
-        valorPago: parseFloat(valorPago) || 0,
+        valorTotal: totalParcelas,
+        valorPago: totalPago,
       })
       router.push('/pedidos')
     } catch {
@@ -135,7 +171,6 @@ export default function NovoPedidoPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Formulário principal */}
         <div className="lg:col-span-2 space-y-6">
 
           {/* Dados do cliente */}
@@ -160,7 +195,11 @@ export default function NovoPedidoPage() {
                         className="w-full text-left px-4 py-2.5 hover:bg-nice-50 transition-colors flex items-center justify-between">
                         <div>
                           <div className="text-sm font-medium text-gray-800">{c.nome}</div>
-                          {c.empresa && <div className="text-xs text-gray-400">{c.empresa}</div>}
+                          {c.empresa && (
+                            <div className="text-xs text-gray-400">
+                              {c.empresa}{c.responsavelEmpresa ? ` — ${c.responsavelEmpresa}` : ''}
+                            </div>
+                          )}
                         </div>
                         <span className="text-xs text-gray-400">{c.telefone}</span>
                       </button>
@@ -177,7 +216,8 @@ export default function NovoPedidoPage() {
               </div>
               <div>
                 <label className="label">Empresa</label>
-                <input className="input" placeholder="Empresa ou equipe" value={cliente.empresa} onChange={e => setCliente(c => ({ ...c, empresa: e.target.value }))} />
+                <input className="input" placeholder="Empresa ou equipe" value={cliente.empresa}
+                  onChange={e => setCliente(c => ({ ...c, empresa: e.target.value }))} />
               </div>
               <div>
                 <label className="label">Telefone</label>
@@ -186,12 +226,19 @@ export default function NovoPedidoPage() {
               </div>
               <div className="col-span-2">
                 <label className="label">E-mail</label>
-                <input className="input" type="email" placeholder="cliente@email.com" value={cliente.email} onChange={e => setCliente(c => ({ ...c, email: e.target.value }))} />
+                <input className="input" type="email" placeholder="cliente@email.com" value={cliente.email}
+                  onChange={e => setCliente(c => ({ ...c, email: e.target.value }))} />
               </div>
+              {clienteSelecionado && clienteResponsavel && (
+                <div className="col-span-2">
+                  <label className="label">Responsável da Empresa</label>
+                  <p className="text-sm text-gray-700 font-medium">{clienteResponsavel}</p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Tipo e Data */}
+          {/* Tipo, Data e Consultor */}
           <div className="card space-y-4">
             <h2 className="font-semibold text-nice-800 text-base">Configurações do Pedido</h2>
             <div className="grid grid-cols-2 gap-4">
@@ -214,17 +261,89 @@ export default function NovoPedidoPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="label">Valor Total (R$)</label>
-                <input className="input" type="number" placeholder="0,00" value={valorTotal} onChange={e => setValorTotal(e.target.value)} />
+                <label className="label">Consultor Responsável</label>
+                <select className="input" value={consultor} onChange={e => setConsultor(e.target.value)}>
+                  <option value="Pedro">Pedro</option>
+                  <option value="Outro">Outro</option>
+                </select>
               </div>
-              <div>
-                <label className="label">Valor Pago (R$)</label>
-                <input className="input" type="number" placeholder="0,00" value={valorPago} onChange={e => setValorPago(e.target.value)} />
-              </div>
+              {consultor === 'Outro' && (
+                <div>
+                  <label className="label">Nome do Consultor</label>
+                  <input className="input" placeholder="Digite o nome..." value={consultorCustom}
+                    onChange={e => setConsultorCustom(e.target.value)} />
+                </div>
+              )}
             </div>
             <div>
               <label className="label">Observações gerais</label>
-              <textarea className="input resize-none" rows={3} placeholder="Observações sobre o pedido..." value={obs} onChange={e => setObs(e.target.value)} />
+              <textarea className="input resize-none" rows={3} placeholder="Observações sobre o pedido..."
+                value={obs} onChange={e => setObs(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Pagamentos / Parcelas */}
+          <div className="card space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-nice-800 text-base">Pagamentos</h2>
+              <button type="button" onClick={addParcela} className="btn-secondary text-sm">
+                <PlusCircle className="w-4 h-4" /> Adicionar parcela
+              </button>
+            </div>
+            <div className="space-y-3">
+              {parcelas.map((parcela, pi) => (
+                <div key={parcela.id} className="border border-gray-100 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">Parcela {pi + 1}</span>
+                    {parcelas.length > 1 && (
+                      <button type="button" onClick={() => removeParcela(parcela.id)}
+                        className="text-red-400 hover:text-red-600 transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="label">Descrição</label>
+                      <input className="input" placeholder="Ex: Entrada 50%" value={parcela.descricao}
+                        onChange={e => updateParcela(parcela.id, { descricao: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="label">Valor (R$)</label>
+                      <input className="input" type="number" min={0} step={0.01} placeholder="0,00"
+                        value={parcela.valor || ''}
+                        onChange={e => updateParcela(parcela.id, { valor: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="label">Data prevista</label>
+                      <input className="input" type="date" value={parcela.dataPrevista}
+                        onChange={e => updateParcela(parcela.id, { dataPrevista: e.target.value })} />
+                    </div>
+                    <div className="col-span-2 flex items-center gap-2">
+                      <input type="checkbox" id={`pago-${parcela.id}`} checked={parcela.pago}
+                        onChange={e => updateParcela(parcela.id, { pago: e.target.checked })}
+                        className="w-4 h-4 accent-nice-500" />
+                      <label htmlFor={`pago-${parcela.id}`} className="text-sm text-gray-700 cursor-pointer">Pago</label>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t pt-3 space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Total</span>
+                <span className="font-semibold text-nice-700">R$ {totalParcelas.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Total pago</span>
+                <span className="font-medium text-green-600">R$ {totalPago.toFixed(2)}</span>
+              </div>
+              {saldo > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Saldo restante</span>
+                  <span className="font-semibold text-orange-600">R$ {saldo.toFixed(2)}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -260,21 +379,23 @@ export default function NovoPedidoPage() {
                       <select className="input" value={peca.categoria}
                         onChange={e => {
                           const cat = e.target.value
-                          const tipo = Object.entries(CATALOGO).find(([k]) => k === cat)?.[1][0] || ''
-                          updatePeca(peca.id, { categoria: cat, tipo })
+                          const t = Object.entries(CATALOGO).find(([k]) => k === cat)?.[1][0] || ''
+                          updatePeca(peca.id, { categoria: cat, tipo: t })
                         }}>
                         {Object.keys(CATALOGO).map(c => <option key={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="label">Tipo de Peça</label>
-                      <select className="input" value={peca.tipo} onChange={e => updatePeca(peca.id, { tipo: e.target.value })}>
+                      <select className="input" value={peca.tipo}
+                        onChange={e => updatePeca(peca.id, { tipo: e.target.value })}>
                         {(CATALOGO[peca.categoria as keyof typeof CATALOGO] || []).map(t => <option key={t}>{t}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="label">Cor</label>
-                      <input className="input" placeholder="Ex: branca, preta..." value={peca.cor} onChange={e => updatePeca(peca.id, { cor: e.target.value })} />
+                      <input className="input" placeholder="Ex: branca, preta..." value={peca.cor}
+                        onChange={e => updatePeca(peca.id, { cor: e.target.value })} />
                     </div>
                     <div>
                       <label className="label">Personalizações</label>
@@ -290,6 +411,14 @@ export default function NovoPedidoPage() {
                           </button>
                         ))}
                       </div>
+                      {peca.personalizacoes.length > 0 && (
+                        <div className="mt-2">
+                          <label className="label">Cor da personalização</label>
+                          <input className="input" placeholder="Ex: preto, branco, dourado..."
+                            value={peca.corPersonalizacao ?? ''}
+                            onChange={e => updatePeca(peca.id, { corPersonalizacao: e.target.value })} />
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -298,19 +427,32 @@ export default function NovoPedidoPage() {
                     <label className="label">Tamanhos e Quantidades</label>
                     <div className="space-y-2">
                       {peca.tamanhos.map((t, ti) => (
-                        <div key={ti} className="flex items-center gap-2">
-                          <select className="input w-28" value={t.tamanho}
-                            onChange={e => updateTamanho(peca.id, ti, { tamanho: e.target.value as any })}>
-                            {TAMANHOS.map(s => <option key={s}>{s}</option>)}
-                          </select>
-                          <input type="number" min={1} className="input w-24" value={t.quantidade}
-                            onChange={e => updateTamanho(peca.id, ti, { quantidade: parseInt(e.target.value) || 1 })} />
-                          <span className="text-xs text-gray-400">un.</span>
-                          {peca.tamanhos.length > 1 && (
-                            <button type="button" onClick={() => removeTamanho(peca.id, ti)}
-                              className="text-red-400 hover:text-red-600">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                        <div key={ti} className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <select className="input w-36" value={t.tamanho}
+                              onChange={e => updateTamanho(peca.id, ti, { tamanho: e.target.value as any, medidaEspecial: '' })}>
+                              <optgroup label="Adulto">
+                                {TAMANHOS_ADULTO.map(s => <option key={s} value={s}>{s}</option>)}
+                              </optgroup>
+                              <optgroup label="Infantil">
+                                {TAMANHOS_INFANTIL.map(s => <option key={s} value={s}>{s}</option>)}
+                              </optgroup>
+                              <option value="SOB_MEDIDA">Sob Medida</option>
+                            </select>
+                            <input type="number" min={1} className="input w-24" value={t.quantidade}
+                              onChange={e => updateTamanho(peca.id, ti, { quantidade: parseInt(e.target.value) || 1 })} />
+                            <span className="text-xs text-gray-400">un.</span>
+                            {peca.tamanhos.length > 1 && (
+                              <button type="button" onClick={() => removeTamanho(peca.id, ti)}
+                                className="text-red-400 hover:text-red-600">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          {t.tamanho === 'SOB_MEDIDA' && (
+                            <input className="input text-sm" placeholder="Descreva as medidas específicas..."
+                              value={t.medidaEspecial ?? ''}
+                              onChange={e => updateTamanho(peca.id, ti, { medidaEspecial: e.target.value })} />
                           )}
                         </div>
                       ))}
@@ -345,12 +487,18 @@ export default function NovoPedidoPage() {
                 <span className="text-gray-500">Tipos de peças</span>
                 <span className="font-semibold">{pecas.length}</span>
               </div>
+              {consultorFinal && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Consultor</span>
+                  <span className="font-semibold text-gray-700">{consultorFinal}</span>
+                </div>
+              )}
             </div>
 
             <div className="border-t pt-3">
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Complexidades</p>
               <div className="space-y-1.5">
-                {pecas.map((p, i) => {
+                {pecas.map(p => {
                   const cc = COMPLEXIDADE_CONFIG[p.complexidade]
                   const qtd = p.tamanhos.reduce((a, t) => a + t.quantidade, 0)
                   return (
@@ -370,14 +518,26 @@ export default function NovoPedidoPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Tipo</span>
                 <span className={clsx('font-medium', tipo === 'urgente' ? 'text-red-600' : 'text-gray-700')}>
-                  {tipo === 'normal' ? 'Normal' : tipo === 'urgente' ? '🔴 Urgente' : 'Grande Volume'}
+                  {tipo === 'normal' ? 'Normal' : tipo === 'urgente' ? 'Urgente' : 'Grande Volume'}
                 </span>
               </div>
-              {valorTotal && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Valor total</span>
-                  <span className="font-semibold text-nice-700">R$ {parseFloat(valorTotal).toFixed(2)}</span>
-                </div>
+              {totalParcelas > 0 && (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Total</span>
+                    <span className="font-semibold text-nice-700">R$ {totalParcelas.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Pago</span>
+                    <span className="font-medium text-green-600">R$ {totalPago.toFixed(2)}</span>
+                  </div>
+                  {saldo > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Saldo</span>
+                      <span className="font-semibold text-orange-600">R$ {saldo.toFixed(2)}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

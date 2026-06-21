@@ -1,14 +1,15 @@
-export type StatusPedido = 'orcamento' | 'aprovado' | 'em_producao' | 'finalizado' | 'entregue' | 'cancelado'
+export type StatusPedido = 'orcamento' | 'aprovado' | 'aguardando_pagamento' | 'em_producao' | 'finalizado' | 'entregue' | 'cancelado'
 export type TipoPedido = 'normal' | 'urgente' | 'grande_volume'
 export type Complexidade = 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
 export type Personalizacao = 'bordado' | 'silk' | 'dtf' | 'sublimacao'
 export type StatusSetor = 'pendente' | 'em_andamento' | 'concluido'
 
-export type Tamanho = 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XGG' | 'UNICO'
+export type Tamanho = 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XGG' | 'UNICO' | '01' | '02' | '04' | '06' | '08' | '10' | '12' | '14' | 'SOB_MEDIDA'
 
 export interface TamanhoQuantidade {
   tamanho: Tamanho
   quantidade: number
+  medidaEspecial?: string
 }
 
 export interface Peca {
@@ -18,6 +19,7 @@ export interface Peca {
   cor: string
   tamanhos: TamanhoQuantidade[]
   personalizacoes: Personalizacao[]
+  corPersonalizacao?: string
   complexidade: Complexidade
   observacoes: string
 }
@@ -33,6 +35,15 @@ export interface ProgressoSetor {
   acabamento: StatusSetor
 }
 
+export interface Parcela {
+  id: string
+  descricao: string
+  valor: number
+  dataPrevista: string
+  dataPagamento?: string
+  pago: boolean
+}
+
 export interface Pedido {
   id: string
   numero: string
@@ -42,9 +53,11 @@ export interface Pedido {
     telefone: string
     email: string
   }
+  consultor: string
   tipo: TipoPedido
   status: StatusPedido
   pecas: Peca[]
+  parcelas: Parcela[]
   dataEntrada: string
   dataEntrega: string
   progresso: ProgressoSetor
@@ -57,6 +70,7 @@ export interface Cliente {
   id: string
   nome: string
   empresa: string
+  responsavelEmpresa?: string
   telefone: string
   email: string
   dataCadastro: string
