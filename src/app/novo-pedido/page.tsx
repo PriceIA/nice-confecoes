@@ -170,7 +170,9 @@ export default function NovoPedidoPage() {
         valorPago: totalPago,
       })
       router.push('/pedidos')
-    } catch {
+    } catch (error) {
+      console.error('Erro detalhado:', JSON.stringify(error, null, 2))
+      console.error('Erro raw:', error)
       alert('Erro ao salvar o pedido. Tente novamente.')
       setSaving(false)
     }

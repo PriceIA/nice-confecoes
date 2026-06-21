@@ -93,8 +93,11 @@ export async function getPedidoById(id: string): Promise<Pedido | undefined> {
 }
 
 export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEntrada' | 'progresso'>): Promise<Pedido> {
+  console.log('[criarPedido] iniciando, dados cliente:', dados.cliente)
   const cliente = await buscarOuCriarCliente(dados.cliente)
+  console.log('[criarPedido] cliente ok:', cliente.id)
   const numero = await gerarNumero()
+  console.log('[criarPedido] numero gerado:', numero)
   const progresso: ProgressoSetor = {
     atendimento: 'concluido',
     compra: 'pendente',
@@ -114,25 +117,31 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
     ? parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
     : dados.valorPago
 
+  const insertPayload = {
+    numero,
+    cliente_id: cliente.id,
+    consultor: dados.consultor ?? '',
+    tipo: dados.tipo,
+    status: dados.status,
+    data_entrega: dados.dataEntrega,
+    valor_total: vTotal,
+    valor_pago: vPago,
+    observacoes: dados.observacoes,
+    pecas: dados.pecas,
+    parcelas,
+    progresso,
+  }
+  console.log('[criarPedido] insert payload:', JSON.stringify(insertPayload, null, 2))
   const { data, error } = await supabase
     .from('pedidos')
-    .insert({
-      numero,
-      cliente_id: cliente.id,
-      consultor: dados.consultor ?? '',
-      tipo: dados.tipo,
-      status: dados.status,
-      data_entrega: dados.dataEntrega,
-      valor_total: vTotal,
-      valor_pago: vPago,
-      observacoes: dados.observacoes,
-      pecas: dados.pecas,
-      parcelas,
-      progresso,
-    })
+    .insert(insertPayload)
     .select('*, clientes(*)')
     .single()
-  if (error) throw error
+  if (error) {
+    console.error('[criarPedido] erro no insert:', JSON.stringify(error, null, 2))
+    throw error
+  }
+  console.log('[criarPedido] pedido criado:', data?.id)
   return mapPedido(data)
 }
 
