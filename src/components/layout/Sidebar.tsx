@@ -4,18 +4,20 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
   LayoutDashboard, ClipboardList, PlusCircle,
-  Factory, Users, Users2, BarChart3, Scissors, Menu, X
+  Factory, Users, Users2, BarChart3, Scissors, Menu, X, Table2, Settings
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const NAV = [
-  { href: '/dashboard',       label: 'Dashboard',       icon: LayoutDashboard },
-  { href: '/pedidos',         label: 'Pedidos',         icon: ClipboardList },
-  { href: '/clientes',        label: 'Clientes',        icon: Users2 },
-  { href: '/novo-pedido',     label: 'Novo Pedido',     icon: PlusCircle },
-  { href: '/producao',        label: 'Produção',        icon: Factory },
-  { href: '/terceirizadas',   label: 'Terceirizadas',   icon: Users },
-  { href: '/relatorios',      label: 'Relatórios',      icon: BarChart3 },
+  { href: '/dashboard',      label: 'Dashboard',        icon: LayoutDashboard },
+  { href: '/pedidos',        label: 'Pedidos',          icon: ClipboardList },
+  { href: '/clientes',       label: 'Clientes',         icon: Users2 },
+  { href: '/tabela-precos',  label: 'Tabela de Preços', icon: Table2 },
+  { href: '/novo-pedido',    label: 'Novo Pedido',      icon: PlusCircle },
+  { href: '/producao',       label: 'Produção',         icon: Factory },
+  { href: '/terceirizadas',  label: 'Terceirizadas',    icon: Users },
+  { href: '/relatorios',     label: 'Relatórios',       icon: BarChart3 },
+  { href: '/configuracoes',  label: 'Configurações',    icon: Settings },
 ]
 
 function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {

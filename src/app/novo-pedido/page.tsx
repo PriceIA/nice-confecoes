@@ -8,6 +8,8 @@ import {
   calcularComplexidade, COMPLEXIDADE_CONFIG, formatarTelefone
 } from '@/lib/helpers'
 import { Cliente, Parcela, Peca, TamanhoQuantidade, Personalizacao, TipoPedido } from '@/types'
+
+type PersonItem = { value: string; label: string }
 import clsx from 'clsx'
 
 const TAMANHOS_ADULTO = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'UNICO'] as const
@@ -54,8 +56,18 @@ export default function NovoPedidoPage() {
   const [consultor, setConsultor] = useState('Pedro')
   const [consultorCustom, setConsultorCustom] = useState('')
   const [saving, setSaving] = useState(false)
+  const [catalogoEfetivo, setCatalogoEfetivo] = useState<Record<string, string[]>>(
+    () => Object.fromEntries(Object.entries(CATALOGO).map(([k, v]) => [k, [...v]]))
+  )
+  const [personalizacoesEfetivas, setPersonalizacoesEfetivas] = useState<PersonItem[]>([...PERSONALIZACOES])
 
-  useEffect(() => { (async () => setClientes(await getClientes()))() }, [])
+  useEffect(() => {
+    (async () => setClientes(await getClientes()))()
+    const savedCat = localStorage.getItem('nice_catalogo')
+    if (savedCat) { try { setCatalogoEfetivo(JSON.parse(savedCat)) } catch {} }
+    const savedPerson = localStorage.getItem('nice_personalizacoes')
+    if (savedPerson) { try { setPersonalizacoesEfetivas(JSON.parse(savedPerson)) } catch {} }
+  }, [])
 
   const sugestoes = useMemo(() => {
     const q = buscaCliente.trim().toLowerCase()
@@ -112,12 +124,13 @@ export default function NovoPedidoPage() {
       : p))
   }
 
-  function togglePersonalizacao(pecaId: string, val: Personalizacao) {
+  function togglePersonalizacao(pecaId: string, val: string) {
     setPecas(prev => prev.map(p => {
       if (p.id !== pecaId) return p
-      const personalizacoes = p.personalizacoes.includes(val)
-        ? p.personalizacoes.filter(x => x !== val)
-        : [...p.personalizacoes, val]
+      const v = val as Personalizacao
+      const personalizacoes = p.personalizacoes.includes(v)
+        ? p.personalizacoes.filter(x => x !== v)
+        : [...p.personalizacoes, v]
       return { ...p, personalizacoes, complexidade: calcularComplexidade(p.tipo, personalizacoes) }
     }))
   }
@@ -379,17 +392,17 @@ export default function NovoPedidoPage() {
                       <select className="input" value={peca.categoria}
                         onChange={e => {
                           const cat = e.target.value
-                          const t = Object.entries(CATALOGO).find(([k]) => k === cat)?.[1][0] || ''
+                          const t = catalogoEfetivo[cat]?.[0] || ''
                           updatePeca(peca.id, { categoria: cat, tipo: t })
                         }}>
-                        {Object.keys(CATALOGO).map(c => <option key={c}>{c}</option>)}
+                        {Object.keys(catalogoEfetivo).map(c => <option key={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="label">Tipo de Peça</label>
                       <select className="input" value={peca.tipo}
                         onChange={e => updatePeca(peca.id, { tipo: e.target.value })}>
-                        {(CATALOGO[peca.categoria as keyof typeof CATALOGO] || []).map(t => <option key={t}>{t}</option>)}
+                        {(catalogoEfetivo[peca.categoria] || []).map(t => <option key={t}>{t}</option>)}
                       </select>
                     </div>
                     <div>
@@ -400,11 +413,11 @@ export default function NovoPedidoPage() {
                     <div>
                       <label className="label">Personalizações</label>
                       <div className="flex flex-wrap gap-2 mt-1">
-                        {PERSONALIZACOES.map(({ value, label }) => (
+                        {personalizacoesEfetivas.map(({ value, label }) => (
                           <button key={value} type="button"
                             onClick={() => togglePersonalizacao(peca.id, value)}
                             className={clsx('px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors',
-                              peca.personalizacoes.includes(value)
+                              peca.personalizacoes.includes(value as Personalizacao)
                                 ? 'bg-nice-500 text-white border-nice-500'
                                 : 'bg-white border-gray-200 text-gray-600 hover:border-nice-300')}>
                             {label}
