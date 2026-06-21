@@ -96,21 +96,26 @@ export default function NovoPedidoPage() {
   }, [])
 
   useEffect(() => {
+    if (Object.keys(tabelaPrecos).length === 0) return
+    setPecas(prev => prev.map(p => {
+      if (p.valorUnitario !== undefined) return p
+      const faixa = p.tamanhos.length > 0 ? getFaixaTamanho(p.tamanhos[0].tamanho) : 'P/M/G'
+      return { ...p, valorUnitario: tabelaPrecos[p.tipo]?.[faixa] ?? PRECO_FALLBACK[p.complexidade] ?? 30 }
+    }))
+  }, [tabelaPrecos])
+
+  useEffect(() => {
     if (parcelasEditadas) return
     const total = pecas.reduce((sum, peca) => {
-      const precosProduto = tabelaPrecos[peca.tipo]
-      return sum + peca.tamanhos.reduce((t, tam) => {
-        const faixa = getFaixaTamanho(tam.tamanho)
-        const preco = precosProduto?.[faixa] ?? PRECO_FALLBACK[peca.complexidade] ?? 30
-        return t + preco * tam.quantidade
-      }, 0)
+      const qtd = peca.tamanhos.reduce((a, t) => a + t.quantidade, 0)
+      return sum + (peca.valorUnitario ?? 0) * qtd
     }, 0)
     const entrada = Math.round(total * 0.5 * 100) / 100
     setParcelas(prev => {
       const [first, ...rest] = prev
       return [{ ...first, descricao: 'Entrada 50%', valor: entrada }, ...rest]
     })
-  }, [pecas, tabelaPrecos, parcelasEditadas])
+  }, [pecas, parcelasEditadas])
 
   const sugestoes = useMemo(() => {
     const q = buscaCliente.trim().toLowerCase()
@@ -143,6 +148,10 @@ export default function NovoPedidoPage() {
       if (p.id !== id) return p
       const updated = { ...p, ...campo }
       updated.complexidade = calcularComplexidade(updated.tipo, updated.personalizacoes)
+      if (('tipo' in campo || 'categoria' in campo) && !('valorUnitario' in campo)) {
+        const faixa = updated.tamanhos.length > 0 ? getFaixaTamanho(updated.tamanhos[0].tamanho) : 'P/M/G'
+        updated.valorUnitario = tabelaPrecos[updated.tipo]?.[faixa] ?? PRECO_FALLBACK[updated.complexidade] ?? 30
+      }
       return updated
     }))
   }
@@ -192,6 +201,10 @@ export default function NovoPedidoPage() {
   }
 
   const totalUnidades = pecas.reduce((acc, p) => acc + p.tamanhos.reduce((a, t) => a + t.quantidade, 0), 0)
+  const totalPecas = pecas.reduce((sum, p) => {
+    const qtd = p.tamanhos.reduce((a, t) => a + t.quantidade, 0)
+    return sum + (p.valorUnitario ?? 0) * qtd
+  }, 0)
   const totalParcelas = parcelas.reduce((a, p) => a + (p.valor || 0), 0)
   const totalPago = parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
   const saldo = totalParcelas - totalPago
@@ -210,7 +223,7 @@ export default function NovoPedidoPage() {
         parcelas,
         dataEntrega,
         observacoes: obs,
-        valorTotal: totalParcelas,
+        valorTotal: totalPecas,
         valorPago: totalPago,
       })
       router.push('/pedidos')
@@ -352,6 +365,8 @@ export default function NovoPedidoPage() {
 
             {pecas.map((peca, pi) => {
               const cc = COMPLEXIDADE_CONFIG[peca.complexidade]
+              const qtdPeca = peca.tamanhos.reduce((a, t) => a + t.quantidade, 0)
+              const subtotalPeca = (peca.valorUnitario ?? 0) * qtdPeca
               return (
                 <div key={peca.id} className="card border-l-4 border-l-nice-400 space-y-4">
                   <div className="flex items-center justify-between">
@@ -413,6 +428,19 @@ export default function NovoPedidoPage() {
                             onChange={e => updatePeca(peca.id, { corPersonalizacao: e.target.value })} />
                         </div>
                       )}
+                    </div>
+                    <div>
+                      <label className="label">Valor unitário (R$)</label>
+                      <input className="input" type="number" min={0} step={0.01} placeholder="0,00"
+                        value={peca.valorUnitario ?? ''}
+                        onChange={e => updatePeca(peca.id, { valorUnitario: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="flex items-end pb-1">
+                      <p className="text-sm text-gray-500">
+                        Subtotal:{' '}
+                        <span className="font-semibold text-nice-700">R$ {subtotalPeca.toFixed(2)}</span>
+                        <span className="text-gray-400 ml-1">({qtdPeca} un.)</span>
+                      </p>
                     </div>
                   </div>
 
@@ -555,18 +583,22 @@ export default function NovoPedidoPage() {
             </div>
 
             <div className="border-t pt-3">
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Complexidades</p>
+              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Peças</p>
               <div className="space-y-1.5">
                 {pecas.map(p => {
                   const cc = COMPLEXIDADE_CONFIG[p.complexidade]
                   const qtd = p.tamanhos.reduce((a, t) => a + t.quantidade, 0)
+                  const sub = (p.valorUnitario ?? 0) * qtd
                   return (
                     <div key={p.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className={clsx('badge text-xs', cc.bg, cc.color)}>{p.complexidade}</span>
-                        <span className="text-xs text-gray-600 truncate max-w-24">{p.tipo}</span>
+                        <span className="text-xs text-gray-600 truncate max-w-20">{p.tipo}</span>
                       </div>
-                      <span className="text-xs text-gray-500">{qtd} un.</span>
+                      <div className="text-right">
+                        <div className="text-xs text-gray-400">{qtd} un.</div>
+                        {sub > 0 && <div className="text-xs font-semibold text-nice-700">R$ {sub.toFixed(2)}</div>}
+                      </div>
                     </div>
                   )
                 })}
@@ -580,11 +612,11 @@ export default function NovoPedidoPage() {
                   {tipo === 'normal' ? 'Normal' : tipo === 'urgente' ? 'Urgente' : 'Grande Volume'}
                 </span>
               </div>
-              {totalParcelas > 0 && (
+              {totalPecas > 0 && (
                 <>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Total</span>
-                    <span className="font-semibold text-nice-700">R$ {totalParcelas.toFixed(2)}</span>
+                    <span className="font-semibold text-nice-700">R$ {totalPecas.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Pago</span>

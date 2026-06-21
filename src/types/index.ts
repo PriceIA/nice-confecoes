@@ -21,6 +21,7 @@ export interface Peca {
   personalizacoes: Personalizacao[]
   corPersonalizacao?: string
   complexidade: Complexidade
+  valorUnitario?: number
   observacoes: string
 }
 
