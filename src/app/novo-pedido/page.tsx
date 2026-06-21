@@ -8,9 +8,22 @@ import {
   calcularComplexidade, COMPLEXIDADE_CONFIG, formatarTelefone
 } from '@/lib/helpers'
 import { Cliente, Parcela, Peca, TamanhoQuantidade, Personalizacao, TipoPedido } from '@/types'
+import { supabase } from '@/lib/supabase'
 
 type PersonItem = { value: string; label: string }
 import clsx from 'clsx'
+
+const PRECO_FALLBACK: Record<string, number> = { P1: 30, P2: 45, P3: 65, P4: 90, P5: 120 }
+
+function getFaixaTamanho(tamanho: string): string {
+  if (['PP', 'P', 'M', 'G'].includes(tamanho)) return 'P/M/G'
+  if (['GG', 'XGG'].includes(tamanho)) return 'GG'
+  if (['01', '02'].includes(tamanho)) return '0-02'
+  if (['04', '06'].includes(tamanho)) return '04-06'
+  if (['08', '10'].includes(tamanho)) return '08-10'
+  if (['12', '14'].includes(tamanho)) return '12-14'
+  return 'P/M/G'
+}
 
 const TAMANHOS_ADULTO = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'UNICO'] as const
 const TAMANHOS_INFANTIL = ['01', '02', '04', '06', '08', '10', '12', '14'] as const
@@ -60,14 +73,44 @@ export default function NovoPedidoPage() {
     () => Object.fromEntries(Object.entries(CATALOGO).map(([k, v]) => [k, [...v]]))
   )
   const [personalizacoesEfetivas, setPersonalizacoesEfetivas] = useState<PersonItem[]>([...PERSONALIZACOES])
+  const [tabelaPrecos, setTabelaPrecos] = useState<Record<string, Record<string, number>>>({})
+  const [parcelasEditadas, setParcelasEditadas] = useState(false)
 
   useEffect(() => {
-    (async () => setClientes(await getClientes()))()
+    (async () => {
+      setClientes(await getClientes())
+      const { data } = await supabase.from('tabela_precos').select('produto, faixa_tamanho, preco_unitario')
+      if (data) {
+        const tabela: Record<string, Record<string, number>> = {}
+        for (const row of data) {
+          if (!tabela[row.produto]) tabela[row.produto] = {}
+          tabela[row.produto][row.faixa_tamanho] = row.preco_unitario
+        }
+        setTabelaPrecos(tabela)
+      }
+    })()
     const savedCat = localStorage.getItem('nice_catalogo')
     if (savedCat) { try { setCatalogoEfetivo(JSON.parse(savedCat)) } catch {} }
     const savedPerson = localStorage.getItem('nice_personalizacoes')
     if (savedPerson) { try { setPersonalizacoesEfetivas(JSON.parse(savedPerson)) } catch {} }
   }, [])
+
+  useEffect(() => {
+    if (parcelasEditadas) return
+    const total = pecas.reduce((sum, peca) => {
+      const precosProduto = tabelaPrecos[peca.tipo]
+      return sum + peca.tamanhos.reduce((t, tam) => {
+        const faixa = getFaixaTamanho(tam.tamanho)
+        const preco = precosProduto?.[faixa] ?? PRECO_FALLBACK[peca.complexidade] ?? 30
+        return t + preco * tam.quantidade
+      }, 0)
+    }, 0)
+    const entrada = Math.round(total * 0.5 * 100) / 100
+    setParcelas(prev => {
+      const [first, ...rest] = prev
+      return [{ ...first, descricao: 'Entrada 50%', valor: entrada }, ...rest]
+    })
+  }, [pecas, tabelaPrecos, parcelasEditadas])
 
   const sugestoes = useMemo(() => {
     const q = buscaCliente.trim().toLowerCase()
@@ -140,6 +183,7 @@ export default function NovoPedidoPage() {
   }
 
   function updateParcela(id: string, campo: Partial<Parcela>) {
+    setParcelasEditadas(true)
     setParcelas(prev => prev.map(p => p.id === id ? { ...p, ...campo } : p))
   }
 
@@ -297,71 +341,6 @@ export default function NovoPedidoPage() {
             </div>
           </div>
 
-          {/* Pagamentos / Parcelas */}
-          <div className="card space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-nice-800 text-base">Pagamentos</h2>
-              <button type="button" onClick={addParcela} className="btn-secondary text-sm">
-                <PlusCircle className="w-4 h-4" /> Adicionar parcela
-              </button>
-            </div>
-            <div className="space-y-3">
-              {parcelas.map((parcela, pi) => (
-                <div key={parcela.id} className="border border-gray-100 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Parcela {pi + 1}</span>
-                    {parcelas.length > 1 && (
-                      <button type="button" onClick={() => removeParcela(parcela.id)}
-                        className="text-red-400 hover:text-red-600 transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
-                      <label className="label">Descrição</label>
-                      <input className="input" placeholder="Ex: Entrada 50%" value={parcela.descricao}
-                        onChange={e => updateParcela(parcela.id, { descricao: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="label">Valor (R$)</label>
-                      <input className="input" type="number" min={0} step={0.01} placeholder="0,00"
-                        value={parcela.valor || ''}
-                        onChange={e => updateParcela(parcela.id, { valor: parseFloat(e.target.value) || 0 })} />
-                    </div>
-                    <div>
-                      <label className="label">Data prevista</label>
-                      <input className="input" type="date" value={parcela.dataPrevista}
-                        onChange={e => updateParcela(parcela.id, { dataPrevista: e.target.value })} />
-                    </div>
-                    <div className="col-span-2 flex items-center gap-2">
-                      <input type="checkbox" id={`pago-${parcela.id}`} checked={parcela.pago}
-                        onChange={e => updateParcela(parcela.id, { pago: e.target.checked })}
-                        className="w-4 h-4 accent-nice-500" />
-                      <label htmlFor={`pago-${parcela.id}`} className="text-sm text-gray-700 cursor-pointer">Pago</label>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="border-t pt-3 space-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Total</span>
-                <span className="font-semibold text-nice-700">R$ {totalParcelas.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Total pago</span>
-                <span className="font-medium text-green-600">R$ {totalPago.toFixed(2)}</span>
-              </div>
-              {saldo > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Saldo restante</span>
-                  <span className="font-semibold text-orange-600">R$ {saldo.toFixed(2)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Peças */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -486,6 +465,71 @@ export default function NovoPedidoPage() {
                 </div>
               )
             })}
+          </div>
+
+          {/* Pagamentos / Parcelas */}
+          <div className="card space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-nice-800 text-base">Pagamentos</h2>
+              <button type="button" onClick={addParcela} className="btn-secondary text-sm">
+                <PlusCircle className="w-4 h-4" /> Adicionar parcela
+              </button>
+            </div>
+            <div className="space-y-3">
+              {parcelas.map((parcela, pi) => (
+                <div key={parcela.id} className="border border-gray-100 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">Parcela {pi + 1}</span>
+                    {parcelas.length > 1 && (
+                      <button type="button" onClick={() => removeParcela(parcela.id)}
+                        className="text-red-400 hover:text-red-600 transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="label">Descrição</label>
+                      <input className="input" placeholder="Ex: Entrada 50%" value={parcela.descricao}
+                        onChange={e => updateParcela(parcela.id, { descricao: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="label">Valor (R$)</label>
+                      <input className="input" type="number" min={0} step={0.01} placeholder="0,00"
+                        value={parcela.valor || ''}
+                        onChange={e => updateParcela(parcela.id, { valor: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="label">Data prevista</label>
+                      <input className="input" type="date" value={parcela.dataPrevista}
+                        onChange={e => updateParcela(parcela.id, { dataPrevista: e.target.value })} />
+                    </div>
+                    <div className="col-span-2 flex items-center gap-2">
+                      <input type="checkbox" id={`pago-${parcela.id}`} checked={parcela.pago}
+                        onChange={e => updateParcela(parcela.id, { pago: e.target.checked })}
+                        className="w-4 h-4 accent-nice-500" />
+                      <label htmlFor={`pago-${parcela.id}`} className="text-sm text-gray-700 cursor-pointer">Pago</label>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t pt-3 space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Total</span>
+                <span className="font-semibold text-nice-700">R$ {totalParcelas.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Total pago</span>
+                <span className="font-medium text-green-600">R$ {totalPago.toFixed(2)}</span>
+              </div>
+              {saldo > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Saldo restante</span>
+                  <span className="font-semibold text-orange-600">R$ {saldo.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
