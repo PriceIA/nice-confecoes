@@ -99,7 +99,6 @@ export default function DetalhePedidoPage() {
               {pedido.cliente.empresa && <div><span className="text-gray-400 text-xs">Empresa</span><p className="font-medium text-gray-800">{pedido.cliente.empresa}</p></div>}
               {pedido.cliente.telefone && <div><span className="text-gray-400 text-xs">Telefone</span><p className="font-medium text-gray-800">{pedido.cliente.telefone}</p></div>}
               {pedido.cliente.email && <div><span className="text-gray-400 text-xs">E-mail</span><p className="font-medium text-gray-800">{pedido.cliente.email}</p></div>}
-              {pedido.consultor && <div><span className="text-gray-400 text-xs">Consultor</span><p className="font-medium text-gray-800">{pedido.consultor}</p></div>}
             </div>
           </div>
 
@@ -251,6 +250,12 @@ export default function DetalhePedidoPage() {
           <div className="card space-y-3 text-sm">
             <h2 className="font-semibold text-nice-800">Informações</h2>
             <div className="space-y-2">
+              {pedido.consultor && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Consultor</span>
+                  <span className="font-medium text-gray-700">{pedido.consultor}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-400">Entrega</span>
                 <span className="font-medium">{format(new Date(pedido.dataEntrega), 'dd/MM/yyyy')}</span>

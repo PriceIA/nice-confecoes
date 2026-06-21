@@ -94,6 +94,7 @@ export default function PedidosPage() {
                 <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                   <th className="text-left px-6 py-3 font-semibold">Nº</th>
                   <th className="text-left px-6 py-3 font-semibold">Cliente</th>
+                  <th className="text-left px-6 py-3 font-semibold">Consultor</th>
                   <th className="text-left px-6 py-3 font-semibold">Tipo</th>
                   <th className="text-left px-6 py-3 font-semibold">Peças</th>
                   <th className="text-left px-6 py-3 font-semibold">Status</th>
@@ -111,8 +112,8 @@ export default function PedidosPage() {
                       <td className="px-6 py-4">
                         <div className="font-medium text-gray-800">{p.cliente.nome}</div>
                         {p.cliente.empresa && <div className="text-xs text-gray-400">{p.cliente.empresa}</div>}
-                        {p.consultor && <div className="text-xs text-nice-500">Consultor: {p.consultor}</div>}
                       </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{p.consultor || <span className="text-gray-300">—</span>}</td>
                       <td className="px-6 py-4">
                         {p.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600">urgente</span>}
                         {p.tipo === 'grande_volume' && <span className="badge bg-purple-100 text-purple-600">grande vol.</span>}
