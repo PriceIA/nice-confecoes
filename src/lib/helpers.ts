@@ -3,7 +3,7 @@ import { Complexidade, Personalizacao } from '@/types'
 export const CATALOGO = {
   Esportivo: ['Camiseta sublimada futebol', 'Short sublimado', 'Rashguard', 'Bermuda Jiu-jitsu/MMA', 'Bermuda Muay Thai'],
   Empresarial: ['Camiseta PV', 'Camiseta algodão', 'Polo PV', 'Polo algodão', 'Polo PQ', 'Camisa social slim', 'Moletom', 'Calça reta', 'Calça slim', 'Bermuda', 'Jaleco'],
-  Escolar: ['Camiseta', 'Polo', 'Bermuda'],
+  Escolar: ['Camiseta M Curta', 'Regata', 'Manga Longa', 'Camiseta Algodão', 'Jardineira Curta', 'Jardineira Longa', 'Conjunto Helança', 'Blusa Helança', 'Blusa c/ Capuz Helança', 'Calça Helança', 'Bailarina/Legging', 'Corsário', 'Conjunto Moletom', 'Blusa Moletom', 'Blusa c/ Capuz Moletom', 'Calça Moletom', 'Shorts Saia Inteira', 'Shorts Saia Meia', 'Conjunto Tactel', 'Blusa Tactel', 'Blusa c/ Capuz Tactel', 'Calça c/ Forro Tactel', 'Calça s/ Forro Tactel', 'Bermuda Helança e Tactel'],
   Acessórios: ['Ecobag', 'Sacolinha kimono', 'Avental', 'Roupa coroinha'],
 }
 
