@@ -23,6 +23,7 @@ export interface Peca {
   complexidade: Complexidade
   valorUnitario?: number
   observacoes: string
+  imagem?: string
 }
 
 export interface ProgressoSetor {
@@ -65,7 +66,6 @@ export interface Pedido {
   observacoes: string
   valorTotal: number
   valorPago: number
-  imagem?: string
   vetorizacao?: { necessaria: boolean; valor: number }
 }
 

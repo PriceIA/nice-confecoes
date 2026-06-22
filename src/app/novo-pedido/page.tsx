@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { PlusCircle, Trash2, Search, UserPlus } from 'lucide-react'
+import { PlusCircle, Trash2, Search, UserPlus, X } from 'lucide-react'
 import { criarPedido, calcularDataEntrega, getClientes } from '@/lib/store'
 import {
   CATALOGO, PERSONALIZACOES,
@@ -75,7 +75,6 @@ export default function NovoPedidoPage() {
   const [personalizacoesEfetivas, setPersonalizacoesEfetivas] = useState<PersonItem[]>([...PERSONALIZACOES])
   const [tabelaPrecos, setTabelaPrecos] = useState<Record<string, Record<string, number>>>({})
   const [parcelasEditadas, setParcelasEditadas] = useState(false)
-  const [imagem, setImagem] = useState<string | undefined>(undefined)
   const [vetorizacao, setVetorizacao] = useState({ necessaria: false, valor: 50 })
 
   useEffect(() => {
@@ -120,11 +119,11 @@ export default function NovoPedidoPage() {
     })
   }, [pecas, parcelasEditadas, vetorizacao])
 
-  function handleImagemChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleImagemPeca(pecaId: string, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => setImagem(reader.result as string)
+    reader.onload = () => updatePeca(pecaId, { imagem: reader.result as string })
     reader.readAsDataURL(file)
   }
 
@@ -237,7 +236,6 @@ export default function NovoPedidoPage() {
         observacoes: obs,
         valorTotal: totalGeral,
         valorPago: totalPago,
-        imagem,
         vetorizacao,
       })
       router.push('/pedidos')
@@ -366,25 +364,6 @@ export default function NovoPedidoPage() {
               <textarea className="input resize-none" rows={3} placeholder="Observações sobre o pedido..."
                 value={obs} onChange={e => setObs(e.target.value)} />
             </div>
-          </div>
-
-          {/* Imagem do Pedido */}
-          <div className="card space-y-4">
-            <h2 className="font-semibold text-nice-800 text-base">Imagem do Pedido</h2>
-            <div>
-              <label className="label">Arquivo de referência</label>
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png,.webp"
-                onChange={handleImagemChange}
-                className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-nice-50 file:text-nice-700 hover:file:bg-nice-100 cursor-pointer"
-              />
-            </div>
-            {imagem && (
-              <div className="rounded-xl overflow-hidden border border-gray-100">
-                <img src={imagem} alt="Preview do pedido" className="w-full max-h-64 object-contain bg-gray-50" />
-              </div>
-            )}
           </div>
 
           {/* Peças */}
@@ -522,6 +501,27 @@ export default function NovoPedidoPage() {
                     <label className="label">Observações da peça</label>
                     <input className="input" placeholder="Ex: logotipo no peito esquerdo..." value={peca.observacoes}
                       onChange={e => updatePeca(peca.id, { observacoes: e.target.value })} />
+                  </div>
+
+                  <div>
+                    <label className="label">Imagem da peça</label>
+                    {peca.imagem ? (
+                      <div className="relative inline-block">
+                        <img src={peca.imagem} alt={`Imagem da peça ${pi + 1}`}
+                          className="w-24 h-24 object-cover rounded-xl border border-gray-100" />
+                        <button type="button" onClick={() => updatePeca(peca.id, { imagem: undefined })}
+                          className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.webp"
+                        onChange={e => handleImagemPeca(peca.id, e)}
+                        className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-nice-50 file:text-nice-700 hover:file:bg-nice-100 cursor-pointer"
+                      />
+                    )}
                   </div>
                 </div>
               )

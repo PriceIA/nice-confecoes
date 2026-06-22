@@ -43,7 +43,6 @@ function mapPedido(row: any): Pedido {
     observacoes: row.observacoes ?? '',
     valorTotal,
     valorPago,
-    imagem: row.imagem ?? undefined,
     vetorizacao: row.vetorizacao ?? undefined,
   }
 }
@@ -132,7 +131,6 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
     pecas: dados.pecas,
     parcelas,
     progresso,
-    imagem: dados.imagem ?? null,
     vetorizacao: dados.vetorizacao ?? null,
   }
   console.log('[criarPedido] insert payload:', JSON.stringify(insertPayload, null, 2))
@@ -170,7 +168,6 @@ export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promi
     const cliente = await buscarOuCriarCliente(dados.cliente)
     update.cliente_id = cliente.id
   }
-  if (dados.imagem !== undefined) update.imagem = dados.imagem
   if (dados.vetorizacao !== undefined) update.vetorizacao = dados.vetorizacao
 
   const { error } = await supabase.from('pedidos').update(update).eq('id', id)
