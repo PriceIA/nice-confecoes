@@ -65,6 +65,8 @@ export interface Pedido {
   observacoes: string
   valorTotal: number
   valorPago: number
+  imagem?: string
+  vetorizacao?: { necessaria: boolean; valor: number }
 }
 
 export interface Cliente {

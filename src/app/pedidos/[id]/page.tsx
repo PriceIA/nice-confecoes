@@ -102,6 +102,16 @@ export default function DetalhePedidoPage() {
             </div>
           </div>
 
+          {/* Imagem */}
+          {pedido.imagem && (
+            <div className="card space-y-3">
+              <h2 className="font-semibold text-nice-800">Imagem do Pedido</h2>
+              <div className="rounded-xl overflow-hidden border border-gray-100">
+                <img src={pedido.imagem} alt="Imagem do pedido" className="w-full max-h-72 object-contain bg-gray-50" />
+              </div>
+            </div>
+          )}
+
           {/* Peças */}
           <div className="card space-y-4">
             <div className="flex items-center justify-between">
@@ -260,6 +270,12 @@ export default function DetalhePedidoPage() {
                 <span className="text-gray-400">Entrega</span>
                 <span className="font-medium">{format(new Date(pedido.dataEntrega), 'dd/MM/yyyy')}</span>
               </div>
+              {pedido.vetorizacao?.necessaria && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Vetorização</span>
+                  <span className="font-medium text-nice-700">R$ {pedido.vetorizacao.valor.toFixed(2)}</span>
+                </div>
+              )}
               {pedido.parcelas.length === 0 && (
                 <>
                   <div className="flex justify-between">

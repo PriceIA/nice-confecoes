@@ -75,6 +75,8 @@ export default function NovoPedidoPage() {
   const [personalizacoesEfetivas, setPersonalizacoesEfetivas] = useState<PersonItem[]>([...PERSONALIZACOES])
   const [tabelaPrecos, setTabelaPrecos] = useState<Record<string, Record<string, number>>>({})
   const [parcelasEditadas, setParcelasEditadas] = useState(false)
+  const [imagem, setImagem] = useState<string | undefined>(undefined)
+  const [vetorizacao, setVetorizacao] = useState({ necessaria: false, valor: 50 })
 
   useEffect(() => {
     (async () => {
@@ -106,16 +108,25 @@ export default function NovoPedidoPage() {
 
   useEffect(() => {
     if (parcelasEditadas) return
-    const total = pecas.reduce((sum, peca) => {
+    const totalPecasVal = pecas.reduce((sum, peca) => {
       const qtd = peca.tamanhos.reduce((a, t) => a + t.quantidade, 0)
       return sum + (peca.valorUnitario ?? 0) * qtd
     }, 0)
+    const total = totalPecasVal + (vetorizacao.necessaria ? vetorizacao.valor : 0)
     const entrada = Math.round(total * 0.5 * 100) / 100
     setParcelas(prev => {
       const [first, ...rest] = prev
       return [{ ...first, descricao: 'Entrada 50%', valor: entrada }, ...rest]
     })
-  }, [pecas, parcelasEditadas])
+  }, [pecas, parcelasEditadas, vetorizacao])
+
+  function handleImagemChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setImagem(reader.result as string)
+    reader.readAsDataURL(file)
+  }
 
   const sugestoes = useMemo(() => {
     const q = buscaCliente.trim().toLowerCase()
@@ -205,6 +216,7 @@ export default function NovoPedidoPage() {
     const qtd = p.tamanhos.reduce((a, t) => a + t.quantidade, 0)
     return sum + (p.valorUnitario ?? 0) * qtd
   }, 0)
+  const totalGeral = totalPecas + (vetorizacao.necessaria ? vetorizacao.valor : 0)
   const totalParcelas = parcelas.reduce((a, p) => a + (p.valor || 0), 0)
   const totalPago = parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
   const saldo = totalParcelas - totalPago
@@ -223,8 +235,10 @@ export default function NovoPedidoPage() {
         parcelas,
         dataEntrega,
         observacoes: obs,
-        valorTotal: totalPecas,
+        valorTotal: totalGeral,
         valorPago: totalPago,
+        imagem,
+        vetorizacao,
       })
       router.push('/pedidos')
     } catch (error) {
@@ -352,6 +366,25 @@ export default function NovoPedidoPage() {
               <textarea className="input resize-none" rows={3} placeholder="Observações sobre o pedido..."
                 value={obs} onChange={e => setObs(e.target.value)} />
             </div>
+          </div>
+
+          {/* Imagem do Pedido */}
+          <div className="card space-y-4">
+            <h2 className="font-semibold text-nice-800 text-base">Imagem do Pedido</h2>
+            <div>
+              <label className="label">Arquivo de referência</label>
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp"
+                onChange={handleImagemChange}
+                className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-nice-50 file:text-nice-700 hover:file:bg-nice-100 cursor-pointer"
+              />
+            </div>
+            {imagem && (
+              <div className="rounded-xl overflow-hidden border border-gray-100">
+                <img src={imagem} alt="Preview do pedido" className="w-full max-h-64 object-contain bg-gray-50" />
+              </div>
+            )}
           </div>
 
           {/* Peças */}
@@ -503,6 +536,23 @@ export default function NovoPedidoPage() {
                 <PlusCircle className="w-4 h-4" /> Adicionar parcela
               </button>
             </div>
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+              <input type="checkbox" id="vetorizacao" checked={vetorizacao.necessaria}
+                onChange={e => setVetorizacao(v => ({ ...v, necessaria: e.target.checked }))}
+                className="w-4 h-4 accent-nice-500 cursor-pointer" />
+              <label htmlFor="vetorizacao" className="text-sm font-medium text-gray-700 cursor-pointer flex-1">
+                Vetorização necessária
+              </label>
+              {vetorizacao.necessaria && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-500">R$</span>
+                  <input type="number" min={0} step={0.01} className="input w-24 py-1 text-sm"
+                    value={vetorizacao.valor}
+                    onChange={e => setVetorizacao(v => ({ ...v, valor: parseFloat(e.target.value) || 0 }))} />
+                </div>
+              )}
+            </div>
+
             <div className="space-y-3">
               {parcelas.map((parcela, pi) => (
                 <div key={parcela.id} className="border border-gray-100 rounded-xl p-4 space-y-3">
@@ -612,11 +662,17 @@ export default function NovoPedidoPage() {
                   {tipo === 'normal' ? 'Normal' : tipo === 'urgente' ? 'Urgente' : 'Grande Volume'}
                 </span>
               </div>
-              {totalPecas > 0 && (
+              {totalGeral > 0 && (
                 <>
+                  {vetorizacao.necessaria && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Vetorização</span>
+                      <span className="font-medium text-nice-700">R$ {vetorizacao.valor.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Total</span>
-                    <span className="font-semibold text-nice-700">R$ {totalPecas.toFixed(2)}</span>
+                    <span className="font-semibold text-nice-700">R$ {totalGeral.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Pago</span>
