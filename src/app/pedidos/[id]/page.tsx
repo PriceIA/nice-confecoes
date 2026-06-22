@@ -4,12 +4,84 @@ import { useParams, useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ArrowLeft, Printer, ChevronRight, CheckCircle2, Circle, Loader2 } from 'lucide-react'
 import { getPedidoById, atualizarPedido } from '@/lib/store'
-import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, totalPecas } from '@/lib/helpers'
-import { Pedido, StatusPedido, StatusSetor, ProgressoSetor } from '@/types'
+import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas } from '@/lib/helpers'
+import { Pedido, Peca, StatusPedido, StatusSetor, ProgressoSetor } from '@/types'
 import clsx from 'clsx'
 import Link from 'next/link'
 
 const STATUS_LIST: StatusPedido[] = ['orcamento', 'aprovado', 'aguardando_pagamento', 'em_producao', 'finalizado', 'entregue', 'cancelado']
+
+const STATUS_SETOR_LABEL: Record<StatusSetor, string> = {
+  pendente: 'Pendente',
+  em_andamento: 'Em Andamento',
+  concluido: 'Concluído',
+}
+
+function combinarStatus(estados: StatusSetor[]): StatusSetor {
+  if (estados.length === 0) return 'pendente'
+  if (estados.every(s => s === 'concluido')) return 'concluido'
+  if (estados.some(s => s === 'em_andamento' || s === 'concluido')) return 'em_andamento'
+  return 'pendente'
+}
+
+function personalizacaoLabel(valor: string): string {
+  return PERSONALIZACOES.find(p => p.value === valor)?.label ?? valor
+}
+
+function gradeTamanhos(peca: Peca): string {
+  return peca.tamanhos
+    .map(t => `${t.tamanho === 'SOB_MEDIDA' ? (t.medidaEspecial || 'Sob Medida') : t.tamanho}: ${t.quantidade}`)
+    .join(' · ')
+}
+
+function PrintHeader({ pedido }: { pedido: Pedido }) {
+  const badge = pedido.tipo === 'urgente' ? 'URGENTE' : pedido.tipo === 'grande_volume' ? 'EVENTO' : null
+  return (
+    <div className="flex items-start justify-between border-b-2 border-black pb-2 mb-3">
+      <div>
+        <div className="text-2xl font-extrabold tracking-tight leading-none">Nice Confecções</div>
+        <div className="text-[10px] text-gray-600 mt-1">Pedido #{pedido.numero}</div>
+      </div>
+      <div className="text-right text-[11px] leading-tight">
+        <div>Data do Pedido: {format(new Date(pedido.dataEntrada), 'dd/MM/yy')}</div>
+        <div>Data da Entrega: {format(new Date(pedido.dataEntrega), 'dd/MM/yy')}</div>
+        {badge && <div className="mt-1 inline-block border border-black px-2 py-0.5 font-bold text-[10px]">{badge}</div>}
+      </div>
+    </div>
+  )
+}
+
+function ClienteTabela({ pedido, resumida }: { pedido: Pedido; resumida?: boolean }) {
+  return (
+    <div className="mb-3">
+      <h3 className="text-xs font-bold uppercase border-b border-black mb-1 pb-0.5">Dados do Cliente</h3>
+      <table className="w-full text-[11px] border border-black">
+        <tbody>
+          <tr>
+            <td className="border border-black px-2 py-1 font-semibold w-1/6">Empresa</td>
+            <td className="border border-black px-2 py-1 w-1/3">{pedido.cliente.empresa || pedido.cliente.nome}</td>
+            <td className="border border-black px-2 py-1 font-semibold w-1/6">Responsável</td>
+            <td className="border border-black px-2 py-1">{pedido.cliente.responsavelEmpresa || pedido.cliente.nome}</td>
+          </tr>
+          {!resumida && (
+            <tr>
+              <td className="border border-black px-2 py-1 font-semibold">Telefone</td>
+              <td className="border border-black px-2 py-1">{pedido.cliente.telefone}</td>
+              <td className="border border-black px-2 py-1 font-semibold">Endereço</td>
+              <td className="border border-black px-2 py-1"></td>
+            </tr>
+          )}
+          {!resumida && (
+            <tr>
+              <td className="border border-black px-2 py-1 font-semibold">Email</td>
+              <td className="border border-black px-2 py-1" colSpan={3}>{pedido.cliente.email}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 export default function DetalhePedidoPage() {
   const { id } = useParams()
@@ -67,7 +139,8 @@ export default function DetalhePedidoPage() {
   const saldo = totalParcelas - totalPago
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <>
+    <div className="max-w-4xl space-y-6 print:hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -305,5 +378,209 @@ export default function DetalhePedidoPage() {
         </div>
       </div>
     </div>
+
+    {/* Layout de impressão */}
+    <div className="hidden print:block text-black">
+      {pedido.pecas.map((p, i) => {
+        const cc = COMPLEXIDADE_CONFIG[p.complexidade]
+        const statusPersonalizacao = combinarStatus([
+          pedido.progresso.estamparia_silk,
+          pedido.progresso.prensa_dtf,
+          pedido.progresso.prensa_sublimacao,
+        ])
+        const setoresLinha: { label: string; status: StatusSetor }[] = [
+          { label: 'Matéria Prima', status: pedido.progresso.compra },
+          { label: 'Corte', status: pedido.progresso.corte },
+          { label: 'Personalização', status: statusPersonalizacao },
+          { label: 'Costura', status: pedido.progresso.costura },
+          { label: 'Acabamento', status: pedido.progresso.acabamento },
+          { label: 'Loja', status: 'pendente' },
+        ]
+        return (
+          <div key={p.id} className="break-after-page">
+            <PrintHeader pedido={pedido} />
+            <ClienteTabela pedido={pedido} />
+
+            <div className="mb-3">
+              <h3 className="text-xs font-bold uppercase border-b border-black mb-1 pb-0.5">Matéria Prima</h3>
+              <table className="w-full text-[11px] border border-black">
+                <tbody>
+                  <tr>
+                    <td className="border border-black px-2 py-1 font-semibold w-1/4">Malha/Tecido</td>
+                    <td className="border border-black px-2 py-1"></td>
+                  </tr>
+                  <tr>
+                    <td className="border border-black px-2 py-1 font-semibold">Aviamento</td>
+                    <td className="border border-black px-2 py-1"></td>
+                  </tr>
+                  <tr>
+                    <td className="border border-black px-2 py-1 font-semibold">Arte</td>
+                    <td className="border border-black px-2 py-1">{p.observacoes || 'ARTE OK'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mb-3">
+              <table className="w-full text-[10px] border border-black text-center">
+                <thead>
+                  <tr>
+                    {setoresLinha.map(s => (
+                      <th key={s.label} className="border border-black px-1 py-1 font-bold uppercase">{s.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {setoresLinha.map(s => (
+                      <td key={s.label} className={clsx('border border-black px-1 py-1', s.status === 'concluido' && 'font-bold')}>
+                        {STATUS_SETOR_LABEL[s.status]}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mb-2">
+              <h3 className="text-xs font-bold uppercase border-b border-black mb-2 pb-0.5">Dados do Pedido</h3>
+              <div className="text-center font-bold text-sm mb-2">
+                Peça {i + 1} — {p.tipo} {p.cor && `(${p.cor})`}
+                <span className={clsx('ml-2 text-[10px] font-normal', cc.color)}>{cc.label}</span>
+              </div>
+              <div className="flex gap-3 items-start">
+                <div className="w-32 h-32 border border-black flex items-center justify-center shrink-0 overflow-hidden">
+                  {p.imagem ? (
+                    <img src={p.imagem} alt={`Imagem da peça ${i + 1}`} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-[9px] text-gray-400 text-center px-1">Sem imagem</span>
+                  )}
+                </div>
+                <table className="flex-1 text-[11px] border border-black">
+                  <thead>
+                    <tr>
+                      <th className="border border-black px-2 py-1">Tamanho</th>
+                      <th className="border border-black px-2 py-1">Quantidade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {p.tamanhos.map((t, ti) => (
+                      <tr key={ti}>
+                        <td className="border border-black px-2 py-1 text-center">
+                          {t.tamanho === 'SOB_MEDIDA' ? (t.medidaEspecial || 'Sob Medida') : t.tamanho}
+                        </td>
+                        <td className="border border-black px-2 py-1 text-center">{t.quantidade}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {p.observacoes && (
+                <p className="text-[11px] mt-2"><span className="font-semibold">Descrição:</span> {p.observacoes}</p>
+              )}
+              {p.personalizacoes.length > 0 && (
+                <p className="text-[11px] mt-1">
+                  <span className="font-semibold">Personalizações:</span>{' '}
+                  {p.personalizacoes.map(personalizacaoLabel).join(', ')}
+                  {p.corPersonalizacao && ` — Cor: ${p.corPersonalizacao}`}
+                </p>
+              )}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Página final: resumo e pagamento */}
+      <div>
+        <PrintHeader pedido={pedido} />
+        <ClienteTabela pedido={pedido} resumida />
+
+        <div className="mb-3">
+          <h3 className="text-xs font-bold uppercase border-b border-black mb-1 pb-0.5">Dados do Pedido</h3>
+          <table className="w-full text-[11px] border border-black">
+            <thead>
+              <tr>
+                <th className="border border-black px-2 py-1">Modelo</th>
+                <th className="border border-black px-2 py-1">Grade de Tamanho</th>
+                <th className="border border-black px-2 py-1">Qtd. Total</th>
+                <th className="border border-black px-2 py-1">Valor Unitário</th>
+                <th className="border border-black px-2 py-1">Valor Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pedido.pecas.map((p, i) => {
+                const qtd = p.tamanhos.reduce((a, t) => a + t.quantidade, 0)
+                const valorUnit = p.valorUnitario ?? 0
+                return (
+                  <tr key={p.id}>
+                    <td className="border border-black px-2 py-1">{p.tipo}</td>
+                    <td className="border border-black px-2 py-1">{gradeTamanhos(p)}</td>
+                    <td className="border border-black px-2 py-1 text-center">{qtd}</td>
+                    <td className="border border-black px-2 py-1 text-right">R$ {valorUnit.toFixed(2)}</td>
+                    <td className="border border-black px-2 py-1 text-right">R$ {(valorUnit * qtd).toFixed(2)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <h3 className="text-xs font-bold uppercase border-b border-black mb-1 pb-0.5">Pagamento</h3>
+          <table className="w-full text-[11px] border border-black mb-2">
+            <tbody>
+              <tr>
+                <td className="border border-black px-2 py-1 font-semibold w-1/4">Valor Total do Pedido</td>
+                <td className="border border-black px-2 py-1" colSpan={3}>R$ {pedido.valorTotal.toFixed(2)}</td>
+              </tr>
+              {pedido.vetorizacao?.necessaria && (
+                <tr>
+                  <td className="border border-black px-2 py-1 font-semibold">Vetorização</td>
+                  <td className="border border-black px-2 py-1" colSpan={3}>R$ {pedido.vetorizacao.valor.toFixed(2)}</td>
+                </tr>
+              )}
+              <tr>
+                <td className="border border-black px-2 py-1 font-semibold">Forma de Pagamento</td>
+                <td className="border border-black px-2 py-1" colSpan={3}></td>
+              </tr>
+            </tbody>
+          </table>
+
+          {pedido.parcelas.length > 0 && (
+            <table className="w-full text-[11px] border border-black mb-2">
+              <thead>
+                <tr>
+                  <th className="border border-black px-2 py-1">Descrição</th>
+                  <th className="border border-black px-2 py-1">Valor</th>
+                  <th className="border border-black px-2 py-1">Data Prevista</th>
+                  <th className="border border-black px-2 py-1">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pedido.parcelas.map((parc, pi) => (
+                  <tr key={parc.id}>
+                    <td className="border border-black px-2 py-1">{parc.descricao || `Parcela ${pi + 1}`}</td>
+                    <td className="border border-black px-2 py-1 text-right">R$ {(parc.valor || 0).toFixed(2)}</td>
+                    <td className="border border-black px-2 py-1 text-center">
+                      {parc.dataPrevista ? format(new Date(parc.dataPrevista + 'T00:00:00'), 'dd/MM/yy') : ''}
+                    </td>
+                    <td className="border border-black px-2 py-1 text-center font-semibold">
+                      {parc.pago ? 'Pago' : 'Pendente'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {pedido.observacoes && (
+            <div className="text-[11px] mt-2">
+              <span className="font-semibold">Observações gerais:</span> {pedido.observacoes}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+    </>
   )
 }

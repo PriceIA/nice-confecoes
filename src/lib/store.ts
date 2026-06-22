@@ -31,6 +31,7 @@ function mapPedido(row: any): Pedido {
       empresa: c?.empresa ?? '',
       telefone: c?.telefone ?? '',
       email: c?.email ?? '',
+      responsavelEmpresa: c?.responsavel_empresa ?? undefined,
     },
     consultor: row.consultor ?? '',
     tipo: row.tipo,

@@ -54,6 +54,7 @@ export interface Pedido {
     empresa: string
     telefone: string
     email: string
+    responsavelEmpresa?: string
   }
   consultor: string
   tipo: TipoPedido
