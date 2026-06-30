@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { Users2, X, ArrowRight, Phone, Mail } from 'lucide-react'
-import { getClientes, getPedidos, pedidosDoCliente } from '@/lib/store'
+import { Users2, X, ArrowRight, Phone, Mail, Pencil, Save, MapPin, FileText, User } from 'lucide-react'
+import { getClientes, getPedidos, pedidosDoCliente, atualizarCliente } from '@/lib/store'
 import { STATUS_CONFIG } from '@/lib/helpers'
 import { Cliente, Pedido } from '@/types'
 import clsx from 'clsx'
@@ -12,17 +12,63 @@ export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [selecionado, setSelecionado] = useState<Cliente | null>(null)
+  const [editandoCliente, setEditandoCliente] = useState(false)
+  const [editDados, setEditDados] = useState<Omit<Cliente, 'id' | 'dataCadastro'>>({
+    nome: '', empresa: '', telefone: '', email: '', responsavel: '', endereco: '', documento: '',
+  })
+  const [salvandoCliente, setSalvandoCliente] = useState(false)
 
-  useEffect(() => {
-    (async () => {
-      const [cli, ped] = await Promise.all([getClientes(), getPedidos()])
-      setClientes(cli)
-      setPedidos(ped)
-    })()
-  }, [])
+  const carregar = async () => {
+    const [cli, ped] = await Promise.all([getClientes(), getPedidos()])
+    setClientes(cli)
+    setPedidos(ped)
+  }
+
+  useEffect(() => { carregar() }, [])
+
+  function abrirDrawer(c: Cliente) {
+    setSelecionado(c)
+    setEditandoCliente(false)
+  }
+
+  function fecharDrawer() {
+    setSelecionado(null)
+    setEditandoCliente(false)
+  }
+
+  function iniciarEdicaoCliente() {
+    if (!selecionado) return
+    setEditDados({
+      nome: selecionado.nome,
+      empresa: selecionado.empresa,
+      telefone: selecionado.telefone,
+      email: selecionado.email,
+      responsavel: selecionado.responsavel,
+      endereco: selecionado.endereco,
+      documento: selecionado.documento,
+    })
+    setEditandoCliente(true)
+  }
+
+  async function salvarCliente() {
+    if (!selecionado || !editDados.nome) return
+    setSalvandoCliente(true)
+    try {
+      await atualizarCliente(selecionado.id, editDados)
+      const atualizado: Cliente = { ...selecionado, ...editDados }
+      setClientes(prev => prev.map(c => c.id === selecionado.id ? atualizado : c))
+      setSelecionado(atualizado)
+      setEditandoCliente(false)
+    } catch {
+      alert('Erro ao salvar. Tente novamente.')
+    } finally {
+      setSalvandoCliente(false)
+    }
+  }
 
   const historico = selecionado
-    ? pedidosDoCliente(selecionado, pedidos).sort((a, b) => new Date(b.dataEntrada).getTime() - new Date(a.dataEntrada).getTime())
+    ? pedidosDoCliente(selecionado, pedidos).sort((a, b) =>
+        new Date(b.dataEntrada).getTime() - new Date(a.dataEntrada).getTime())
     : []
 
   return (
@@ -46,7 +92,7 @@ export default function ClientesPage() {
               !mais || new Date(p.dataEntrada) > new Date(mais.dataEntrada) ? p : mais, null)
 
             return (
-              <button key={c.id} onClick={() => setSelecionado(c)}
+              <button key={c.id} onClick={() => abrirDrawer(c)}
                 className="card text-left hover:border-nice-300 border border-transparent transition-colors space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-nice-50 flex items-center justify-center shrink-0">
@@ -86,60 +132,153 @@ export default function ClientesPage() {
         </div>
       )}
 
-      {/* Drawer de histórico */}
+      {/* Drawer */}
       {selecionado && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelecionado(null)} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={fecharDrawer} />
           <aside className="relative h-screen w-full max-w-md bg-white shadow-xl flex flex-col">
+
+            {/* Header do drawer */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-              <div>
-                <h2 className="font-bold text-nice-800 text-lg">{selecionado.nome}</h2>
-                {selecionado.empresa && <p className="text-sm text-gray-400">{selecionado.empresa}</p>}
+              <div className="min-w-0">
+                <h2 className="font-bold text-nice-800 text-lg truncate">{selecionado.nome}</h2>
+                {selecionado.empresa && <p className="text-sm text-gray-400 truncate">{selecionado.empresa}</p>}
               </div>
-              <button onClick={() => setSelecionado(null)} aria-label="Fechar" className="text-gray-400 hover:text-gray-600 p-1">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2 shrink-0 ml-2">
+                {!editandoCliente && (
+                  <button onClick={iniciarEdicaoCliente}
+                    className="p-2 rounded-xl hover:bg-nice-50 text-nice-600 transition-colors"
+                    title="Editar cliente">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
+                <button onClick={fecharDrawer} className="text-gray-400 hover:text-gray-600 p-1">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            <div className="px-6 py-4 border-b border-gray-100 space-y-2">
-              {selecionado.telefone && (
-                <div className="text-sm text-gray-600 flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-gray-400" />{selecionado.telefone}
-                </div>
-              )}
-              {selecionado.email && (
-                <div className="text-sm text-gray-600 flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-gray-400" />{selecionado.email}
-                </div>
-              )}
-            </div>
+            {/* Conteúdo do drawer */}
+            <div className="flex-1 overflow-y-auto">
 
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Histórico de Pedidos ({historico.length})
-              </h3>
+              {editandoCliente ? (
+                /* Modo edição do cliente */
+                <div className="px-6 py-4 space-y-4">
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Editar Dados</h3>
 
-              {historico.length === 0 ? (
-                <p className="text-sm text-gray-400 py-8 text-center">Nenhum pedido encontrado.</p>
-              ) : historico.map(p => {
-                const sc = STATUS_CONFIG[p.status]
-                return (
-                  <Link key={p.id} href={`/pedidos/${p.id}`}
-                    className="block border border-gray-100 rounded-xl px-4 py-3 hover:border-nice-300 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-nice-700 text-sm">#{p.numero}</span>
-                      <span className={clsx('badge text-xs', sc.bg, sc.color)}>{sc.label}</span>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="label">Nome *</label>
+                      <input className="input" value={editDados.nome}
+                        onChange={e => setEditDados(d => ({ ...d, nome: e.target.value }))} />
                     </div>
-                    <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-                      <span>{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</span>
-                      <span className="font-medium text-gray-700">R$ {p.valorTotal.toFixed(2)}</span>
+                    <div>
+                      <label className="label">Empresa</label>
+                      <input className="input" value={editDados.empresa}
+                        onChange={e => setEditDados(d => ({ ...d, empresa: e.target.value }))} />
                     </div>
-                    <div className="flex items-center justify-end mt-1">
-                      <ArrowRight className="w-3.5 h-3.5 text-gray-300" />
+                    <div>
+                      <label className="label">Responsável</label>
+                      <input className="input" value={editDados.responsavel}
+                        onChange={e => setEditDados(d => ({ ...d, responsavel: e.target.value }))} />
                     </div>
-                  </Link>
-                )
-              })}
+                    <div>
+                      <label className="label">Telefone</label>
+                      <input className="input" value={editDados.telefone}
+                        onChange={e => setEditDados(d => ({ ...d, telefone: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="label">E-mail</label>
+                      <input className="input" type="email" value={editDados.email}
+                        onChange={e => setEditDados(d => ({ ...d, email: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="label">CNPJ / CPF</label>
+                      <input className="input" value={editDados.documento}
+                        onChange={e => setEditDados(d => ({ ...d, documento: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="label">Endereço</label>
+                      <input className="input" value={editDados.endereco}
+                        onChange={e => setEditDados(d => ({ ...d, endereco: e.target.value }))} />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button onClick={() => setEditandoCliente(false)} className="btn-secondary flex-1 justify-center">
+                      Cancelar
+                    </button>
+                    <button onClick={salvarCliente} disabled={salvandoCliente || !editDados.nome}
+                      className="btn-primary flex-1 justify-center">
+                      <Save className="w-4 h-4" /> {salvandoCliente ? 'Salvando...' : 'Salvar'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Modo visualização */
+                <>
+                  <div className="px-6 py-4 border-b border-gray-100 space-y-2">
+                    {selecionado.responsavel && (
+                      <div className="text-sm text-gray-600 flex items-center gap-2">
+                        <User className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span>{selecionado.responsavel}</span>
+                      </div>
+                    )}
+                    {selecionado.telefone && (
+                      <div className="text-sm text-gray-600 flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span>{selecionado.telefone}</span>
+                      </div>
+                    )}
+                    {selecionado.email && (
+                      <div className="text-sm text-gray-600 flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span>{selecionado.email}</span>
+                      </div>
+                    )}
+                    {selecionado.documento && (
+                      <div className="text-sm text-gray-600 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span>{selecionado.documento}</span>
+                      </div>
+                    )}
+                    {selecionado.endereco && (
+                      <div className="text-sm text-gray-600 flex items-start gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                        <span>{selecionado.endereco}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 px-6 py-4 space-y-3">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                      Histórico de Pedidos ({historico.length})
+                    </h3>
+
+                    {historico.length === 0 ? (
+                      <p className="text-sm text-gray-400 py-8 text-center">Nenhum pedido encontrado.</p>
+                    ) : historico.map(p => {
+                      const sc = STATUS_CONFIG[p.status]
+                      return (
+                        <Link key={p.id} href={`/pedidos/${p.id}`}
+                          className="block border border-gray-100 rounded-xl px-4 py-3 hover:border-nice-300 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-nice-700 text-sm">#{p.numero}</span>
+                            <span className={clsx('badge text-xs', sc.bg, sc.color)}>{sc.label}</span>
+                          </div>
+                          <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+                            <span>{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</span>
+                            <span className="font-medium text-gray-700">R$ {p.valorTotal.toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-end mt-1">
+                            <ArrowRight className="w-3.5 h-3.5 text-gray-300" />
+                          </div>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </aside>
         </div>

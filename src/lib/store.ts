@@ -9,6 +9,9 @@ function mapCliente(row: any): Cliente {
     empresa: row.empresa ?? '',
     telefone: row.telefone ?? '',
     email: row.email ?? '',
+    responsavel: row.responsavel ?? '',
+    endereco: row.endereco ?? '',
+    documento: row.documento ?? '',
     dataCadastro: row.data_cadastro,
   }
 }
@@ -23,10 +26,13 @@ function mapPedido(row: any): Pedido {
       empresa: c?.empresa ?? '',
       telefone: c?.telefone ?? '',
       email: c?.email ?? '',
+      responsavel: c?.responsavel ?? '',
+      endereco: c?.endereco ?? '',
+      documento: c?.documento ?? '',
     },
     tipo: row.tipo,
     status: row.status,
-    pecas: row.pecas ?? [],
+    pecas: (row.pecas ?? []).map((p: any) => ({ fotos: [], ...p })),
     dataEntrada: row.data_entrada,
     dataEntrega: row.data_entrega,
     progresso: row.progresso,
@@ -117,7 +123,7 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
 }
 
 export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promise<void> {
-  const update: Record<string, unknown> = {}
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (dados.tipo !== undefined) update.tipo = dados.tipo
   if (dados.status !== undefined) update.status = dados.status
   if (dados.dataEntrega !== undefined) update.data_entrega = dados.dataEntrega
@@ -210,6 +216,9 @@ export async function criarCliente(dados: Omit<Cliente, 'id' | 'dataCadastro'>):
       empresa: dados.empresa,
       telefone: dados.telefone,
       email: dados.email,
+      responsavel: dados.responsavel,
+      endereco: dados.endereco,
+      documento: dados.documento,
     })
     .select()
     .single()
@@ -218,11 +227,14 @@ export async function criarCliente(dados: Omit<Cliente, 'id' | 'dataCadastro'>):
 }
 
 export async function atualizarCliente(id: string, dados: Partial<Cliente>): Promise<void> {
-  const update: Record<string, unknown> = {}
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (dados.nome !== undefined) update.nome = dados.nome
   if (dados.empresa !== undefined) update.empresa = dados.empresa
   if (dados.telefone !== undefined) update.telefone = dados.telefone
   if (dados.email !== undefined) update.email = dados.email
+  if (dados.responsavel !== undefined) update.responsavel = dados.responsavel
+  if (dados.endereco !== undefined) update.endereco = dados.endereco
+  if (dados.documento !== undefined) update.documento = dados.documento
 
   const { error } = await supabase.from('clientes').update(update).eq('id', id)
   if (error) throw error
@@ -243,12 +255,26 @@ export async function buscarOuCriarCliente(dados: Omit<Cliente, 'id' | 'dataCada
         nome: dados.nome || existente.nome,
         empresa: dados.empresa || existente.empresa,
         email: dados.email || existente.email,
+        responsavel: dados.responsavel || existente.responsavel,
+        endereco: dados.endereco || existente.endereco,
+        documento: dados.documento || existente.documento,
       }
       await atualizarCliente(existente.id, atualizado)
       return atualizado
     }
   }
   return criarCliente(dados)
+}
+
+export async function uploadFotoPeca(pecaId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg'
+  const path = `${pecaId}/${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage
+    .from('pedido-fotos')
+    .upload(path, file, { upsert: false })
+  if (error) throw error
+  const { data } = supabase.storage.from('pedido-fotos').getPublicUrl(path)
+  return data.publicUrl
 }
 
 export function pedidosDoCliente(cliente: Cliente, pedidos: Pedido[]): Pedido[] {

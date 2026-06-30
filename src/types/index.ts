@@ -20,6 +20,7 @@ export interface Peca {
   personalizacoes: Personalizacao[]
   complexidade: Complexidade
   observacoes: string
+  fotos: string[]
 }
 
 export interface ProgressoSetor {
@@ -41,6 +42,9 @@ export interface Pedido {
     empresa: string
     telefone: string
     email: string
+    responsavel: string
+    endereco: string
+    documento: string
   }
   tipo: TipoPedido
   status: StatusPedido
@@ -59,6 +63,9 @@ export interface Cliente {
   empresa: string
   telefone: string
   email: string
+  responsavel: string
+  endereco: string
+  documento: string
   dataCadastro: string
 }
 

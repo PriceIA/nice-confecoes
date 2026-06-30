@@ -8,6 +8,7 @@ import {
   calcularComplexidade, COMPLEXIDADE_CONFIG, formatarTelefone
 } from '@/lib/helpers'
 import { Cliente, Peca, TamanhoQuantidade, Personalizacao, TipoPedido } from '@/types'
+import FotoUpload from '@/components/FotoUpload'
 import clsx from 'clsx'
 
 function novaPeca(): Peca {
@@ -20,13 +21,17 @@ function novaPeca(): Peca {
     personalizacoes: [],
     complexidade: 'P1',
     observacoes: '',
+    fotos: [],
   }
 }
 
 export default function NovoPedidoPage() {
   const router = useRouter()
 
-  const [cliente, setCliente] = useState({ nome: '', empresa: '', telefone: '', email: '' })
+  const [cliente, setCliente] = useState({
+    nome: '', empresa: '', telefone: '', email: '',
+    responsavel: '', endereco: '', documento: '',
+  })
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [buscaCliente, setBuscaCliente] = useState('')
   const [sugestoesAbertas, setSugestoesAbertas] = useState(false)
@@ -52,7 +57,15 @@ export default function NovoPedidoPage() {
   }, [buscaCliente, clientes])
 
   function selecionarCliente(c: Cliente) {
-    setCliente({ nome: c.nome, empresa: c.empresa, telefone: c.telefone, email: c.email })
+    setCliente({
+      nome: c.nome,
+      empresa: c.empresa,
+      telefone: c.telefone,
+      email: c.email,
+      responsavel: c.responsavel,
+      endereco: c.endereco,
+      documento: c.documento,
+    })
     setBuscaCliente(c.nome)
     setSugestoesAbertas(false)
     setClienteSelecionado(true)
@@ -175,18 +188,36 @@ export default function NovoPedidoPage() {
                   <p className="text-xs text-nice-600 mt-1.5">Cliente cadastrado selecionado.</p>
                 )}
               </div>
+
               <div>
                 <label className="label">Empresa</label>
-                <input className="input" placeholder="Empresa ou equipe" value={cliente.empresa} onChange={e => setCliente(c => ({ ...c, empresa: e.target.value }))} />
+                <input className="input" placeholder="Empresa ou equipe" value={cliente.empresa}
+                  onChange={e => setCliente(c => ({ ...c, empresa: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Responsável</label>
+                <input className="input" placeholder="Nome do responsável" value={cliente.responsavel}
+                  onChange={e => setCliente(c => ({ ...c, responsavel: e.target.value }))} />
               </div>
               <div>
                 <label className="label">Telefone</label>
                 <input className="input" placeholder="(44) 99999-0000" value={cliente.telefone}
                   onChange={e => setCliente(c => ({ ...c, telefone: formatarTelefone(e.target.value) }))} />
               </div>
+              <div>
+                <label className="label">CNPJ / CPF</label>
+                <input className="input" placeholder="Documento (texto livre)" value={cliente.documento}
+                  onChange={e => setCliente(c => ({ ...c, documento: e.target.value }))} />
+              </div>
               <div className="col-span-2">
                 <label className="label">E-mail</label>
-                <input className="input" type="email" placeholder="cliente@email.com" value={cliente.email} onChange={e => setCliente(c => ({ ...c, email: e.target.value }))} />
+                <input className="input" type="email" placeholder="cliente@email.com" value={cliente.email}
+                  onChange={e => setCliente(c => ({ ...c, email: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <label className="label">Endereço</label>
+                <input className="input" placeholder="Rua, número, bairro, cidade..." value={cliente.endereco}
+                  onChange={e => setCliente(c => ({ ...c, endereco: e.target.value }))} />
               </div>
             </div>
           </div>
@@ -215,16 +246,19 @@ export default function NovoPedidoPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label">Valor Total (R$)</label>
-                <input className="input" type="number" placeholder="0,00" value={valorTotal} onChange={e => setValorTotal(e.target.value)} />
+                <input className="input" type="number" placeholder="0,00" value={valorTotal}
+                  onChange={e => setValorTotal(e.target.value)} />
               </div>
               <div>
                 <label className="label">Valor Pago (R$)</label>
-                <input className="input" type="number" placeholder="0,00" value={valorPago} onChange={e => setValorPago(e.target.value)} />
+                <input className="input" type="number" placeholder="0,00" value={valorPago}
+                  onChange={e => setValorPago(e.target.value)} />
               </div>
             </div>
             <div>
               <label className="label">Observações gerais</label>
-              <textarea className="input resize-none" rows={3} placeholder="Observações sobre o pedido..." value={obs} onChange={e => setObs(e.target.value)} />
+              <textarea className="input resize-none" rows={3} placeholder="Observações sobre o pedido..."
+                value={obs} onChange={e => setObs(e.target.value)} />
             </div>
           </div>
 
@@ -274,7 +308,8 @@ export default function NovoPedidoPage() {
                     </div>
                     <div>
                       <label className="label">Cor</label>
-                      <input className="input" placeholder="Ex: branca, preta..." value={peca.cor} onChange={e => updatePeca(peca.id, { cor: e.target.value })} />
+                      <input className="input" placeholder="Ex: branca, preta..." value={peca.cor}
+                        onChange={e => updatePeca(peca.id, { cor: e.target.value })} />
                     </div>
                     <div>
                       <label className="label">Personalizações</label>
@@ -326,6 +361,15 @@ export default function NovoPedidoPage() {
                     <input className="input" placeholder="Ex: logotipo no peito esquerdo..." value={peca.observacoes}
                       onChange={e => updatePeca(peca.id, { observacoes: e.target.value })} />
                   </div>
+
+                  <div>
+                    <label className="label">Fotos da peça</label>
+                    <FotoUpload
+                      pecaId={peca.id}
+                      fotos={peca.fotos}
+                      onChange={fotos => updatePeca(peca.id, { fotos })}
+                    />
+                  </div>
                 </div>
               )
             })}
@@ -350,7 +394,7 @@ export default function NovoPedidoPage() {
             <div className="border-t pt-3">
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Complexidades</p>
               <div className="space-y-1.5">
-                {pecas.map((p, i) => {
+                {pecas.map(p => {
                   const cc = COMPLEXIDADE_CONFIG[p.complexidade]
                   const qtd = p.tamanhos.reduce((a, t) => a + t.quantidade, 0)
                   return (
