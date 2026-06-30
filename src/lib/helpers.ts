@@ -3,7 +3,7 @@ import { Complexidade, Personalizacao } from '@/types'
 export const CATALOGO = {
   Esportivo: ['Camiseta sublimada futebol', 'Short sublimado', 'Rashguard', 'Bermuda Jiu-jitsu/MMA', 'Bermuda Muay Thai'],
   Empresarial: ['Camiseta PV', 'Camiseta algodão', 'Polo PV', 'Polo algodão', 'Polo PQ', 'Camisa social slim', 'Moletom', 'Calça reta', 'Calça slim', 'Bermuda', 'Jaleco'],
-  Escolar: ['Camiseta', 'Polo', 'Bermuda'],
+  Escolar: ['Camiseta M Curta', 'Regata', 'Manga Longa', 'Camiseta Algodão', 'Jardineira Curta', 'Jardineira Longa', 'Conjunto Helança', 'Blusa Helança', 'Blusa c/ Capuz Helança', 'Calça Helança', 'Bailarina/Legging', 'Corsário', 'Conjunto Moletom', 'Blusa Moletom', 'Blusa c/ Capuz Moletom', 'Calça Moletom', 'Shorts Saia Inteira', 'Shorts Saia Meia', 'Conjunto Tactel', 'Blusa Tactel', 'Blusa c/ Capuz Tactel', 'Calça c/ Forro Tactel', 'Calça s/ Forro Tactel', 'Bermuda Helança e Tactel'],
   Acessórios: ['Ecobag', 'Sacolinha kimono', 'Avental', 'Roupa coroinha'],
 }
 
@@ -14,7 +14,7 @@ export const PERSONALIZACOES: { value: Personalizacao; label: string }[] = [
   { value: 'sublimacao', label: 'Sublimação' },
 ]
 
-export const TAMANHOS = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'UNICO'] as const
+export const TAMANHOS = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'UNICO', '01', '02', '04', '06', '08', '10', '12', '14', 'SOB_MEDIDA'] as const
 
 export function calcularComplexidade(tipo: string, personalizacoes: Personalizacao[]): Complexidade {
   const qtdPerson = personalizacoes.length
@@ -36,12 +36,13 @@ export const COMPLEXIDADE_CONFIG: Record<Complexidade, { label: string; color: s
 }
 
 export const STATUS_CONFIG = {
-  orcamento:    { label: 'Orçamento',      color: 'text-gray-600',   bg: 'bg-gray-100' },
-  aprovado:     { label: 'Aprovado',       color: 'text-blue-600',   bg: 'bg-blue-100' },
-  em_producao:  { label: 'Em Produção',    color: 'text-nice-600',   bg: 'bg-nice-100' },
-  finalizado:   { label: 'Finalizado',     color: 'text-purple-600', bg: 'bg-purple-100' },
-  entregue:     { label: 'Entregue',       color: 'text-green-700',  bg: 'bg-green-100' },
-  cancelado:    { label: 'Cancelado',      color: 'text-red-600',    bg: 'bg-red-100' },
+  orcamento:            { label: 'Orçamento',           color: 'text-gray-600',    bg: 'bg-gray-100' },
+  aprovado:             { label: 'Aprovado',            color: 'text-blue-600',    bg: 'bg-blue-100' },
+  aguardando_pagamento: { label: 'Aguardando Pagamento', color: 'text-yellow-700',  bg: 'bg-yellow-100' },
+  em_producao:          { label: 'Em Produção',         color: 'text-nice-600',    bg: 'bg-nice-100' },
+  finalizado:           { label: 'Finalizado',          color: 'text-purple-600',  bg: 'bg-purple-100' },
+  entregue:             { label: 'Entregue',            color: 'text-green-700',   bg: 'bg-green-100' },
+  cancelado:            { label: 'Cancelado',           color: 'text-red-600',     bg: 'bg-red-100' },
 }
 
 export const SETOR_LABELS: Record<string, string> = {

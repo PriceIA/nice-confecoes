@@ -4,18 +4,20 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
   LayoutDashboard, ClipboardList, PlusCircle,
-  Factory, Users, Users2, BarChart3, Scissors, Menu, X
+  Factory, Users, Users2, BarChart3, Scissors, Menu, X, Table2, Settings
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const NAV = [
-  { href: '/dashboard',       label: 'Dashboard',       icon: LayoutDashboard },
-  { href: '/pedidos',         label: 'Pedidos',         icon: ClipboardList },
-  { href: '/clientes',        label: 'Clientes',        icon: Users2 },
-  { href: '/novo-pedido',     label: 'Novo Pedido',     icon: PlusCircle },
-  { href: '/producao',        label: 'Produção',        icon: Factory },
-  { href: '/terceirizadas',   label: 'Terceirizadas',   icon: Users },
-  { href: '/relatorios',      label: 'Relatórios',      icon: BarChart3 },
+  { href: '/dashboard',      label: 'Dashboard',        icon: LayoutDashboard },
+  { href: '/pedidos',        label: 'Pedidos',          icon: ClipboardList },
+  { href: '/clientes',       label: 'Clientes',         icon: Users2 },
+  { href: '/tabela-precos',  label: 'Tabela de Preços', icon: Table2 },
+  { href: '/novo-pedido',    label: 'Novo Pedido',      icon: PlusCircle },
+  { href: '/producao',       label: 'Produção',         icon: Factory },
+  { href: '/terceirizadas',  label: 'Terceirizadas',    icon: Users },
+  { href: '/relatorios',     label: 'Relatórios',       icon: BarChart3 },
+  { href: '/configuracoes',  label: 'Configurações',    icon: Settings },
 ]
 
 function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
@@ -73,7 +75,7 @@ export default function Sidebar() {
   return (
     <>
       {/* Topbar mobile */}
-      <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-nice-800 flex items-center justify-between px-4 z-40 shadow-xl">
+      <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-nice-800 flex items-center justify-between px-4 z-40 shadow-xl print:hidden">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-nice-400 flex items-center justify-center shadow-md">
             <Scissors className="w-4 h-4 text-white" />
@@ -86,13 +88,13 @@ export default function Sidebar() {
       </header>
 
       {/* Sidebar fixa no desktop */}
-      <aside className="hidden md:flex fixed left-0 top-0 h-screen w-60 bg-nice-800 flex-col z-40 shadow-xl">
+      <aside className="hidden md:flex fixed left-0 top-0 h-screen w-60 bg-nice-800 flex-col z-40 shadow-xl print:hidden">
         <SidebarContent pathname={pathname} />
       </aside>
 
       {/* Drawer mobile */}
       {open && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
+        <div className="md:hidden fixed inset-0 z-50 flex print:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
           <aside className="relative h-screen w-60 bg-nice-800 flex flex-col shadow-xl">
             <button onClick={() => setOpen(false)} aria-label="Fechar menu" className="absolute top-5 right-4 text-white p-1">
