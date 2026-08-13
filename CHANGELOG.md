@@ -15,23 +15,53 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 - `supabase/migrations/005_tabela_precos_unique.sql`: registro histórico da constraint
   `unique (grupo, produto, faixa_tamanho)` em `tabela_precos`, aplicada manualmente no banco.
   Bloco `do $$` idempotente que verifica pelas colunas, não pelo nome.
+- `supabase/migrations/006_povoar_tabela_precos.sql`: povoamento da `tabela_precos` com a
+  tabela de preços oficial vigente (2025) — 142 linhas, executado manualmente no Supabase
+  SQL Editor. `produto` usa os nomes exatos do `CATALOGO` (`src/lib/helpers.ts`) e
+  `faixa_tamanho` as strings que o código gera (`0-02`…`P/M/G`, `GG`), não a grafia da
+  imagem original. A linha oficial "Manga Curta/Regata" virou duas (`Camiseta M Curta` e
+  `Regata`, mesmo preço); "Bailarina" e "Legging" viraram uma (`Bailarina/Legging`); as
+  Jardineiras não têm linha `GG`. Re-executável via `on conflict do update`.
 
 ### Alterado
 - **Tabela de preços — gravação reescrita** (`src/app/tabela-precos/page.tsx`). O salvar
   usava `.delete().not('grupo','is',null)` seguido de `insert` em lote, ou seja, apagava a
   tabela inteira antes de reinserir; falha no meio deixava a tabela vazia. Agora usa
   `upsert` com `onConflict: 'grupo,produto,faixa_tamanho'`.
-- Limpar o campo de um preço passou a **remover a linha no banco** por `delete().in('id', …)`
-  com os ids exatos, em vez de gravar `0` — que virava um preço real de R$ 0,00. O
-  carregamento passou a trazer `id` no `select` para viabilizar isso.
+- Preço deixado em branco não grava nada: a linha é pulada (sem `insert` e sem `delete`), o
+  valor que já está no banco é mantido e o usuário é avisado de quais linhas ficaram de
+  fora, sem bloquear o salvamento das demais. Antes, campo vazio gravava `0` — que virava
+  um preço real de R$ 0,00.
 - Mensagens de erro do salvar diferenciam falha de rede (laranja) de erro de
   permissão/RLS, constraint ausente (`42P10`) e validação (`22xxx`/`23xxx`) (vermelho).
   Toda falha diz explicitamente que as alterações ficaram só no navegador e **não** no banco.
-  Mensagem de sucesso passou a informar quantos preços foram salvos e removidos.
+
+### Corrigido
+- **O cálculo automático de preço por peça nunca funcionou** (`src/app/novo-pedido/page.tsx`).
+  O `select` pedia a coluna `preco_unitario`, que não existe em `tabela_precos` — o nome real
+  é `valor`. O PostgREST devolvia `42703`, `data` vinha `null` e o guard `if (data)` engolia
+  o erro em silêncio, então todo pedido caía no `PRECO_FALLBACK` fixo por complexidade.
+- **Preços deslocados uma linha na grade** (`src/app/tabela-precos/page.tsx`). No grupo
+  `CAMISETA/REGATA`, `Regata` exibia o preço de Manga Longa, `Manga Longa` o de Camiseta
+  Algodão, `Camiseta Algodão` o de Jardineira Curta e `Jardineira Curta` o de Jardineira
+  Longa — que por sua vez não aparecia na tela. Realinhado com a tabela oficial 2025.
+  Impacto: `Camiseta Algodão` era exibida a R$ 48,40 quando o correto é R$ 29,80.
 
 ### Segurança
 - Removida a operação de `DELETE` em massa em `tabela_precos` disparada do browser com a
-  anon key. O `DELETE` que restou é pontual, por `id`, e só nas linhas que o usuário limpou.
+  anon key. A tela de preços não emite mais nenhum `DELETE`.
+
+### Dívida técnica
+- **`/tabela-precos` e o cálculo automático de `/novo-pedido` usam taxonomias diferentes.**
+  O cálculo busca o preço por `tabelaPrecos[peca.tipo]`, onde `peca.tipo` é um nome do
+  `CATALOGO` (`src/lib/helpers.ts`) e o `grupo` é ignorado. A tela de preços monta a chave
+  como `grupo + produto + faixa` a partir do `DADOS_PADRAO` (`src/app/tabela-precos/page.tsx`),
+  que tem outros nomes de grupo e de produto. Consequência prática: **editar um preço pela
+  tela não altera o valor usado no cálculo automático**, e vice-versa — as linhas gravadas
+  pelos dois caminhos convivem em paralelo na mesma tabela. Unificar exige eleger a
+  identidade canônica do produto, extrair `CATALOGO` e `DADOS_PADRAO` para um módulo único
+  (junto com as faixas, hoje duplicadas entre `FAIXAS` e `getFaixaTamanho`) e migrar as
+  chaves já gravadas.
 
 ---
 

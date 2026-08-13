@@ -1,0 +1,177 @@
+-- Povoamento da tabela_precos com a tabela de preços oficial vigente (2025).
+--
+-- NÃO EXECUTADO PELO CLAUDE CODE. Rodar manualmente no Supabase SQL Editor.
+--
+-- Decisões tomadas ao converter a tabela oficial para estas linhas:
+--
+-- 1. `produto` usa o nome EXATO do CATALOGO em src/lib/helpers.ts (categoria
+--    Escolar), porque o cálculo automático em novo-pedido/page.tsx:108 procura
+--    o preço por `tabelaPrecos[peca.tipo]`, e `peca.tipo` vem do CATALOGO.
+--
+-- 2. `faixa_tamanho` usa as strings que o CÓDIGO produz — '0-02', '04-06',
+--    '08-10', '12-14', 'P/M/G', 'GG' — e não a grafia da imagem original
+--    ('0.01.02', 'P.M.G'). Quem monta a chave de busca é getFaixaTamanho
+--    (novo-pedido/page.tsx:19-27); com a grafia da imagem nada casaria.
+--
+-- 3. A linha oficial "Manga Curta/Regata" virou DUAS linhas com o mesmo preço,
+--    'Camiseta M Curta' e 'Regata', porque o CATALOGO trata as duas como peças
+--    separadas.
+--
+-- 4. As linhas oficiais "Bailarina" e "Legging" (preços idênticos) viraram UMA
+--    linha 'Bailarina/Legging', que é como o CATALOGO nomeia a peça.
+--
+-- 5. Jardineira Curta e Jardineira Longa não têm linha 'GG' ("não se aplica").
+--
+-- Idempotente: o ON CONFLICT depende da constraint da migration 005.
+-- Reexecutar atualiza os valores em vez de duplicar.
+
+insert into tabela_precos (grupo, produto, faixa_tamanho, valor, updated_at)
+values
+  -- Escolar
+  ('Escolar', 'Camiseta M Curta', '0-02', 26.40, now()),
+  ('Escolar', 'Camiseta M Curta', '04-06', 29.70, now()),
+  ('Escolar', 'Camiseta M Curta', '08-10', 32.30, now()),
+  ('Escolar', 'Camiseta M Curta', '12-14', 34.00, now()),
+  ('Escolar', 'Camiseta M Curta', 'P/M/G', 38.30, now()),
+  ('Escolar', 'Camiseta M Curta', 'GG', 41.80, now()),
+  ('Escolar', 'Regata', '0-02', 26.40, now()),
+  ('Escolar', 'Regata', '04-06', 29.70, now()),
+  ('Escolar', 'Regata', '08-10', 32.30, now()),
+  ('Escolar', 'Regata', '12-14', 34.00, now()),
+  ('Escolar', 'Regata', 'P/M/G', 38.30, now()),
+  ('Escolar', 'Regata', 'GG', 41.80, now()),
+  ('Escolar', 'Manga Longa', '0-02', 29.10, now()),
+  ('Escolar', 'Manga Longa', '04-06', 33.70, now()),
+  ('Escolar', 'Manga Longa', '08-10', 39.70, now()),
+  ('Escolar', 'Manga Longa', '12-14', 42.70, now()),
+  ('Escolar', 'Manga Longa', 'P/M/G', 50.40, now()),
+  ('Escolar', 'Manga Longa', 'GG', 52.00, now()),
+  ('Escolar', 'Camiseta Algodão', '0-02', 29.80, now()),
+  ('Escolar', 'Camiseta Algodão', '04-06', 32.90, now()),
+  ('Escolar', 'Camiseta Algodão', '08-10', 35.80, now()),
+  ('Escolar', 'Camiseta Algodão', '12-14', 37.50, now()),
+  ('Escolar', 'Camiseta Algodão', 'P/M/G', 42.20, now()),
+  ('Escolar', 'Camiseta Algodão', 'GG', 47.20, now()),
+  ('Escolar', 'Jardineira Curta', '0-02', 48.40, now()),
+  ('Escolar', 'Jardineira Curta', '04-06', 54.50, now()),
+  ('Escolar', 'Jardineira Curta', '08-10', 66.60, now()),
+  ('Escolar', 'Jardineira Curta', '12-14', 71.70, now()),
+  ('Escolar', 'Jardineira Curta', 'P/M/G', 90.80, now()),
+  ('Escolar', 'Jardineira Longa', '0-02', 49.30, now()),
+  ('Escolar', 'Jardineira Longa', '04-06', 67.80, now()),
+  ('Escolar', 'Jardineira Longa', '08-10', 76.60, now()),
+  ('Escolar', 'Jardineira Longa', '12-14', 88.10, now()),
+  ('Escolar', 'Jardineira Longa', 'P/M/G', 102.90, now()),
+  -- Conjunto Helanca
+  ('Conjunto Helanca', 'Conjunto Helança', '0-02', 94.60, now()),
+  ('Conjunto Helanca', 'Conjunto Helança', '04-06', 107.20, now()),
+  ('Conjunto Helanca', 'Conjunto Helança', '08-10', 124.60, now()),
+  ('Conjunto Helanca', 'Conjunto Helança', '12-14', 145.50, now()),
+  ('Conjunto Helanca', 'Conjunto Helança', 'P/M/G', 176.80, now()),
+  ('Conjunto Helanca', 'Conjunto Helança', 'GG', 195.00, now()),
+  ('Conjunto Helanca', 'Blusa Helança', '0-02', 57.00, now()),
+  ('Conjunto Helanca', 'Blusa Helança', '04-06', 61.40, now()),
+  ('Conjunto Helanca', 'Blusa Helança', '08-10', 72.30, now()),
+  ('Conjunto Helanca', 'Blusa Helança', '12-14', 82.80, now()),
+  ('Conjunto Helanca', 'Blusa Helança', 'P/M/G', 96.10, now()),
+  ('Conjunto Helanca', 'Blusa Helança', 'GG', 108.50, now()),
+  ('Conjunto Helanca', 'Blusa c/ Capuz Helança', '0-02', 62.00, now()),
+  ('Conjunto Helanca', 'Blusa c/ Capuz Helança', '04-06', 71.00, now()),
+  ('Conjunto Helanca', 'Blusa c/ Capuz Helança', '08-10', 86.30, now()),
+  ('Conjunto Helanca', 'Blusa c/ Capuz Helança', '12-14', 96.10, now()),
+  ('Conjunto Helanca', 'Blusa c/ Capuz Helança', 'P/M/G', 108.50, now()),
+  ('Conjunto Helanca', 'Blusa c/ Capuz Helança', 'GG', 127.20, now()),
+  ('Conjunto Helanca', 'Calça Helança', '0-02', 37.30, now()),
+  ('Conjunto Helanca', 'Calça Helança', '04-06', 45.90, now()),
+  ('Conjunto Helanca', 'Calça Helança', '08-10', 52.10, now()),
+  ('Conjunto Helanca', 'Calça Helança', '12-14', 62.60, now()),
+  ('Conjunto Helanca', 'Calça Helança', 'P/M/G', 81.00, now()),
+  ('Conjunto Helanca', 'Calça Helança', 'GG', 86.30, now()),
+  ('Conjunto Helanca', 'Bailarina/Legging', '0-02', 37.30, now()),
+  ('Conjunto Helanca', 'Bailarina/Legging', '04-06', 45.90, now()),
+  ('Conjunto Helanca', 'Bailarina/Legging', '08-10', 52.10, now()),
+  ('Conjunto Helanca', 'Bailarina/Legging', '12-14', 62.60, now()),
+  ('Conjunto Helanca', 'Bailarina/Legging', 'P/M/G', 81.00, now()),
+  ('Conjunto Helanca', 'Bailarina/Legging', 'GG', 86.30, now()),
+  ('Conjunto Helanca', 'Corsário', '0-02', 34.40, now()),
+  ('Conjunto Helanca', 'Corsário', '04-06', 36.90, now()),
+  ('Conjunto Helanca', 'Corsário', '08-10', 41.70, now()),
+  ('Conjunto Helanca', 'Corsário', '12-14', 45.70, now()),
+  ('Conjunto Helanca', 'Corsário', 'P/M/G', 53.60, now()),
+  ('Conjunto Helanca', 'Corsário', 'GG', 57.00, now()),
+  -- Conjunto Moletom
+  ('Conjunto Moletom', 'Conjunto Moletom', '0-02', 117.00, now()),
+  ('Conjunto Moletom', 'Conjunto Moletom', '04-06', 140.50, now()),
+  ('Conjunto Moletom', 'Conjunto Moletom', '08-10', 160.10, now()),
+  ('Conjunto Moletom', 'Conjunto Moletom', '12-14', 179.60, now()),
+  ('Conjunto Moletom', 'Conjunto Moletom', 'P/M/G', 214.30, now()),
+  ('Conjunto Moletom', 'Conjunto Moletom', 'GG', 243.70, now()),
+  ('Conjunto Moletom', 'Blusa Moletom', '0-02', 65.40, now()),
+  ('Conjunto Moletom', 'Blusa Moletom', '04-06', 80.80, now()),
+  ('Conjunto Moletom', 'Blusa Moletom', '08-10', 87.80, now()),
+  ('Conjunto Moletom', 'Blusa Moletom', '12-14', 102.50, now()),
+  ('Conjunto Moletom', 'Blusa Moletom', 'P/M/G', 121.00, now()),
+  ('Conjunto Moletom', 'Blusa Moletom', 'GG', 140.50, now()),
+  ('Conjunto Moletom', 'Blusa c/ Capuz Moletom', '0-02', 76.60, now()),
+  ('Conjunto Moletom', 'Blusa c/ Capuz Moletom', '04-06', 86.40, now()),
+  ('Conjunto Moletom', 'Blusa c/ Capuz Moletom', '08-10', 97.10, now()),
+  ('Conjunto Moletom', 'Blusa c/ Capuz Moletom', '12-14', 117.00, now()),
+  ('Conjunto Moletom', 'Blusa c/ Capuz Moletom', 'P/M/G', 132.30, now()),
+  ('Conjunto Moletom', 'Blusa c/ Capuz Moletom', 'GG', 158.80, now()),
+  ('Conjunto Moletom', 'Calça Moletom', '0-02', 51.50, now()),
+  ('Conjunto Moletom', 'Calça Moletom', '04-06', 59.90, now()),
+  ('Conjunto Moletom', 'Calça Moletom', '08-10', 72.40, now()),
+  ('Conjunto Moletom', 'Calça Moletom', '12-14', 76.60, now()),
+  ('Conjunto Moletom', 'Calça Moletom', 'P/M/G', 93.30, now()),
+  ('Conjunto Moletom', 'Calça Moletom', 'GG', 103.00, now()),
+  ('Conjunto Moletom', 'Shorts Saia Inteira', '0-02', 38.00, now()),
+  ('Conjunto Moletom', 'Shorts Saia Inteira', '04-06', 41.00, now()),
+  ('Conjunto Moletom', 'Shorts Saia Inteira', '08-10', 48.50, now()),
+  ('Conjunto Moletom', 'Shorts Saia Inteira', '12-14', 52.50, now()),
+  ('Conjunto Moletom', 'Shorts Saia Inteira', 'P/M/G', 58.50, now()),
+  ('Conjunto Moletom', 'Shorts Saia Inteira', 'GG', 68.00, now()),
+  ('Conjunto Moletom', 'Shorts Saia Meia', '0-02', 34.50, now()),
+  ('Conjunto Moletom', 'Shorts Saia Meia', '04-06', 37.50, now()),
+  ('Conjunto Moletom', 'Shorts Saia Meia', '08-10', 44.50, now()),
+  ('Conjunto Moletom', 'Shorts Saia Meia', '12-14', 48.50, now()),
+  ('Conjunto Moletom', 'Shorts Saia Meia', 'P/M/G', 53.00, now()),
+  ('Conjunto Moletom', 'Shorts Saia Meia', 'GG', 62.50, now()),
+  -- Conjunto Tactel
+  ('Conjunto Tactel', 'Conjunto Tactel', '0-02', 118.25, now()),
+  ('Conjunto Tactel', 'Conjunto Tactel', '04-06', 142.00, now()),
+  ('Conjunto Tactel', 'Conjunto Tactel', '08-10', 162.10, now()),
+  ('Conjunto Tactel', 'Conjunto Tactel', '12-14', 173.80, now()),
+  ('Conjunto Tactel', 'Conjunto Tactel', 'P/M/G', 215.00, now()),
+  ('Conjunto Tactel', 'Conjunto Tactel', 'GG', 245.00, now()),
+  ('Conjunto Tactel', 'Blusa Tactel', '0-02', 58.90, now()),
+  ('Conjunto Tactel', 'Blusa Tactel', '04-06', 63.30, now()),
+  ('Conjunto Tactel', 'Blusa Tactel', '08-10', 89.20, now()),
+  ('Conjunto Tactel', 'Blusa Tactel', '12-14', 105.70, now()),
+  ('Conjunto Tactel', 'Blusa Tactel', 'P/M/G', 124.00, now()),
+  ('Conjunto Tactel', 'Blusa Tactel', 'GG', 145.00, now()),
+  ('Conjunto Tactel', 'Blusa c/ Capuz Tactel', '0-02', 77.90, now()),
+  ('Conjunto Tactel', 'Blusa c/ Capuz Tactel', '04-06', 85.30, now()),
+  ('Conjunto Tactel', 'Blusa c/ Capuz Tactel', '08-10', 92.40, now()),
+  ('Conjunto Tactel', 'Blusa c/ Capuz Tactel', '12-14', 115.40, now()),
+  ('Conjunto Tactel', 'Blusa c/ Capuz Tactel', 'P/M/G', 125.30, now()),
+  ('Conjunto Tactel', 'Blusa c/ Capuz Tactel', 'GG', 151.90, now()),
+  ('Conjunto Tactel', 'Calça c/ Forro Tactel', '0-02', 48.90, now()),
+  ('Conjunto Tactel', 'Calça c/ Forro Tactel', '04-06', 57.40, now()),
+  ('Conjunto Tactel', 'Calça c/ Forro Tactel', '08-10', 71.60, now()),
+  ('Conjunto Tactel', 'Calça c/ Forro Tactel', '12-14', 75.40, now()),
+  ('Conjunto Tactel', 'Calça c/ Forro Tactel', 'P/M/G', 88.70, now()),
+  ('Conjunto Tactel', 'Calça c/ Forro Tactel', 'GG', 98.40, now()),
+  ('Conjunto Tactel', 'Calça s/ Forro Tactel', '0-02', 37.60, now()),
+  ('Conjunto Tactel', 'Calça s/ Forro Tactel', '04-06', 45.80, now()),
+  ('Conjunto Tactel', 'Calça s/ Forro Tactel', '08-10', 52.00, now()),
+  ('Conjunto Tactel', 'Calça s/ Forro Tactel', '12-14', 62.50, now()),
+  ('Conjunto Tactel', 'Calça s/ Forro Tactel', 'P/M/G', 80.60, now()),
+  ('Conjunto Tactel', 'Calça s/ Forro Tactel', 'GG', 86.20, now()),
+  ('Conjunto Tactel', 'Bermuda Helança e Tactel', '0-02', 27.10, now()),
+  ('Conjunto Tactel', 'Bermuda Helança e Tactel', '04-06', 36.20, now()),
+  ('Conjunto Tactel', 'Bermuda Helança e Tactel', '08-10', 39.20, now()),
+  ('Conjunto Tactel', 'Bermuda Helança e Tactel', '12-14', 41.80, now()),
+  ('Conjunto Tactel', 'Bermuda Helança e Tactel', 'P/M/G', 48.00, now()),
+  ('Conjunto Tactel', 'Bermuda Helança e Tactel', 'GG', 58.00, now())
+on conflict (grupo, produto, faixa_tamanho)
+do update set valor = excluded.valor, updated_at = now();
