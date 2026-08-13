@@ -12,6 +12,26 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 - `CLAUDE.md` na raiz: contexto permanente do projeto — stack, identidade visual, módulos,
   modelo de dados, regras de negócio, convenções de trabalho e estado de segurança.
 - `CHANGELOG.md` (este arquivo).
+- `supabase/migrations/005_tabela_precos_unique.sql`: registro histórico da constraint
+  `unique (grupo, produto, faixa_tamanho)` em `tabela_precos`, aplicada manualmente no banco.
+  Bloco `do $$` idempotente que verifica pelas colunas, não pelo nome.
+
+### Alterado
+- **Tabela de preços — gravação reescrita** (`src/app/tabela-precos/page.tsx`). O salvar
+  usava `.delete().not('grupo','is',null)` seguido de `insert` em lote, ou seja, apagava a
+  tabela inteira antes de reinserir; falha no meio deixava a tabela vazia. Agora usa
+  `upsert` com `onConflict: 'grupo,produto,faixa_tamanho'`.
+- Limpar o campo de um preço passou a **remover a linha no banco** por `delete().in('id', …)`
+  com os ids exatos, em vez de gravar `0` — que virava um preço real de R$ 0,00. O
+  carregamento passou a trazer `id` no `select` para viabilizar isso.
+- Mensagens de erro do salvar diferenciam falha de rede (laranja) de erro de
+  permissão/RLS, constraint ausente (`42P10`) e validação (`22xxx`/`23xxx`) (vermelho).
+  Toda falha diz explicitamente que as alterações ficaram só no navegador e **não** no banco.
+  Mensagem de sucesso passou a informar quantos preços foram salvos e removidos.
+
+### Segurança
+- Removida a operação de `DELETE` em massa em `tabela_precos` disparada do browser com a
+  anon key. O `DELETE` que restou é pontual, por `id`, e só nas linhas que o usuário limpou.
 
 ---
 

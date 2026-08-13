@@ -75,23 +75,76 @@ function defaultPrecos(): PrecoMap {
 
 const LS_KEY = 'nice_tabela_precos'
 
+// Constraint única esperada no banco para o upsert funcionar.
+const ON_CONFLICT = 'grupo,produto,faixa_tamanho'
+
+type StatusMsg = { tipo: 'ok' | 'err' | 'local'; texto: string }
+
+// Toda mensagem de falha deixa explícito que o rascunho ficou só no navegador
+// e NÃO foi gravado no banco — salvar local não é salvar no Supabase.
+const SO_LOCAL = 'As alterações ficaram só neste navegador e ainda NÃO estão no banco.'
+
+function descreverErro(err: unknown): StatusMsg {
+  const e = err as { code?: string; message?: string; details?: string } | null
+  const code = e?.code ?? ''
+  const msg = e?.message ?? ''
+
+  // Falha de rede: o supabase-js devolve code vazio e prefixa a mensagem com FetchError.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { tipo: 'local', texto: `Sem conexão com a internet. ${SO_LOCAL} Salve de novo quando reconectar.` }
+  }
+  if (msg.startsWith('FetchError') || (!code && /fetch|network|failed to fetch/i.test(msg))) {
+    return { tipo: 'local', texto: `Servidor inacessível no momento. ${SO_LOCAL} Salve de novo quando a conexão voltar.` }
+  }
+
+  // Sem a constraint única, o PostgREST rejeita o ON CONFLICT do upsert.
+  if (code === '42P10' || /on conflict/i.test(msg)) {
+    return {
+      tipo: 'err',
+      texto: `O banco não tem a constraint única (${ON_CONFLICT}), necessária para salvar. Nada foi gravado. ${SO_LOCAL} Avise o administrador.`,
+    }
+  }
+
+  // Permissão / RLS.
+  if (code === '42501' || code === 'PGRST301' || code === '401' || code === '403' || /permission|row-level security|not authorized/i.test(msg)) {
+    return { tipo: 'err', texto: `Sem permissão para gravar na tabela de preços. Nada foi gravado. ${SO_LOCAL}` }
+  }
+
+  // Validação: violações de constraint (23xxx) e tipo/formato inválido (22xxx).
+  if (code.startsWith('23') || code.startsWith('22')) {
+    return {
+      tipo: 'err',
+      texto: `O banco rejeitou os dados${code ? ` (${code})` : ''}: ${e?.details || msg || 'valor inválido'}. Nada foi gravado. ${SO_LOCAL}`,
+    }
+  }
+
+  return { tipo: 'err', texto: `Erro ao salvar${code ? ` (${code})` : ''}: ${msg || 'falha desconhecida'}. Nada foi gravado. ${SO_LOCAL}` }
+}
+
 export default function TabelaPrecosPage() {
   const [precos, setPrecos] = useState<PrecoMap>(defaultPrecos)
   const [saving, setSaving] = useState(false)
-  const [statusMsg, setStatusMsg] = useState<{ tipo: 'ok' | 'err' | 'local'; texto: string } | null>(null)
+  const [statusMsg, setStatusMsg] = useState<StatusMsg | null>(null)
   const [loading, setLoading] = useState(true)
+  // key → id da linha no banco. Só o que já existe lá entra aqui; é a origem
+  // dos ids usados no delete pontual quando o usuário limpa um preço.
+  const [idsRemotos, setIdsRemotos] = useState<Record<string, string>>({})
 
   useEffect(() => {
     async function carregar() {
       try {
-        const { data, error } = await supabase.from('tabela_precos').select('grupo, produto, faixa_tamanho, valor')
+        const { data, error } = await supabase.from('tabela_precos').select('id, grupo, produto, faixa_tamanho, valor')
         if (!error && data && data.length > 0) {
           const map: PrecoMap = defaultPrecos()
+          const ids: Record<string, string> = {}
           for (const row of data) {
-            const v = row.valor != null ? Number(row.valor) : null
-            if (v !== null) map[makeKey(row.grupo, row.produto, row.faixa_tamanho)] = v
+            const key = makeKey(row.grupo, row.produto, row.faixa_tamanho)
+            ids[key] = row.id
+            // null aqui é intencional: linha existe no banco sem preço definido.
+            map[key] = row.valor != null ? Number(row.valor) : null
           }
           setPrecos(map)
+          setIdsRemotos(ids)
           localStorage.setItem(LS_KEY, JSON.stringify(map))
         } else {
           throw new Error('vazio')
@@ -116,28 +169,72 @@ export default function TabelaPrecosPage() {
   async function salvar() {
     setSaving(true)
     setStatusMsg(null)
+    // Rascunho local primeiro, para não perder digitação se a gravação falhar.
     localStorage.setItem(LS_KEY, JSON.stringify(precos))
 
-    const rows: { grupo: string; produto: string; faixa_tamanho: string; valor: number; updated_at: string }[] = []
+    const linhas: { grupo: string; produto: string; faixa_tamanho: string; valor: number; updated_at: string }[] = []
+    const idsParaRemover: string[] = []
+    const keysRemovidas: string[] = []
     const now = new Date().toISOString()
+
     for (const g of DADOS_PADRAO) {
       for (const p of g.produtos) {
         FAIXAS.forEach((f, i) => {
+          // Combinação que não existe no catálogo: nunca teve célula editável.
           if (p.precos[i] === null) return
-          const val = precos[makeKey(g.grupo, p.nome, f)]
-          rows.push({ grupo: g.grupo, produto: p.nome, faixa_tamanho: f, valor: val ?? 0, updated_at: now })
+          const key = makeKey(g.grupo, p.nome, f)
+          const val = precos[key]
+          if (val == null) {
+            // Célula limpa na UI = preço removido. Apaga a linha pelo id em vez
+            // de gravar 0, que seria um preço real e errado.
+            const id = idsRemotos[key]
+            if (id) {
+              idsParaRemover.push(id)
+              keysRemovidas.push(key)
+            }
+            return
+          }
+          linhas.push({ grupo: g.grupo, produto: p.nome, faixa_tamanho: f, valor: val, updated_at: now })
         })
       }
     }
 
     try {
-      const { error: delErr } = await supabase.from('tabela_precos').delete().not('grupo', 'is', null)
-      if (delErr) throw delErr
-      const { error: insErr } = await supabase.from('tabela_precos').insert(rows)
-      if (insErr) throw insErr
-      setStatusMsg({ tipo: 'ok', texto: 'Alterações salvas com sucesso.' })
-    } catch {
-      setStatusMsg({ tipo: 'local', texto: 'Supabase indisponível — salvo localmente.' })
+      // Upsert antes do delete: se a gravação falhar, nada foi removido.
+      if (linhas.length > 0) {
+        const { data, error } = await supabase
+          .from('tabela_precos')
+          .upsert(linhas, { onConflict: ON_CONFLICT })
+          .select('id, grupo, produto, faixa_tamanho')
+        if (error) throw error
+        if (data) {
+          setIdsRemotos(prev => {
+            const next = { ...prev }
+            for (const row of data) next[makeKey(row.grupo, row.produto, row.faixa_tamanho)] = row.id
+            return next
+          })
+        }
+      }
+
+      if (idsParaRemover.length > 0) {
+        const { error } = await supabase.from('tabela_precos').delete().in('id', idsParaRemover)
+        if (error) throw error
+        setIdsRemotos(prev => {
+          const next = { ...prev }
+          for (const key of keysRemovidas) delete next[key]
+          return next
+        })
+      }
+
+      const removidas = idsParaRemover.length
+      setStatusMsg({
+        tipo: 'ok',
+        texto: removidas > 0
+          ? `${linhas.length} preço(s) salvos no banco e ${removidas} removido(s).`
+          : `${linhas.length} preço(s) salvos no banco.`,
+      })
+    } catch (err) {
+      setStatusMsg(descreverErro(err))
     } finally {
       setSaving(false)
     }
@@ -214,13 +311,13 @@ export default function TabelaPrecosPage() {
       ))}
 
       {/* Botão salvar fixo */}
-      <div className="fixed bottom-0 left-0 md:left-60 right-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center justify-between z-30">
-        <div className="text-sm">
+      <div className="fixed bottom-0 left-0 md:left-60 right-0 bg-white border-t border-gray-200 px-6 py-4 flex items-start justify-between gap-4 z-30">
+        <div className="text-sm flex-1 min-w-0" role="status" aria-live="polite">
           {statusMsg?.tipo === 'ok'    && <span className="text-green-600 font-medium">{statusMsg.texto}</span>}
           {statusMsg?.tipo === 'local' && <span className="text-orange-500 font-medium">{statusMsg.texto}</span>}
           {statusMsg?.tipo === 'err'   && <span className="text-red-600 font-medium">{statusMsg.texto}</span>}
         </div>
-        <button onClick={salvar} disabled={saving} className="btn-primary">
+        <button onClick={salvar} disabled={saving} className="btn-primary shrink-0">
           <Save className="w-4 h-4" />
           {saving ? 'Salvando...' : 'Salvar alterações'}
         </button>
