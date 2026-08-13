@@ -7,6 +7,7 @@ import { getPedidoById, atualizarPedido } from '@/lib/store'
 import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade } from '@/lib/helpers'
 import { Pedido, Peca, StatusPedido, StatusSetor, ProgressoSetor, Personalizacao, TamanhoQuantidade } from '@/types'
 import FotoUpload from '@/components/FotoUpload'
+import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
 import Link from 'next/link'
 
@@ -90,6 +91,7 @@ function ClienteTabela({ pedido, resumida }: { pedido: Pedido; resumida?: boolea
 export default function DetalhePedidoPage() {
   const { id } = useParams()
   const router = useRouter()
+  const { permissoes } = useMembro()
   const [pedido, setPedido] = useState<Pedido | null>(null)
 
   const [editando, setEditando] = useState(false)
@@ -240,7 +242,7 @@ export default function DetalhePedidoPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {!editando && (
+          {!editando && permissoes.editarPedido && (
             <button onClick={iniciarEdicao} className="btn-secondary">
               <Pencil className="w-4 h-4" /> Editar Pedido
             </button>
@@ -531,8 +533,9 @@ export default function DetalhePedidoPage() {
                       p.pago ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100')}>
                     <div className="flex items-center gap-3">
                       <input type="checkbox" checked={p.pago}
+                        disabled={!permissoes.editarPedido}
                         onChange={e => marcarParcelaPaga(p.id, e.target.checked)}
-                        className="w-4 h-4 accent-nice-500 cursor-pointer" />
+                        className="w-4 h-4 accent-nice-500 cursor-pointer disabled:cursor-default" />
                       <div>
                         <p className={clsx('font-medium', p.pago ? 'text-green-700' : 'text-gray-700')}>
                           {p.descricao || `Parcela ${i + 1}`}
@@ -578,8 +581,9 @@ export default function DetalhePedidoPage() {
                 const status = pedido.progresso[setor]
                 return (
                   <button key={setor} onClick={() => ciclarSetor(setor)}
+                    disabled={!permissoes.editarPedido}
                     className={clsx(
-                      'w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm',
+                      'w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm disabled:cursor-default',
                       status === 'concluido' ? 'bg-nice-50 border-nice-200' :
                       status === 'em_andamento' ? 'bg-orange-50 border-orange-200' :
                       'bg-gray-50 border-gray-100 hover:border-gray-200'
@@ -605,6 +609,7 @@ export default function DetalhePedidoPage() {
         {/* Sidebar lateral */}
         <div className="space-y-4">
           {/* Status */}
+          {permissoes.editarPedido && (
           <div className="card space-y-3">
             <h2 className="font-semibold text-nice-800 text-sm">Alterar Status</h2>
             <div className="space-y-1.5">
@@ -621,6 +626,7 @@ export default function DetalhePedidoPage() {
               })}
             </div>
           </div>
+          )}
 
           {/* Datas e valor */}
           <div className="card space-y-3 text-sm">

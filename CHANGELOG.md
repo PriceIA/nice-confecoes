@@ -23,7 +23,28 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
   `Regata`, mesmo preço); "Bailarina" e "Legging" viraram uma (`Bailarina/Legging`); as
   Jardineiras não têm linha `GG`. Re-executável via `on conflict do update`.
 
+- **Autenticação (Fase A).** Login por usuário e senha com Supabase Auth + `@supabase/ssr`
+  (sessão em cookies), cobrindo:
+  - `/login` — usuário curto sem `@`; o e-mail é montado como `usuario@niceconfec.app`.
+    Erro sempre genérico ("usuário ou senha incorretos"), sem expor detalhe do Supabase.
+  - `src/middleware.ts` — exige sessão em tudo que não seja `/login`, valida com `getUser()`
+    e aplica a matriz de permissões por URL. `/api/keep-alive` fica fora do matcher para o
+    cron da Vercel continuar funcionando sem sessão.
+  - `src/lib/permissoes.ts` — **fonte única** das regras de perfil (`gestor`,
+    `recepcionista`, `costureira`), consumida por middleware, sidebar e telas.
+  - `src/components/AuthProvider.tsx` — contexto com o membro logado, resolvido no servidor
+    pelo layout raiz (sem flash de carregamento). `useMembro()` devolve
+    `{ membro, permissoes, sair }`.
+  - `/perfil` — troca da própria senha, aberta a todos os perfis.
+  - Botão "Sair" na sidebar.
+- **Perfil costureira**: leitura em `/pedidos` e `/pedidos/[id]` (sem botões de criar, editar
+  ou excluir), leitura e escrita em `/producao`, e bloqueio das demais rotas com redirect
+  para `/producao`. Gestor e recepcionista seguem com acesso total, sem mudança.
+
 ### Alterado
+- **"Pedro"/"Administrador" deixaram de ser hardcoded.** Nome e perfil na sidebar e o
+  consultor responsável em `/novo-pedido` passam a vir do usuário autenticado
+  (`src/components/layout/Sidebar.tsx`, `src/app/novo-pedido/page.tsx`).
 - **Tabela de preços — gravação reescrita** (`src/app/tabela-precos/page.tsx`). O salvar
   usava `.delete().not('grupo','is',null)` seguido de `insert` em lote, ou seja, apagava a
   tabela inteira antes de reinserir; falha no meio deixava a tabela vazia. Agora usa
@@ -48,6 +69,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
   Impacto: `Camiseta Algodão` era exibida a R$ 48,40 quando o correto é R$ 29,80.
 
 ### Segurança
+- **O acesso à aplicação passou a exigir login.** Antes, qualquer pessoa com a URL abria o
+  sistema inteiro.
+- **RLS continua desabilitado** em `pedidos`, `clientes`, `terceirizadas` e `tabela_precos`,
+  e o `store.ts` continua gravando com a anon key exposta no bundle. **O login protege a
+  aplicação, não o banco**: quem extrair a anon key ainda lê e escreve em qualquer tabela
+  pela API do Supabase, sem passar pelo login. Fechar o RLS é a Fase B e **não foi feita**.
 - Removida a operação de `DELETE` em massa em `tabela_precos` disparada do browser com a
   anon key. A tela de preços não emite mais nenhum `DELETE`.
 

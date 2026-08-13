@@ -10,6 +10,7 @@ import {
 import { Cliente, Parcela, Peca, TamanhoQuantidade, Personalizacao, TipoPedido } from '@/types'
 import { supabase } from '@/lib/supabase'
 import FotoUpload from '@/components/FotoUpload'
+import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
 
 type PersonItem = { value: string; label: string }
@@ -56,6 +57,7 @@ function novaParcela(): Parcela {
 
 export default function NovoPedidoPage() {
   const router = useRouter()
+  const { membro } = useMembro()
 
   const [cliente, setCliente] = useState({
     nome: '', empresa: '', telefone: '', email: '',
@@ -70,7 +72,7 @@ export default function NovoPedidoPage() {
   const [pecas, setPecas] = useState<Peca[]>([novaPeca()])
   const [obs, setObs] = useState('')
   const [parcelas, setParcelas] = useState<Parcela[]>([novaParcela()])
-  const [consultor, setConsultor] = useState('Pedro')
+  const [consultor, setConsultor] = useState(membro?.nome ?? '')
   const [consultorCustom, setConsultorCustom] = useState('')
   const [saving, setSaving] = useState(false)
   const [catalogoEfetivo, setCatalogoEfetivo] = useState<Record<string, string[]>>(
@@ -358,7 +360,7 @@ export default function NovoPedidoPage() {
               <div>
                 <label className="label">Consultor Responsável</label>
                 <select className="input" value={consultor} onChange={e => setConsultor(e.target.value)}>
-                  <option value="Pedro">Pedro</option>
+                  {membro && <option value={membro.nome}>{membro.nome}</option>}
                   <option value="Outro">Outro</option>
                 </select>
               </div>

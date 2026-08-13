@@ -6,6 +6,7 @@ import { PlusCircle, Search, ArrowRight, Trash2 } from 'lucide-react'
 import { getPedidos, deletarPedido } from '@/lib/store'
 import { STATUS_CONFIG, totalPecas } from '@/lib/helpers'
 import { Pedido, StatusPedido } from '@/types'
+import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
 
 const FILTROS: { value: StatusPedido | 'todos'; label: string }[] = [
@@ -20,6 +21,7 @@ const FILTROS: { value: StatusPedido | 'todos'; label: string }[] = [
 ]
 
 export default function PedidosPage() {
+  const { permissoes } = useMembro()
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [filtro, setFiltro] = useState<StatusPedido | 'todos'>('todos')
   const [busca, setBusca] = useState('')
@@ -49,10 +51,12 @@ export default function PedidosPage() {
           <h1 className="text-2xl font-bold text-nice-800">Pedidos</h1>
           <p className="text-sm text-gray-500 mt-0.5">{pedidos.length} pedido(s) cadastrado(s)</p>
         </div>
-        <Link href="/novo-pedido" className="btn-primary">
-          <PlusCircle className="w-4 h-4" />
-          Novo Pedido
-        </Link>
+        {permissoes.criarPedido && (
+          <Link href="/novo-pedido" className="btn-primary">
+            <PlusCircle className="w-4 h-4" />
+            Novo Pedido
+          </Link>
+        )}
       </div>
 
       {/* Filtros + Busca */}
@@ -130,9 +134,11 @@ export default function PedidosPage() {
                           <Link href={`/pedidos/${p.id}`} className="text-nice-600 hover:text-nice-700 font-medium text-xs flex items-center gap-1">
                             Ver <ArrowRight className="w-3 h-3" />
                           </Link>
-                          <button onClick={() => handleDeletar(p.id)} className="text-red-400 hover:text-red-600 transition-colors">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {permissoes.excluirPedido && (
+                            <button onClick={() => handleDeletar(p.id)} className="text-red-400 hover:text-red-600 transition-colors">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

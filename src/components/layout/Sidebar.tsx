@@ -4,9 +4,11 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
   LayoutDashboard, ClipboardList, PlusCircle,
-  Factory, Users, Users2, BarChart3, Scissors, Menu, X, Table2, Settings
+  Factory, Users, Users2, BarChart3, Scissors, Menu, X, Table2, Settings, LogOut
 } from 'lucide-react'
 import clsx from 'clsx'
+import { useMembro } from '@/components/AuthProvider'
+import { PERFIL_LABEL, podeAcessarRota } from '@/lib/permissoes'
 
 const NAV = [
   { href: '/dashboard',      label: 'Dashboard',        icon: LayoutDashboard },
@@ -21,6 +23,14 @@ const NAV = [
 ]
 
 function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+  const { membro, sair } = useMembro()
+
+  // O menu esconde o que o perfil não pode abrir. Quem decide é a mesma função
+  // que o middleware usa, então menu e bloqueio nunca divergem.
+  const itens = membro
+    ? NAV.filter(item => podeAcessarRota(membro.perfil, item.href))
+    : []
+
   return (
     <>
       {/* Logo */}
@@ -38,7 +48,7 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {itens.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (
             <Link key={href} href={href} onClick={onNavigate} className={clsx(
@@ -54,15 +64,30 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="px-4 py-4 border-t border-nice-700">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-nice-500 flex items-center justify-center text-white text-xs font-bold">P</div>
-          <div>
-            <div className="text-white text-sm font-medium">Pedro</div>
-            <div className="text-nice-300 text-xs">Administrador</div>
+      {/* Usuário logado */}
+      <div className="px-4 py-4 border-t border-nice-700 space-y-2">
+        <Link
+          href="/perfil"
+          onClick={onNavigate}
+          className="flex items-center gap-3 rounded-xl px-1 py-1 hover:bg-nice-700 transition-colors"
+        >
+          <div className="w-8 h-8 rounded-full bg-nice-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            {membro?.nome?.charAt(0).toUpperCase() ?? '?'}
           </div>
-        </div>
+          <div className="min-w-0">
+            <div className="text-white text-sm font-medium truncate">{membro?.nome ?? '—'}</div>
+            <div className="text-nice-300 text-xs">
+              {membro ? PERFIL_LABEL[membro.perfil] : '—'}
+            </div>
+          </div>
+        </Link>
+        <button
+          onClick={sair}
+          className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-medium text-nice-200 hover:bg-nice-700 hover:text-white transition-colors"
+        >
+          <LogOut className="w-4 h-4 shrink-0" />
+          Sair
+        </button>
       </div>
     </>
   )

@@ -13,7 +13,7 @@ mesmo dia.
 - **Libs:** `date-fns`, `lucide-react`, `clsx`
 - **Repo:** github.com/PriceIA/nice-confecoes
 - **Deploy:** nice-confecoes.vercel.app
-- **Não existe:** testes, autenticação, camada de API (exceto um route handler de keep-alive)
+- **Não existe:** testes, camada de API (exceto um route handler de keep-alive)
 
 ## Identidade visual
 
@@ -45,12 +45,22 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros |
 | `/relatorios` | `src/app/relatorios/page.tsx` | Fechamento mensal: receita, unidades, distribuição por complexidade |
 | `/configuracoes` | `src/app/configuracoes/page.tsx` | Catálogo de peças e personalizações — **grava só em `localStorage`**, não vai para o banco nem é compartilhado entre dispositivos |
-| `/api/keep-alive` | `src/app/api/keep-alive/route.ts` | Route handler; cron diário 06:00 UTC (`vercel.json`) para evitar a pausa por inatividade do Supabase free |
+| `/login` | `src/app/login/page.tsx` + `LoginForm.tsx` | Única rota pública. Usuário curto + senha; o e-mail é montado como `usuario@niceconfec.app` |
+| `/perfil` | `src/app/perfil/page.tsx` | Mostra nome e perfil do usuário logado e permite trocar a própria senha. Aberta a todos os perfis |
+| `/api/keep-alive` | `src/app/api/keep-alive/route.ts` | Route handler; cron diário 06:00 UTC (`vercel.json`) para evitar a pausa por inatividade do Supabase free. **Fora do matcher do middleware** — o cron não tem sessão |
 
 Código compartilhado:
 
+- `src/lib/permissoes.ts` — **fonte única das regras de perfil**. Middleware, sidebar e telas
+  consultam a mesma matriz; nunca espalhe `if (perfil === ...)` por componente
+- `src/middleware.ts` — exige sessão em tudo que não é `/login` e aplica a matriz de rotas
+- `src/components/AuthProvider.tsx` — contexto com o membro logado; `useMembro()` devolve
+  `{ membro, permissoes, sair }`
+- `src/lib/supabase/client.ts` e `src/lib/supabase/server.ts` — clients de **autenticação**
+  (`@supabase/ssr`, sessão em cookies)
 - `src/lib/store.ts` — **todo** o acesso a dados passa por aqui (exceto `tabela-precos`, ver abaixo)
-- `src/lib/supabase.ts` — client singleton, anon key
+- `src/lib/supabase.ts` — client singleton, anon key, **sem sessão**; é o que o `store.ts` usa
+  para dados de negócio. Não confundir com os clients de auth acima
 - `src/lib/helpers.ts` — `CATALOGO`, `PERSONALIZACOES`, `TAMANHOS`, `calcularComplexidade`, `STATUS_CONFIG`, `SETOR_LABELS`, `totalPecas`
 - `src/types/index.ts` — todos os tipos do domínio
 - `src/components/FotoUpload.tsx` — upload de fotos por peça, com lightbox
@@ -103,6 +113,23 @@ id uuid pk · grupo text · produto text · faixa_tamanho text · valor numeric 
 
 Sem constraint de unicidade em `(grupo, produto, faixa_tamanho)` — por isso a tela de preços
 apaga tudo e reinsere em vez de fazer upsert.
+
+### `equipe`
+
+Tabela de usuários do sistema. **Criada e populada manualmente pelo dono** — não há tela de
+cadastro, e nenhuma migration deste repo a cria.
+
+```
+id · nome · perfil · auth_user_id → auth.users(id)
+check (perfil in ('gestor', 'recepcionista', 'costureira'))
+```
+
+`auth_user_id` liga a linha ao usuário do Supabase Auth. É por ele que o middleware
+(`src/middleware.ts`) e o layout raiz descobrem nome e perfil de quem está logado. Usuário
+autenticado **sem** linha em `equipe` não entra: é devolvido para `/login`.
+
+Os valores de `perfil` estão espelhados em `Perfil` (`src/lib/permissoes.ts`) — ao mexer no
+CHECK, mexa no tipo junto.
 
 ### Storage
 
@@ -160,36 +187,46 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
 
 Seção honesta do que existe hoje. Nada aqui é surpresa — é dívida conhecida e assumida.
 
-**Não há autenticação.** Não existe `supabase.auth` em nenhum lugar de `src/`, não existe
-`middleware.ts` (nem na raiz, nem em `src/`, nem em `src/app/`), não há rota de login
-iniciada. Qualquer pessoa com a URL acessa o sistema inteiro.
+### O que já está protegido (Fase A — feita)
 
-**O app depende inteiramente da anon key.** `src/lib/supabase.ts:3-4` lê
-`NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` — o prefixo `NEXT_PUBLIC_` põe
-as duas no bundle do browser, onde são legíveis por qualquer visitante. Não existe
-`SUPABASE_SERVICE_ROLE_KEY` no repo, então não houve vazamento de chave privilegiada; mas
-também não existe nenhum caminho de acesso privilegiado. Até o route handler
-`src/app/api/keep-alive/route.ts` usa o mesmo client anon.
+**Existe login e ele protege o acesso à aplicação.** Supabase Auth + `@supabase/ssr`, sessão
+em cookies. `src/middleware.ts` exige sessão em toda rota que não seja `/login` e valida com
+`getUser()` (não `getSession()`, que confiaria no cookie sem verificar). Sem sessão →
+`/login`. Com sessão em `/login` → rota inicial do perfil.
 
-**RLS está desabilitado em todas as tabelas**, por migration explícita:
-`supabase/migrations/001_initial.sql:47-49` (clientes, pedidos, terceirizadas) e
-`002_tabela_precos.sql:10` (tabela_precos).
+**Existe autorização por perfil**, com a matriz em `src/lib/permissoes.ts` como fonte única.
+Gestor e recepcionista têm acesso total; costureira lê `/pedidos` e opera `/producao`. O
+middleware bloqueia por URL e a sidebar esconde o que o perfil não pode abrir — os dois
+consultam a **mesma** função `podeAcessarRota`, então menu e bloqueio não divergem.
 
-**Há DELETE disparado direto do browser:**
+### O que continua desprotegido (Fase B — NÃO feita)
 
-- `store.ts:183` — `deletarPedido`, apaga da tabela `pedidos`. Botão de lixeira em
-  `src/app/pedidos/page.tsx:133`, protegido só por um `confirm()`.
-- `src/app/tabela-precos/page.tsx:134` — `.delete().not('grupo', 'is', null)` **apaga a
-  tabela `tabela_precos` inteira** e reinsere logo em seguida (`:136`), disparado pelo botão
-  "Salvar alterações". Se o insert falhar depois do delete, o `catch` (`:139`) apenas exibe
-  "Supabase indisponível — salvo localmente" e a tabela remota fica vazia.
+> **O login protege a aplicação, não o banco.** Essa distinção é a coisa mais importante
+> desta seção.
 
-`src/lib/store.ts` não tem `'use client'`, mas é importado por componentes que têm — na
-prática executa no browser.
+**RLS segue desabilitado nas tabelas de negócio** — `pedidos`, `clientes`, `terceirizadas`
+(`supabase/migrations/001_initial.sql:47-49`) e `tabela_precos` (`002_tabela_precos.sql:10`).
+
+**A anon key continua no bundle do browser** (`NEXT_PUBLIC_SUPABASE_ANON_KEY`, lida em
+`src/lib/supabase.ts:3-4`), e todo o `store.ts` grava com ela. Como o RLS está desligado,
+**quem extrair a anon key do bundle lê e escreve em qualquer tabela direto pela API do
+Supabase, sem passar pelo login**. As permissões de perfil valem dentro do app; não valem
+no banco.
+
+Concretamente, isso significa que hoje a costureira é impedida de excluir um pedido **pela
+interface**, mas nada no banco a impediria de fazê-lo por fora dela.
+
+**Fechar o RLS é a Fase B e não foi feita nesta sessão.** Envolve: ligar RLS nas quatro
+tabelas, escrever policies que leiam o perfil a partir de `equipe` via `auth.uid()`, e trocar
+o client anônimo do `store.ts` pelo client autenticado — hoje o `store.ts` usa um client
+**sem sessão**, então nenhuma policy baseada em `auth.uid()` funcionaria com ele.
 
 **Fotos são públicas.** O bucket `pedido-fotos` devolve `getPublicUrl` (`store.ts:314`);
 quem tiver a URL vê a imagem, sem autenticação.
 
-**Trabalho pendente e conhecido:** fechar o RLS e introduzir autenticação. Enquanto isso não
-for feito, as evidências acima ficam registradas aqui para não precisar re-auditar a cada
-sessão.
+**`/api/keep-alive` fica fora do middleware** de propósito (o cron da Vercel não tem sessão).
+A rota só faz um `select id limit 1`, mas é um endpoint sem autenticação — considere isso ao
+mexer nela.
+
+Não existe `SUPABASE_SERVICE_ROLE_KEY` no repo: não houve vazamento de chave privilegiada,
+mas também não existe nenhum caminho de acesso privilegiado.
