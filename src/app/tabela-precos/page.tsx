@@ -12,11 +12,14 @@ const DADOS_PADRAO: GrupoTabela[] = [
   {
     grupo: 'CAMISETA/REGATA',
     produtos: [
+      // "M Curta" e "Regata" são uma linha só na tabela oficial
+      // ("Manga Curta/Regata"), por isso compartilham os mesmos preços.
       { nome: 'M Curta',            precos: [26.40, 29.70, 32.30, 34.00, 38.30,  41.80] },
-      { nome: 'Regata',             precos: [29.10, 33.70, 39.70, 42.70, 50.40,  52.00] },
-      { nome: 'Manga Longa',        precos: [29.80, 32.90, 35.80, 37.50, 42.20,  47.20] },
-      { nome: 'Camiseta Algodão',   precos: [48.40, 54.50, 66.60, 71.70, 90.80,  null] },
-      { nome: 'Jardineira Curta',   precos: [49.30, 67.80, 76.60, 88.10, 102.90, null] },
+      { nome: 'Regata',             precos: [26.40, 29.70, 32.30, 34.00, 38.30,  41.80] },
+      { nome: 'Manga Longa',        precos: [29.10, 33.70, 39.70, 42.70, 50.40,  52.00] },
+      { nome: 'Camiseta Algodão',   precos: [29.80, 32.90, 35.80, 37.50, 42.20,  47.20] },
+      { nome: 'Jardineira Curta',   precos: [48.40, 54.50, 66.60, 71.70, 90.80,  null] },
+      { nome: 'Jardineira Longa',   precos: [49.30, 67.80, 76.60, 88.10, 102.90, null] },
     ],
   },
   {
@@ -78,7 +81,7 @@ const LS_KEY = 'nice_tabela_precos'
 // Constraint única esperada no banco para o upsert funcionar.
 const ON_CONFLICT = 'grupo,produto,faixa_tamanho'
 
-type StatusMsg = { tipo: 'ok' | 'err' | 'local'; texto: string }
+type StatusMsg = { tipo: 'ok' | 'err' | 'local' | 'aviso'; texto: string }
 
 // Toda mensagem de falha deixa explícito que o rascunho ficou só no navegador
 // e NÃO foi gravado no banco — salvar local não é salvar no Supabase.
@@ -126,25 +129,19 @@ export default function TabelaPrecosPage() {
   const [saving, setSaving] = useState(false)
   const [statusMsg, setStatusMsg] = useState<StatusMsg | null>(null)
   const [loading, setLoading] = useState(true)
-  // key → id da linha no banco. Só o que já existe lá entra aqui; é a origem
-  // dos ids usados no delete pontual quando o usuário limpa um preço.
-  const [idsRemotos, setIdsRemotos] = useState<Record<string, string>>({})
 
   useEffect(() => {
     async function carregar() {
       try {
-        const { data, error } = await supabase.from('tabela_precos').select('id, grupo, produto, faixa_tamanho, valor')
+        const { data, error } = await supabase.from('tabela_precos').select('grupo, produto, faixa_tamanho, valor')
         if (!error && data && data.length > 0) {
           const map: PrecoMap = defaultPrecos()
-          const ids: Record<string, string> = {}
           for (const row of data) {
             const key = makeKey(row.grupo, row.produto, row.faixa_tamanho)
-            ids[key] = row.id
             // null aqui é intencional: linha existe no banco sem preço definido.
             map[key] = row.valor != null ? Number(row.valor) : null
           }
           setPrecos(map)
-          setIdsRemotos(ids)
           localStorage.setItem(LS_KEY, JSON.stringify(map))
         } else {
           throw new Error('vazio')
@@ -173,8 +170,7 @@ export default function TabelaPrecosPage() {
     localStorage.setItem(LS_KEY, JSON.stringify(precos))
 
     const linhas: { grupo: string; produto: string; faixa_tamanho: string; valor: number; updated_at: string }[] = []
-    const idsParaRemover: string[] = []
-    const keysRemovidas: string[] = []
+    const puladas: string[] = []
     const now = new Date().toISOString()
 
     for (const g of DADOS_PADRAO) {
@@ -182,16 +178,11 @@ export default function TabelaPrecosPage() {
         FAIXAS.forEach((f, i) => {
           // Combinação que não existe no catálogo: nunca teve célula editável.
           if (p.precos[i] === null) return
-          const key = makeKey(g.grupo, p.nome, f)
-          const val = precos[key]
+          const val = precos[makeKey(g.grupo, p.nome, f)]
           if (val == null) {
-            // Célula limpa na UI = preço removido. Apaga a linha pelo id em vez
-            // de gravar 0, que seria um preço real e errado.
-            const id = idsRemotos[key]
-            if (id) {
-              idsParaRemover.push(id)
-              keysRemovidas.push(key)
-            }
+            // Preço vazio não é instrução de apagar: a linha fica intocada no
+            // banco (sem insert e sem delete) e o usuário é avisado.
+            puladas.push(`${p.nome} (${f})`)
             return
           }
           linhas.push({ grupo: g.grupo, produto: p.nome, faixa_tamanho: f, valor: val, updated_at: now })
@@ -200,39 +191,23 @@ export default function TabelaPrecosPage() {
     }
 
     try {
-      // Upsert antes do delete: se a gravação falhar, nada foi removido.
       if (linhas.length > 0) {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('tabela_precos')
           .upsert(linhas, { onConflict: ON_CONFLICT })
-          .select('id, grupo, produto, faixa_tamanho')
         if (error) throw error
-        if (data) {
-          setIdsRemotos(prev => {
-            const next = { ...prev }
-            for (const row of data) next[makeKey(row.grupo, row.produto, row.faixa_tamanho)] = row.id
-            return next
-          })
-        }
       }
 
-      if (idsParaRemover.length > 0) {
-        const { error } = await supabase.from('tabela_precos').delete().in('id', idsParaRemover)
-        if (error) throw error
-        setIdsRemotos(prev => {
-          const next = { ...prev }
-          for (const key of keysRemovidas) delete next[key]
-          return next
+      if (puladas.length === 0) {
+        setStatusMsg({ tipo: 'ok', texto: `${linhas.length} preço(s) salvos no banco.` })
+      } else {
+        const amostra = puladas.slice(0, 3).join(', ')
+        const resto = puladas.length > 3 ? ` e mais ${puladas.length - 3}` : ''
+        setStatusMsg({
+          tipo: 'aviso',
+          texto: `${linhas.length} preço(s) salvos. ${puladas.length} linha(s) não foram alteradas por estarem com o preço vazio — o valor que já estava no banco foi mantido: ${amostra}${resto}.`,
         })
       }
-
-      const removidas = idsParaRemover.length
-      setStatusMsg({
-        tipo: 'ok',
-        texto: removidas > 0
-          ? `${linhas.length} preço(s) salvos no banco e ${removidas} removido(s).`
-          : `${linhas.length} preço(s) salvos no banco.`,
-      })
     } catch (err) {
       setStatusMsg(descreverErro(err))
     } finally {
@@ -314,6 +289,7 @@ export default function TabelaPrecosPage() {
       <div className="fixed bottom-0 left-0 md:left-60 right-0 bg-white border-t border-gray-200 px-6 py-4 flex items-start justify-between gap-4 z-30">
         <div className="text-sm flex-1 min-w-0" role="status" aria-live="polite">
           {statusMsg?.tipo === 'ok'    && <span className="text-green-600 font-medium">{statusMsg.texto}</span>}
+          {statusMsg?.tipo === 'aviso' && <span className="text-yellow-700 font-medium">{statusMsg.texto}</span>}
           {statusMsg?.tipo === 'local' && <span className="text-orange-500 font-medium">{statusMsg.texto}</span>}
           {statusMsg?.tipo === 'err'   && <span className="text-red-600 font-medium">{statusMsg.texto}</span>}
         </div>

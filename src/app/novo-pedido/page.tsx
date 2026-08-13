@@ -84,12 +84,12 @@ export default function NovoPedidoPage() {
   useEffect(() => {
     (async () => {
       setClientes(await getClientes())
-      const { data } = await supabase.from('tabela_precos').select('produto, faixa_tamanho, preco_unitario')
+      const { data } = await supabase.from('tabela_precos').select('produto, faixa_tamanho, valor')
       if (data) {
         const tabela: Record<string, Record<string, number>> = {}
         for (const row of data) {
           if (!tabela[row.produto]) tabela[row.produto] = {}
-          tabela[row.produto][row.faixa_tamanho] = row.preco_unitario
+          tabela[row.produto][row.faixa_tamanho] = row.valor
         }
         setTabelaPrecos(tabela)
       }
