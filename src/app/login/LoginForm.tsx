@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Scissors, Loader2 } from 'lucide-react'
 import { criarClienteBrowser } from '@/lib/supabase/client'
+import BotaoTema from '@/components/BotaoTema'
 import { rotaInicialDe, type Perfil } from '@/lib/permissoes'
 
 // O login é por usuário curto (sem @); o domínio é fixo e interno.
@@ -58,14 +59,20 @@ export default function LoginForm({ avisoInicial }: { avisoInicial: string | nul
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f4f6f4] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-fundo px-4">
+      {/* O /login não tem sidebar nem topbar, então o alternador fica solto no
+          canto — senão não haveria como trocar o tema antes de entrar. */}
+      <div className="absolute top-4 right-4">
+        <BotaoTema variante="avulso" />
+      </div>
+
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-nice-500 flex items-center justify-center shadow-md mb-3">
             <Scissors className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-xl font-bold text-nice-800">Nice Confecções</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Gestão de pedidos</p>
+          <h1 className="text-xl font-bold text-titulo">Nice Confecções</h1>
+          <p className="text-sm text-suave mt-0.5">Gestão de pedidos</p>
         </div>
 
         <form onSubmit={entrar} className="card space-y-4">

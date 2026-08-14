@@ -48,8 +48,8 @@ export default function PedidosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-nice-800">Pedidos</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{pedidos.length} pedido(s) cadastrado(s)</p>
+          <h1 className="text-2xl font-bold text-titulo">Pedidos</h1>
+          <p className="text-sm text-suave mt-0.5">{pedidos.length} pedido(s) cadastrado(s)</p>
         </div>
         {permissoes.criarPedido && (
           <Link href="/novo-pedido" className="btn-primary">
@@ -63,7 +63,7 @@ export default function PedidosPage() {
       <div className="card py-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fraco" />
             <input
               className="input pl-9"
               placeholder="Buscar por cliente, empresa ou número..."
@@ -77,7 +77,7 @@ export default function PedidosPage() {
                 className={clsx('px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors',
                   filtro === f.value
                     ? 'bg-nice-500 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>
+                    : 'bg-superficie-3 text-suave hover:bg-superficie-3')}>
                 {f.label}
               </button>
             ))}
@@ -88,14 +88,14 @@ export default function PedidosPage() {
       {/* Tabela */}
       <div className="card p-0 overflow-hidden">
         {filtrados.length === 0 ? (
-          <div className="py-20 text-center text-gray-400">
+          <div className="py-20 text-center text-fraco">
             <p className="text-sm">Nenhum pedido encontrado.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                <tr className="bg-superficie-2 text-xs text-suave uppercase tracking-wide">
                   <th className="text-left px-6 py-3 font-semibold">Nº</th>
                   <th className="text-left px-6 py-3 font-semibold">Cliente</th>
                   <th className="text-left px-6 py-3 font-semibold">Consultor</th>
@@ -107,31 +107,31 @@ export default function PedidosPage() {
                   <th className="px-6 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-borda">
                 {filtrados.map(p => {
                   const sc = STATUS_CONFIG[p.status]
                   return (
-                    <tr key={p.id} className="hover:bg-gray-50 transition-colors group">
-                      <td className="px-6 py-4 font-semibold text-nice-700">#{p.numero}</td>
+                    <tr key={p.id} className="hover:bg-superficie-2 transition-colors group">
+                      <td className="px-6 py-4 font-semibold text-marca-texto">#{p.numero}</td>
                       <td className="px-6 py-4">
-                        <div className="font-medium text-gray-800">{p.cliente.nome}</div>
-                        {p.cliente.empresa && <div className="text-xs text-gray-400">{p.cliente.empresa}</div>}
+                        <div className="font-medium text-conteudo">{p.cliente.nome}</div>
+                        {p.cliente.empresa && <div className="text-xs text-fraco">{p.cliente.empresa}</div>}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{p.consultor || <span className="text-gray-300">—</span>}</td>
+                      <td className="px-6 py-4 text-sm text-suave">{p.consultor || <span className="text-fraco">—</span>}</td>
                       <td className="px-6 py-4">
                         {p.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600">urgente</span>}
                         {p.tipo === 'grande_volume' && <span className="badge bg-purple-100 text-purple-600">grande vol.</span>}
-                        {p.tipo === 'normal' && <span className="text-gray-400 text-xs">normal</span>}
+                        {p.tipo === 'normal' && <span className="text-fraco text-xs">normal</span>}
                       </td>
-                      <td className="px-6 py-4 text-gray-600">{totalPecas(p)} un.</td>
+                      <td className="px-6 py-4 text-suave">{totalPecas(p)} un.</td>
                       <td className="px-6 py-4">
                         <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
                       </td>
-                      <td className="px-6 py-4 text-gray-500">{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</td>
-                      <td className="px-6 py-4 text-gray-600 font-medium">{format(new Date(p.dataEntrega), 'dd/MM/yyyy')}</td>
+                      <td className="px-6 py-4 text-suave">{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</td>
+                      <td className="px-6 py-4 text-suave font-medium">{format(new Date(p.dataEntrega), 'dd/MM/yyyy')}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Link href={`/pedidos/${p.id}`} className="text-nice-600 hover:text-nice-700 font-medium text-xs flex items-center gap-1">
+                          <Link href={`/pedidos/${p.id}`} className="text-marca-texto hover:text-marca-texto font-medium text-xs flex items-center gap-1">
                             Ver <ArrowRight className="w-3 h-3" />
                           </Link>
                           {permissoes.excluirPedido && (

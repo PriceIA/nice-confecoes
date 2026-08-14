@@ -9,6 +9,66 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 ## [Não lançado]
 
 ### Adicionado
+
+- **Tema claro/escuro em todo o sistema**, alternável pelo usuário.
+  - Fonte única em variáveis CSS (`:root` e `.dark` em `src/app/globals.css`) para superfície,
+    texto, borda e marca. As classes utilitárias (`.card`, `.btn-*`, `.input`, `.label`)
+    consomem as variáveis, e as telas usam cores **semânticas** (`bg-superficie`,
+    `text-conteudo`, `text-suave`, `text-fraco`, `text-titulo`, `border-borda`,
+    `text-marca-texto`…). Nenhum `dark:` espalhado pelas telas.
+  - `darkMode: 'class'` no `tailwind.config.ts`; a classe `dark` no `<html>` é a única chave.
+  - `src/components/TemaProvider.tsx` + `src/components/BotaoTema.tsx` (sol/lua na sidebar, no
+    topbar mobile e no `/login`, que não tem nem sidebar nem topbar).
+  - Escolha persistida em `localStorage` (`nice-tema`); sem escolha, segue
+    `prefers-color-scheme`; escolha explícita sempre vence. Enquanto não há escolha, o app
+    acompanha o sistema mudando de dia/noite.
+  - Script inline no `<head>` aplica o tema **antes da primeira pintura** — sem flash.
+  - A paleta de status (`red`/`orange`/`yellow`/`green`/`blue`/`purple`/`amber`) também virou
+    variável, e a escala inverte de papel no escuro: `50–300` viram fundo escuro, `400–900`
+    viram texto claro. `bg-red-100 text-red-700` continua legível nos dois temas sem edição.
+  - `.btn-perigo` para ação destrutiva, já que `bg-red-600` deixou de servir como fundo sólido
+    para texto branco no tema escuro.
+  - **Impressão continua clara**: o bloco `@media print` redefine as variáveis para os valores
+    claros e força fundo branco, mesmo com o tema escuro ativo.
+- `supabase/migrations/008_kanban_updated_at.sql`: registro histórico da coluna `updated_at`
+  em `quadros`, `listas` e `cards`.
+
+- **Kanban de quadros livres** (`/quadros` e `/quadros/[id]`) — módulo novo, separado da
+  `/producao`. Quadros → listas → cartões, no espírito do Trello.
+  - `/quadros`: grid de quadros com contagem de listas e cartões; criar, renomear, arquivar
+    e excluir (só gestor/recepcionista). Estado vazio com CTA.
+  - `/quadros/[id]`: listas lado a lado com rolagem horizontal, título editável inline,
+    contador, cor de destaque e "Adicionar cartão" no rodapé. Cartão mostra título, trecho da
+    descrição, badge de prazo com destaque por urgência (atrasado vermelho, ≤3 dias laranja,
+    ≤7 dias amarelo) e etiqueta com cadeado quando `perfis_visiveis` não é nulo. Clicar abre
+    um painel com título, descrição, prazo, perfis visíveis e vínculo com um pedido.
+  - **Drag-and-drop** com `@dnd-kit`: cartão entre listas e dentro da lista, e listas entre
+    si (pelo punho no cabeçalho).
+- **Camada de acesso própria do Kanban** (`src/lib/kanban.ts`), usando o client
+  **autenticado** do `@supabase/ssr`. As tabelas do Kanban têm RLS baseada em `auth.uid()`;
+  com o client anônimo do `store.ts` as queries voltariam **zero linhas em silêncio**. Os
+  dois clients agora convivem — documentado no `CLAUDE.md`, e a Fase B segue pendente.
+- **5 perfis novos** em `src/lib/permissoes.ts` (`designer`, `corte`,
+  `estamparia_serigrafia`, `estamparia_sublimacao`, `acabamento`), somando 8. Os seis perfis
+  de produção compartilham um único objeto `LEITURA_PRODUCAO` — mesmo acesso da costureira,
+  mais leitura de `/quadros`. Novo campo de permissão `editarKanban`, exclusivo de gestor e
+  recepcionista.
+- **Exportar pedido concluído para cartão** (`src/components/kanban/CriarCartaoDoPedido.tsx`).
+  Em `/pedidos/[id]`, com os 8 setores concluídos, aparece "Criar cartão no Kanban": seletor
+  de quadro e lista, com título, descrição e prazo pré-preenchidos a partir do pedido e
+  totalmente editáveis. Grava `pedido_id`, e o cartão passa a mostrar link de volta.
+  É **opcional e sugerido, nunca automático**.
+- `src/lib/erros.ts` — `classificarErro`, extraída de `/tabela-precos`, agora compartilhada.
+  Classifica o erro (`offline`/`rede`/`conflito`/`permissao`/`validacao`); o texto continua
+  em cada tela, porque a consequência de falhar é diferente em cada uma.
+- `src/components/kanban/Modal.tsx` — primeiro modal reutilizável do projeto, com fechamento
+  por Esc e por clique no fundo (os overlays existentes não têm nenhum dos dois).
+- `supabase/migrations/007_kanban.sql`: **registro histórico** do SQL executado manualmente
+  pelo dono — `public.meu_perfil()`, as tabelas `quadros`/`listas`/`cards` com RLS e
+  policies, e a expansão do CHECK de `equipe` para 8 perfis. Reconstruído a partir da
+  descrição, não exportado do banco.
+
+### Adicionado (sessões anteriores)
 - `CLAUDE.md` na raiz: contexto permanente do projeto — stack, identidade visual, módulos,
   modelo de dados, regras de negócio, convenções de trabalho e estado de segurança.
 - `CHANGELOG.md` (este arquivo).
@@ -42,6 +102,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
   para `/producao`. Gestor e recepcionista seguem com acesso total, sem mudança.
 
 ### Alterado
+- `src/app/tabela-precos/page.tsx`: `descreverErro` passa a montar o texto a partir de
+  `classificarErro` (`src/lib/erros.ts`). As mensagens continuam **idênticas** — só a
+  classificação saiu do arquivo para ser reaproveitada pelo Kanban.
+- `src/components/layout/Sidebar.tsx`: item "Quadros" no menu, depois de Produção.
 - **"Pedro"/"Administrador" deixaram de ser hardcoded.** Nome e perfil na sidebar e o
   consultor responsável em `/novo-pedido` passam a vir do usuário autenticado
   (`src/components/layout/Sidebar.tsx`, `src/app/novo-pedido/page.tsx`).
@@ -58,6 +122,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
   Toda falha diz explicitamente que as alterações ficaram só no navegador e **não** no banco.
 
 ### Corrigido
+- **`src/lib` estava fora dos `content` do Tailwind desde o primeiro commit**
+  (`tailwind.config.ts`). O Tailwind só gera a classe que enxerga no código, e
+  `STATUS_CONFIG`/`COMPLEXIDADE_CONFIG` (`helpers.ts`) e `badgePrazo`/`CORES_LISTA`
+  (`kanban-ui.ts`) montam classe por string. Resultado: tudo que existia **só** nesses
+  arquivos nunca virou CSS — as tarjas "Aprovado" (`bg-blue-100`) e "Entregue"
+  (`bg-green-100`) saíam **sem fundo nenhum**, assim como `bg-yellow-100`/`bg-orange-100` dos
+  badges de prazo e complexidade, e a cor âmbar de lista do Kanban não aparecia.
+- **Mudar a cor de uma lista do Kanban falhava com `PGRST204`**, porque `atualizarLista`
+  manda `updated_at` e a coluna não existia em `listas`. Coluna adicionada manualmente pelo
+  dono; versionada em `008_kanban_updated_at.sql`, junto com `quadros` e `cards`, que têm o
+  mesmo update e o mesmo risco (afetava também **arrastar cartão**).
+- **Contraste de texto abaixo de WCAG AA no tema claro.** `--texto-fraco` era o antigo
+  `gray-400`, com 2.54:1 sobre branco, em ~100 rótulos e legendas; e os badges de status
+  usavam o tom `-600` sobre fundo `-100` (P4 ficava em 3.11:1). Ambos ajustados um tom, nos
+  dois temas. Mínimo agora: 6.03:1 no escuro, 4.5:1 no claro.
 - **O cálculo automático de preço por peça nunca funcionou** (`src/app/novo-pedido/page.tsx`).
   O `select` pedia a coluna `preco_unitario`, que não existe em `tabela_precos` — o nome real
   é `valor`. O PostgREST devolvia `42703`, `data` vinha `null` e o guard `if (data)` engolia

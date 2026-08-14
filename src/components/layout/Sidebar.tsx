@@ -4,10 +4,12 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
   LayoutDashboard, ClipboardList, PlusCircle,
-  Factory, Users, Users2, BarChart3, Scissors, Menu, X, Table2, Settings, LogOut
+  Factory, Users, Users2, BarChart3, Scissors, Menu, X, Table2, Settings, LogOut,
+  KanbanSquare
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useMembro } from '@/components/AuthProvider'
+import BotaoTema from '@/components/BotaoTema'
 import { PERFIL_LABEL, podeAcessarRota } from '@/lib/permissoes'
 
 const NAV = [
@@ -17,6 +19,9 @@ const NAV = [
   { href: '/tabela-precos',  label: 'Tabela de Preços', icon: Table2 },
   { href: '/novo-pedido',    label: 'Novo Pedido',      icon: PlusCircle },
   { href: '/producao',       label: 'Produção',         icon: Factory },
+  // Módulo separado da Produção: aqui são tarefas livres, lá é o progresso real
+  // dos pedidos pelos 8 setores.
+  { href: '/quadros',        label: 'Quadros',          icon: KanbanSquare },
   { href: '/terceirizadas',  label: 'Terceirizadas',    icon: Users },
   { href: '/relatorios',     label: 'Relatórios',       icon: BarChart3 },
   { href: '/configuracoes',  label: 'Configurações',    icon: Settings },
@@ -81,6 +86,7 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
             </div>
           </div>
         </Link>
+        <BotaoTema />
         <button
           onClick={sair}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-medium text-nice-200 hover:bg-nice-700 hover:text-white transition-colors"
@@ -107,9 +113,12 @@ export default function Sidebar() {
           </div>
           <div className="text-white font-bold text-sm">Nice Confecções</div>
         </div>
-        <button onClick={() => setOpen(true)} aria-label="Abrir menu" className="text-white p-2 -mr-2">
-          <Menu className="w-6 h-6" />
-        </button>
+        <div className="flex items-center gap-1 -mr-2">
+          <BotaoTema variante="icone" />
+          <button onClick={() => setOpen(true)} aria-label="Abrir menu" className="text-white p-2">
+            <Menu className="w-6 h-6" />
+          </button>
+        </div>
       </header>
 
       {/* Sidebar fixa no desktop */}

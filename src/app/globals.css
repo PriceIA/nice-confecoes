@@ -3,34 +3,237 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   TEMA — fonte única das cores de superfície, texto e borda.
+   ==========================================================================
+
+   Trocar o tema é trocar estas variáveis. Nada mais.
+
+   Como usar numa tela nova:
+
+     bg-superficie   bg-superficie-2   bg-superficie-3   bg-fundo
+     text-conteudo   text-suave        text-fraco        text-titulo
+     border-borda    border-borda-forte
+     bg-marca        text-marca-texto  bg-marca-suave    border-marca-borda
+
+   NÃO use bg-white, text-gray-500, border-gray-100 e afins: cor literal não
+   reage ao tema e vira texto invisível no escuro. As classes utilitárias mais
+   abaixo (.card, .btn-*, .input, .label) já consomem as variáveis, então na
+   maioria dos casos basta usá-las.
+
+   Cores semânticas de STATUS (vermelho de atraso, laranja de urgência, etc.)
+   são exceção: continuam sendo classes Tailwind literais, mas com variante
+   `dark:` ao lado, e ficam centralizadas em src/lib/helpers.ts (STATUS_CONFIG,
+   COMPLEXIDADE_CONFIG) e src/lib/kanban-ui.ts (badgePrazo, CORES_LISTA).
+
+   Contraste: os tons de texto do tema escuro foram escolhidos para passar
+   WCAG AA (>= 4.5:1) sobre --superficie. O sistema é usado o dia inteiro numa
+   fábrica; legibilidade vem antes de estética. Ao mexer nos valores, refaça a
+   conta — o mais apertado é --texto-fraco, hoje em ~6.2:1.
+   ========================================================================== */
+
+:root {
+  --fundo: #f4f6f4;
+  --superficie: #ffffff;
+  --superficie-2: #f9fafb;
+  --superficie-3: #f3f4f6;
+
+  --borda: #ecefec;
+  --borda-forte: #d9dcd9;
+
+  --texto: #1e2d1b;
+  /* Um tom mais escuros que os originais (gray-500/gray-400).
+     O gray-400 antigo dava 2.54:1 sobre branco — reprovava AA com folga, e era
+     o tom de ~100 rótulos e legendas. Agora: suave 8.2:1, fraco 4.8:1. */
+  --texto-suave: #4b5563;
+  --texto-fraco: #6b7280;
+  --titulo: #1e2d1b;
+
+  --marca: #3a8c2f;
+  --marca-hover: #2d6e24;
+  --marca-texto: #2d6e24;
+  --marca-suave: #f0f9ee;
+  --marca-borda: #b4e0ab;
+
+  --sombra: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --sombra-media: 0 4px 12px -2px rgb(0 0 0 / 0.10);
+  --sombra-forte: 0 10px 30px -5px rgb(0 0 0 / 0.20);
+
+  --perigo: #dc2626;
+  --perigo-hover: #b91c1c;
+
+  /* Escala de status — valores padrão do Tailwind no tema claro. */
+  --red-50:#fef2f2;    --red-100:#fee2e2;    --red-200:#fecaca;    --red-300:#fca5a5;
+  --red-400:#f87171;   --red-500:#ef4444;    --red-600:#dc2626;    --red-700:#b91c1c;
+  --red-800:#991b1b;   --red-900:#7f1d1d;
+
+  --orange-50:#fff7ed; --orange-100:#ffedd5; --orange-200:#fed7aa; --orange-300:#fdba74;
+  --orange-400:#fb923c;--orange-500:#f97316; --orange-600:#ea580c; --orange-700:#c2410c;
+  --orange-800:#9a3412;--orange-900:#7c2d12;
+
+  --yellow-50:#fefce8; --yellow-100:#fef9c3; --yellow-200:#fef08a; --yellow-300:#fde047;
+  --yellow-400:#facc15;--yellow-500:#eab308; --yellow-600:#ca8a04; --yellow-700:#a16207;
+  --yellow-800:#854d0e;--yellow-900:#713f12;
+
+  --green-50:#f0fdf4;  --green-100:#dcfce7;  --green-200:#bbf7d0;  --green-300:#86efac;
+  --green-400:#4ade80; --green-500:#22c55e;  --green-600:#16a34a;  --green-700:#15803d;
+  --green-800:#166534; --green-900:#14532d;
+
+  --blue-50:#eff6ff;   --blue-100:#dbeafe;   --blue-200:#bfdbfe;   --blue-300:#93c5fd;
+  --blue-400:#60a5fa;  --blue-500:#3b82f6;   --blue-600:#2563eb;   --blue-700:#1d4ed8;
+  --blue-800:#1e40af;  --blue-900:#1e3a8a;
+
+  --purple-50:#faf5ff; --purple-100:#f3e8ff; --purple-200:#e9d5ff; --purple-300:#d8b4fe;
+  --purple-400:#c084fc;--purple-500:#a855f7; --purple-600:#9333ea; --purple-700:#7e22ce;
+  --purple-800:#6b21a8;--purple-900:#581c87;
+
+  --amber-50:#fffbeb;  --amber-100:#fef3c7;  --amber-200:#fde68a;  --amber-300:#fcd34d;
+  --amber-400:#fbbf24; --amber-500:#f59e0b;  --amber-600:#d97706;  --amber-700:#b45309;
+  --amber-800:#92400e; --amber-900:#78350f;
+}
+
+.dark {
+  /* O fundo da página é o tom mais escuro. A sidebar (bg-nice-800, #1e2d1b)
+     fica ACIMA dele na escala, então continua se destacando em vez de sumir —
+     era o risco apontado, já que ela é verde escura por identidade. */
+  --fundo: #0f120f;
+  --superficie: #191d18;
+  --superficie-2: #212720;
+  --superficie-3: #2a3228;
+
+  --borda: #2c342b;
+  --borda-forte: #3d483b;
+
+  --texto: #e9efe8;
+  --texto-suave: #b9c4b7;
+  --texto-fraco: #93a191;
+  --titulo: #e9efe8;
+
+  /* --marca continua o verde Nice: é fundo de botão, com texto branco por
+     cima, e isso não muda com o tema.
+     --marca-texto clareia porque o #3a8c2f COMO TEXTO dá só 4.0:1 sobre a
+     superfície escura — reprova em AA. O nice-400 sobe para ~6.7:1. */
+  --marca: #3a8c2f;
+  --marca-hover: #45a338;
+  --marca-texto: #5ab84a;
+  --marca-suave: #1b2a19;
+  --marca-borda: #2f4d29;
+
+  --sombra: 0 1px 2px 0 rgb(0 0 0 / 0.40);
+  --sombra-media: 0 4px 12px -2px rgb(0 0 0 / 0.50);
+  --sombra-forte: 0 10px 30px -5px rgb(0 0 0 / 0.60);
+
+  /* Botão destrutivo continua escuro com texto branco: é fundo sólido, e
+     nesse papel clarear pioraria o contraste em vez de melhorar. */
+  --perigo: #b91c1c;
+  --perigo-hover: #991b1b;
+
+  /* Escala de status no tema escuro. A escala INVERTE de papel:
+       50–300  viram tarjas e bordas ESCURAS (eram claras)
+       400–900 viram texto CLARO (era escuro)
+     Assim `bg-red-100 text-red-700`, que aparece dezenas de vezes nas telas,
+     continua significando a mesma coisa sem nenhuma edição.
+     Os tons de texto ficam em >= 4.5:1 sobre --superficie. */
+  --red-50:#2b1618;    --red-100:#3a1c1f;    --red-200:#4f2429;    --red-300:#6b2f35;
+  --red-400:#f7a8a8;   --red-500:#f58f8f;    --red-600:#f87171;    --red-700:#fca5a5;
+  --red-800:#fecdcd;   --red-900:#fee2e2;
+
+  --orange-50:#2c1c10; --orange-100:#3b2513; --orange-200:#533318; --orange-300:#6d4520;
+  --orange-400:#f8b06a;--orange-500:#f9ab63; --orange-600:#f9a55a; --orange-700:#fbc084;
+  --orange-800:#fdd6ae;--orange-900:#ffe8d0;
+
+  --yellow-50:#2a2410; --yellow-100:#382f12; --yellow-200:#4d4018; --yellow-300:#66551f;
+  --yellow-400:#f0c43a;--yellow-500:#f2cb4d; --yellow-600:#f4d268; --yellow-700:#f7dc8c;
+  --yellow-800:#fae7b0;--yellow-900:#fcf0cf;
+
+  --green-50:#142a17;  --green-100:#1a381d;  --green-200:#234d27;  --green-300:#2f6633;
+  --green-400:#5fd47f; --green-500:#56cc76;  --green-600:#4ade80;  --green-700:#86efac;
+  --green-800:#b5f5cb; --green-900:#dcfce7;
+
+  --blue-50:#131f2e;   --blue-100:#17293d;   --blue-200:#1e3855;   --blue-300:#274a70;
+  --blue-400:#7cb8f5;  --blue-500:#6aabf2;   --blue-600:#60a5fa;   --blue-700:#93c5fd;
+  --blue-800:#bfdbfe;  --blue-900:#dbeafe;
+
+  --purple-50:#221a2e; --purple-100:#2d2140; --purple-200:#3d2c58; --purple-300:#513a75;
+  --purple-400:#c9aef7;--purple-500:#bd9df5; --purple-600:#c084fc; --purple-700:#d8b4fe;
+  --purple-800:#e9d5ff;--purple-900:#f3e8ff;
+
+  --amber-50:#2c2110;  --amber-100:#3b2c13;  --amber-200:#533d18;  --amber-300:#6d5120;
+  --amber-400:#f0b23c; --amber-500:#f2bb52;  --amber-600:#f5c66e;  --amber-700:#f8d492;
+  --amber-800:#fbe2b6; --amber-900:#fdf0d8;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background-color: #f4f6f4;
-  color: #1e2d1b;
+  background-color: var(--fundo);
+  color: var(--texto);
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6;
+    @apply rounded-2xl border p-6;
+    background-color: var(--superficie);
+    border-color: var(--borda);
+    box-shadow: var(--sombra);
   }
   .btn-primary {
-    @apply bg-nice-500 hover:bg-nice-600 text-white font-medium px-4 py-2 rounded-xl transition-colors duration-150 flex items-center gap-2;
+    @apply text-white font-medium px-4 py-2 rounded-xl transition-colors duration-150 flex items-center gap-2;
+    background-color: var(--marca);
+  }
+  .btn-primary:hover {
+    background-color: var(--marca-hover);
   }
   .btn-secondary {
-    @apply bg-white hover:bg-gray-50 text-gray-700 font-medium px-4 py-2 rounded-xl border border-gray-200 transition-colors duration-150 flex items-center gap-2;
+    @apply font-medium px-4 py-2 rounded-xl border transition-colors duration-150 flex items-center gap-2;
+    background-color: var(--superficie);
+    border-color: var(--borda-forte);
+    color: var(--texto);
+  }
+  .btn-secondary:hover {
+    background-color: var(--superficie-2);
+  }
+  /* Ação destrutiva (excluir). Precisa ser fundo SÓLIDO com texto branco, e por
+     isso não pode usar bg-red-600: no tema escuro aquela escala vira tom claro,
+     de texto, e branco sobre ela ficaria ilegível. */
+  .btn-perigo {
+    @apply text-white font-medium px-4 py-2 rounded-xl transition-colors duration-150 flex items-center gap-2;
+    background-color: var(--perigo);
+  }
+  .btn-perigo:hover {
+    background-color: var(--perigo-hover);
   }
   .btn-ghost {
-    @apply hover:bg-nice-50 text-nice-700 font-medium px-3 py-2 rounded-xl transition-colors duration-150 flex items-center gap-2;
+    @apply font-medium px-3 py-2 rounded-xl transition-colors duration-150 flex items-center gap-2;
+    color: var(--marca-texto);
+  }
+  .btn-ghost:hover {
+    background-color: var(--marca-suave);
   }
   .input {
-    @apply w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-nice-400 focus:border-transparent transition-all bg-white;
+    @apply w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-nice-400 focus:border-transparent transition-all;
+    background-color: var(--superficie);
+    border-color: var(--borda-forte);
+    color: var(--texto);
+  }
+  .input::placeholder {
+    color: var(--texto-fraco);
+  }
+  /* Setas do <select> e ícone do <input type="date"> são desenhados pelo
+     navegador em preto: no tema escuro somem contra o campo. */
+  .dark .input option {
+    background-color: var(--superficie);
+    color: var(--texto);
+  }
+  .dark input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(0.6);
   }
   .label {
-    @apply block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5;
+    @apply block text-xs font-semibold uppercase tracking-wide mb-1.5;
+    color: var(--texto-suave);
   }
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
@@ -40,12 +243,91 @@ body {
   }
 }
 
+/* ==========================================================================
+   IMPRESSÃO — sempre clara, mesmo com o tema escuro ativo.
+   ==========================================================================
+
+   A ficha A4 do pedido (bloco print:block em src/app/pedidos/[id]/page.tsx) é
+   impressa em papel. Ninguém quer imprimir uma página preta, e além do gasto de
+   toner o resultado seria ilegível.
+
+   Em vez de caçar cada elemento, o bloco redefine as PRÓPRIAS VARIÁVEIS para os
+   valores claros. Tudo que consome o tema volta a ser claro automaticamente —
+   inclusive telas futuras, sem ninguém precisar lembrar disso.
+
+   `:root.dark` (0,2,0) tem especificidade maior que `.dark` (0,1,0), então
+   vence a definição do tema escuro lá em cima.
+   ========================================================================== */
+
 @media print {
   @page {
     size: A4;
     margin: 15mm;
   }
-  html, body {
+
+  :root,
+  :root.dark {
+    --fundo: #ffffff;
+    --superficie: #ffffff;
+    --superficie-2: #ffffff;
+    --superficie-3: #f3f4f6;
+
+    --borda: #d1d5db;
+    --borda-forte: #9ca3af;
+
+    --texto: #000000;
+    --texto-suave: #374151;
+    --texto-fraco: #6b7280;
+    --titulo: #000000;
+
+    --marca: #3a8c2f;
+    --marca-hover: #2d6e24;
+    --marca-texto: #235720;
+    --marca-suave: #ffffff;
+    --marca-borda: #b4e0ab;
+
+    --sombra: none;
+    --sombra-media: none;
+    --sombra-forte: none;
+
+    --perigo: #b91c1c;
+    --perigo-hover: #991b1b;
+
+    /* A escala de status volta aos valores CLAROS do Tailwind: no papel, tarja
+       clara com texto escuro é o que se lê. */
+    --red-50:#fef2f2;    --red-100:#fee2e2;    --red-200:#fecaca;    --red-300:#fca5a5;
+    --red-400:#f87171;   --red-500:#ef4444;    --red-600:#dc2626;    --red-700:#b91c1c;
+    --red-800:#991b1b;   --red-900:#7f1d1d;
+
+    --orange-50:#fff7ed; --orange-100:#ffedd5; --orange-200:#fed7aa; --orange-300:#fdba74;
+    --orange-400:#fb923c;--orange-500:#f97316; --orange-600:#ea580c; --orange-700:#c2410c;
+    --orange-800:#9a3412;--orange-900:#7c2d12;
+
+    --yellow-50:#fefce8; --yellow-100:#fef9c3; --yellow-200:#fef08a; --yellow-300:#fde047;
+    --yellow-400:#facc15;--yellow-500:#eab308; --yellow-600:#ca8a04; --yellow-700:#a16207;
+    --yellow-800:#854d0e;--yellow-900:#713f12;
+
+    --green-50:#f0fdf4;  --green-100:#dcfce7;  --green-200:#bbf7d0;  --green-300:#86efac;
+    --green-400:#4ade80; --green-500:#22c55e;  --green-600:#16a34a;  --green-700:#15803d;
+    --green-800:#166534; --green-900:#14532d;
+
+    --blue-50:#eff6ff;   --blue-100:#dbeafe;   --blue-200:#bfdbfe;   --blue-300:#93c5fd;
+    --blue-400:#60a5fa;  --blue-500:#3b82f6;   --blue-600:#2563eb;   --blue-700:#1d4ed8;
+    --blue-800:#1e40af;  --blue-900:#1e3a8a;
+
+    --purple-50:#faf5ff; --purple-100:#f3e8ff; --purple-200:#e9d5ff; --purple-300:#d8b4fe;
+    --purple-400:#c084fc;--purple-500:#a855f7; --purple-600:#9333ea; --purple-700:#7e22ce;
+    --purple-800:#6b21a8;--purple-900:#581c87;
+
+    --amber-50:#fffbeb;  --amber-100:#fef3c7;  --amber-200:#fde68a;  --amber-300:#fcd34d;
+    --amber-400:#fbbf24; --amber-500:#f59e0b;  --amber-600:#d97706;  --amber-700:#b45309;
+    --amber-800:#92400e; --amber-900:#78350f;
+  }
+
+  html,
+  html.dark,
+  body {
     background: #fff !important;
+    color: #000 !important;
   }
 }

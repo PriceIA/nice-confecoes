@@ -28,21 +28,21 @@ export function calcularComplexidade(tipo: string, personalizacoes: Personalizac
 }
 
 export const COMPLEXIDADE_CONFIG: Record<Complexidade, { label: string; color: string; bg: string }> = {
-  P1: { label: 'P1 — Básica', color: 'text-gray-600', bg: 'bg-gray-100' },
-  P2: { label: 'P2 — Simples', color: 'text-blue-600', bg: 'bg-blue-100' },
+  P1: { label: 'P1 — Básica', color: 'text-suave', bg: 'bg-superficie-3' },
+  P2: { label: 'P2 — Simples', color: 'text-blue-700', bg: 'bg-blue-100' },
   P3: { label: 'P3 — Média', color: 'text-yellow-700', bg: 'bg-yellow-100' },
-  P4: { label: 'P4 — Complexa', color: 'text-orange-600', bg: 'bg-orange-100' },
-  P5: { label: 'P5 — Premium', color: 'text-red-600', bg: 'bg-red-100' },
+  P4: { label: 'P4 — Complexa', color: 'text-orange-700', bg: 'bg-orange-100' },
+  P5: { label: 'P5 — Premium', color: 'text-red-700', bg: 'bg-red-100' },
 }
 
 export const STATUS_CONFIG = {
-  orcamento:            { label: 'Orçamento',           color: 'text-gray-600',    bg: 'bg-gray-100' },
-  aprovado:             { label: 'Aprovado',            color: 'text-blue-600',    bg: 'bg-blue-100' },
+  orcamento:            { label: 'Orçamento',           color: 'text-suave',    bg: 'bg-superficie-3' },
+  aprovado:             { label: 'Aprovado',            color: 'text-blue-700',    bg: 'bg-blue-100' },
   aguardando_pagamento: { label: 'Aguardando Pagamento', color: 'text-yellow-700',  bg: 'bg-yellow-100' },
-  em_producao:          { label: 'Em Produção',         color: 'text-nice-600',    bg: 'bg-nice-100' },
-  finalizado:           { label: 'Finalizado',          color: 'text-purple-600',  bg: 'bg-purple-100' },
-  entregue:             { label: 'Entregue',            color: 'text-green-700',   bg: 'bg-green-100' },
-  cancelado:            { label: 'Cancelado',           color: 'text-red-600',     bg: 'bg-red-100' },
+  em_producao:          { label: 'Em Produção',         color: 'text-marca-texto',    bg: 'bg-marca-suave' },
+  finalizado:           { label: 'Finalizado',          color: 'text-purple-700',  bg: 'bg-purple-100' },
+  entregue:             { label: 'Entregue',            color: 'text-green-800',   bg: 'bg-green-100' },
+  cancelado:            { label: 'Cancelado',           color: 'text-red-700',     bg: 'bg-red-100' },
 }
 
 export const SETOR_LABELS: Record<string, string> = {

@@ -32,18 +32,18 @@ export default function ProducaoPage() {
   const statusIcon = (s: StatusSetor) => {
     if (s === 'concluido') return <CheckCircle2 className="w-4 h-4 text-nice-500" />
     if (s === 'em_andamento') return <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
-    return <Circle className="w-4 h-4 text-gray-300" />
+    return <Circle className="w-4 h-4 text-fraco" />
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-nice-800">Produção</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{pedidos.length} pedido(s) em andamento</p>
+        <h1 className="text-2xl font-bold text-titulo">Produção</h1>
+        <p className="text-sm text-suave mt-0.5">{pedidos.length} pedido(s) em andamento</p>
       </div>
 
       {pedidos.length === 0 ? (
-        <div className="card py-20 text-center text-gray-400">
+        <div className="card py-20 text-center text-fraco">
           <p className="text-sm">Nenhum pedido em produção no momento.</p>
         </div>
       ) : (
@@ -58,25 +58,25 @@ export default function ProducaoPage() {
                   <div className="flex items-center gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-nice-700">#{pedido.numero}</span>
-                        <span className="font-medium text-gray-800 text-sm">{pedido.cliente.nome}</span>
-                        {pedido.cliente.empresa && <span className="text-gray-400 text-xs">— {pedido.cliente.empresa}</span>}
+                        <span className="font-bold text-marca-texto">#{pedido.numero}</span>
+                        <span className="font-medium text-conteudo text-sm">{pedido.cliente.nome}</span>
+                        {pedido.cliente.empresa && <span className="text-fraco text-xs">— {pedido.cliente.empresa}</span>}
                         {pedido.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600 text-xs">urgente</span>}
                       </div>
                     </div>
                   </div>
-                  <Link href={`/pedidos/${pedido.id}`} className="text-nice-600 hover:text-nice-700 text-xs font-medium flex items-center gap-1">
+                  <Link href={`/pedidos/${pedido.id}`} className="text-marca-texto hover:text-marca-texto text-xs font-medium flex items-center gap-1">
                     Detalhe <ArrowRight className="w-3 h-3" />
                   </Link>
                 </div>
 
                 {/* Barra de progresso */}
                 <div>
-                  <div className="flex justify-between text-xs text-gray-400 mb-1.5">
+                  <div className="flex justify-between text-xs text-fraco mb-1.5">
                     <span>{concluidos} de {SETORES.length} setores concluídos</span>
-                    <span className="font-medium text-nice-600">{progPct}%</span>
+                    <span className="font-medium text-marca-texto">{progPct}%</span>
                   </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
+                  <div className="w-full bg-superficie-3 rounded-full h-2">
                     <div className="bg-nice-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progPct}%` }} />
                   </div>
                 </div>
@@ -89,9 +89,9 @@ export default function ProducaoPage() {
                       <button key={setor} onClick={() => ciclarSetor(pedido.id, setor)}
                         className={clsx(
                           'flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all text-left',
-                          status === 'concluido' ? 'bg-nice-50 border-nice-200 text-nice-700' :
+                          status === 'concluido' ? 'bg-marca-suave border-marca-borda text-marca-texto' :
                           status === 'em_andamento' ? 'bg-orange-50 border-orange-200 text-orange-600' :
-                          'bg-gray-50 border-gray-100 text-gray-400 hover:border-gray-200'
+                          'bg-superficie-2 border-borda text-fraco hover:border-borda'
                         )}>
                         {statusIcon(status)}
                         <span className="truncate">{SETOR_LABELS[setor]}</span>

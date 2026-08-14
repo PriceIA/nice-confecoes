@@ -40,8 +40,8 @@ export default function RelatoriosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-nice-800">Relatórios</h1>
-          <p className="text-sm text-gray-500 mt-0.5 capitalize">
+          <h1 className="text-2xl font-bold text-titulo">Relatórios</h1>
+          <p className="text-sm text-suave mt-0.5 capitalize">
             {format(new Date(`${mes}-01`), "MMMM 'de' yyyy", { locale: ptBR })}
           </p>
         </div>
@@ -56,7 +56,7 @@ export default function RelatoriosPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         {[
-          { label: 'Pedidos no mês', value: doMes.length, icon: Package, color: 'text-nice-600', bg: 'bg-nice-50', border: 'border-nice-200' },
+          { label: 'Pedidos no mês', value: doMes.length, icon: Package, color: 'text-marca-texto', bg: 'bg-marca-suave', border: 'border-marca-borda' },
           { label: 'Entregues', value: entregues.length, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
           { label: 'Cancelados', value: cancelados.length, icon: XCircle, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' },
           { label: 'Receita (entregues)', value: `R$ ${receitaTotal.toFixed(2)}`, icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
@@ -66,8 +66,8 @@ export default function RelatoriosPage() {
               <Icon className={clsx('w-6 h-6', color)} />
             </div>
             <div>
-              <div className="text-xl font-bold text-nice-800">{value}</div>
-              <div className="text-xs text-gray-500">{label}</div>
+              <div className="text-xl font-bold text-titulo">{value}</div>
+              <div className="text-xs text-suave">{label}</div>
             </div>
           </div>
         ))}
@@ -76,18 +76,18 @@ export default function RelatoriosPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Distribuição por complexidade */}
         <div className="card space-y-4">
-          <h2 className="font-semibold text-nice-800">Distribuição por Complexidade</h2>
+          <h2 className="font-semibold text-titulo">Distribuição por Complexidade</h2>
           <div className="space-y-3">
             {porComplexidade.map(({ complexidade, qtd, config }) => (
               <div key={complexidade}>
                 <div className="flex items-center justify-between text-sm mb-1">
                   <div className="flex items-center gap-2">
                     <span className={clsx('badge', config.bg, config.color)}>{complexidade}</span>
-                    <span className="text-gray-600 text-xs">{config.label.split('—')[1]?.trim()}</span>
+                    <span className="text-suave text-xs">{config.label.split('—')[1]?.trim()}</span>
                   </div>
-                  <span className="font-semibold text-gray-700">{qtd} un.</span>
+                  <span className="font-semibold text-conteudo">{qtd} un.</span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-2">
+                <div className="w-full bg-superficie-3 rounded-full h-2">
                   <div className={clsx('h-2 rounded-full transition-all',
                     complexidade === 'P1' ? 'bg-gray-400' :
                     complexidade === 'P2' ? 'bg-blue-400' :
@@ -98,29 +98,29 @@ export default function RelatoriosPage() {
               </div>
             ))}
           </div>
-          <div className="border-t pt-3 text-sm text-gray-500">
-            Total: <span className="font-semibold text-nice-700">{totalUnidades} peças</span>
+          <div className="border-t pt-3 text-sm text-suave">
+            Total: <span className="font-semibold text-marca-texto">{totalUnidades} peças</span>
           </div>
         </div>
 
         {/* Em andamento */}
         <div className="card space-y-4">
-          <h2 className="font-semibold text-nice-800">Em Andamento ({emAndamento.length})</h2>
+          <h2 className="font-semibold text-titulo">Em Andamento ({emAndamento.length})</h2>
           {emAndamento.length === 0 ? (
-            <p className="text-sm text-gray-400">Nenhum pedido em andamento.</p>
+            <p className="text-sm text-fraco">Nenhum pedido em andamento.</p>
           ) : (
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {emAndamento.map(p => {
                 const sc = STATUS_CONFIG[p.status]
                 return (
-                  <div key={p.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div key={p.id} className="flex items-center justify-between py-2 border-b border-borda last:border-0">
                     <div>
-                      <span className="font-semibold text-nice-700 text-sm">#{p.numero}</span>
-                      <span className="text-gray-600 text-sm ml-2">{p.cliente.nome}</span>
+                      <span className="font-semibold text-marca-texto text-sm">#{p.numero}</span>
+                      <span className="text-suave text-sm ml-2">{p.cliente.nome}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
-                      <span className="text-xs text-gray-400">{format(new Date(p.dataEntrega), 'dd/MM')}</span>
+                      <span className="text-xs text-fraco">{format(new Date(p.dataEntrega), 'dd/MM')}</span>
                     </div>
                   </div>
                 )
@@ -132,16 +132,16 @@ export default function RelatoriosPage() {
 
       {/* Tabela do mês */}
       <div className="card p-0 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-nice-800">Todos os Pedidos do Mês ({doMes.length})</h2>
+        <div className="px-6 py-4 border-b border-borda">
+          <h2 className="font-semibold text-titulo">Todos os Pedidos do Mês ({doMes.length})</h2>
         </div>
         {doMes.length === 0 ? (
-          <div className="py-16 text-center text-gray-400 text-sm">Nenhum pedido neste mês.</div>
+          <div className="py-16 text-center text-fraco text-sm">Nenhum pedido neste mês.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                <tr className="bg-superficie-2 text-xs text-suave uppercase tracking-wide">
                   <th className="text-left px-6 py-3 font-semibold">Nº</th>
                   <th className="text-left px-6 py-3 font-semibold">Cliente</th>
                   <th className="text-left px-6 py-3 font-semibold">Peças</th>
@@ -149,16 +149,16 @@ export default function RelatoriosPage() {
                   <th className="text-left px-6 py-3 font-semibold">Valor</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-borda">
                 {doMes.map(p => {
                   const sc = STATUS_CONFIG[p.status]
                   return (
                     <tr key={p.id}>
-                      <td className="px-6 py-3 font-semibold text-nice-700">#{p.numero}</td>
-                      <td className="px-6 py-3 text-gray-800">{p.cliente.nome}</td>
-                      <td className="px-6 py-3 text-gray-500">{totalPecas(p)} un.</td>
+                      <td className="px-6 py-3 font-semibold text-marca-texto">#{p.numero}</td>
+                      <td className="px-6 py-3 text-conteudo">{p.cliente.nome}</td>
+                      <td className="px-6 py-3 text-suave">{totalPecas(p)} un.</td>
                       <td className="px-6 py-3"><span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span></td>
-                      <td className="px-6 py-3 font-medium text-gray-700">{p.valorTotal > 0 ? `R$ ${p.valorTotal.toFixed(2)}` : '—'}</td>
+                      <td className="px-6 py-3 font-medium text-conteudo">{p.valorTotal > 0 ? `R$ ${p.valorTotal.toFixed(2)}` : '—'}</td>
                     </tr>
                   )
                 })}

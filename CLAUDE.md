@@ -10,7 +10,8 @@ uso diário real** — não é protótipo. Qualquer mudança pode quebrar o trab
 mesmo dia.
 
 - **Stack:** Next.js 14.2.5 (App Router) + Tailwind 3.4 + Supabase (`@supabase/supabase-js` 2.x) + Vercel
-- **Libs:** `date-fns`, `lucide-react`, `clsx`
+- **Libs:** `date-fns`, `lucide-react`, `clsx`, `@dnd-kit/core` + `@dnd-kit/sortable` +
+  `@dnd-kit/utilities` (só no Kanban)
 - **Repo:** github.com/PriceIA/nice-confecoes
 - **Deploy:** nice-confecoes.vercel.app
 - **Não existe:** testes, camada de API (exceto um route handler de keep-alive)
@@ -24,9 +25,73 @@ Todo módulo novo segue este padrão — não invente componentes ou cores fora 
 - **Cards:** brancos, `rounded-2xl`, borda `gray-100`, sombra leve. Fundo da página `#f4f6f4`.
 - **Fonte:** Inter.
 - **Classes utilitárias** em `src/app/globals.css` — use estas em vez de escrever Tailwind solto:
-  `.card`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.input`, `.label`, `.badge`, `.sidebar-link`
+  `.card`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-perigo`, `.input`, `.label`,
+  `.badge`, `.sidebar-link`
+- **Cores: ver a seção "Tema claro/escuro" abaixo.** Nunca escreva `bg-white` ou
+  `text-gray-500` numa tela — o sistema tem tema escuro e cor literal não reage a ele.
 - **Responsivo:** sidebar fixa a partir de `md:`; no mobile vira topbar + drawer
   (`src/components/layout/Sidebar.tsx`). Elementos de navegação levam `print:hidden`.
+
+## Tema claro/escuro — leia antes de escrever qualquer cor
+
+**Nunca escreva cor literal numa tela.** `bg-white`, `text-gray-500`, `border-gray-100` não
+reagem ao tema: viram texto invisível no escuro. Use as cores semânticas.
+
+| Papel | Classe | Variável |
+|---|---|---|
+| Fundo da página | `bg-fundo` | `--fundo` |
+| Card, campo, menu | `bg-superficie` | `--superficie` |
+| Faixa levemente destacada | `bg-superficie-2` | `--superficie-2` |
+| Chip, barra de progresso | `bg-superficie-3` | `--superficie-3` |
+| Texto principal | `text-conteudo` | `--texto` |
+| Texto secundário | `text-suave` | `--texto-suave` |
+| Rótulo, placeholder, ícone inerte | `text-fraco` | `--texto-fraco` |
+| Título de tela e de card | `text-titulo` | `--titulo` |
+| Borda | `border-borda` / `border-borda-forte` | `--borda` |
+| Verde de ação (fundo, texto branco) | `bg-marca` | `--marca` |
+| Verde COMO TEXTO | `text-marca-texto` | `--marca-texto` |
+| Fundo verde tênue | `bg-marca-suave` | `--marca-suave` |
+
+Como funciona:
+
+- `darkMode: 'class'` (`tailwind.config.ts`) — a classe `dark` no `<html>` é a única chave.
+- As variáveis vivem em `:root` e `.dark` (`src/app/globals.css`). **Trocar o tema é trocar
+  as variáveis ali; nenhuma tela precisa de `dark:`.**
+- As classes utilitárias (`.card`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`,
+  `.btn-perigo`, `.input`, `.label`) já consomem as variáveis — na maioria dos casos, usá-las
+  já resolve.
+- Quem liga/desliga a classe é `src/components/TemaProvider.tsx`; o botão é
+  `src/components/BotaoTema.tsx` (variantes `sidebar`, `icone`, `avulso`).
+- A escolha é guardada em `localStorage` (`nice-tema`). Sem escolha, segue
+  `prefers-color-scheme`; com escolha explícita, ela vence sempre.
+- O `SCRIPT_TEMA` roda inline no `<head>` (`src/app/layout.tsx`) **antes da primeira
+  pintura** — é o que evita o flash de tema errado. Por isso o `<html>` leva
+  `suppressHydrationWarning`.
+
+**A paleta de status também é variável.** `red`, `orange`, `yellow`, `green`, `blue`,
+`purple` e `amber` apontam para variáveis, e a escala **inverte de papel** no escuro:
+
+- `50–300` continuam sendo fundo/borda, mas em tom escuro
+- `400–900` continuam sendo texto, mas em tom claro
+
+Ou seja, `bg-red-100 text-red-700` significa "tarja vermelha com texto legível" nos dois
+temas, sem edição. **Consequência:** `bg-red-600` não serve de fundo sólido para texto branco
+no escuro — botão destrutivo usa `.btn-perigo`.
+
+**A sidebar é verde escura nos dois temas** (identidade da marca). Ali o contraste se resolve
+com os tons `nice-*`, não com as variáveis de superfície. No escuro, `--fundo` é mais escuro
+que `bg-nice-800` de propósito, para a sidebar continuar se destacando.
+
+**Impressão é sempre clara.** O bloco `@media print` em `globals.css` redefine as variáveis
+para os valores claros (`:root, :root.dark`) e força `background:#fff !important` no `body`.
+Tela futura que use as variáveis já imprime certo sem ninguém lembrar disso. A ficha A4 do
+pedido usa `text-black`/`border-black` explícitos e não depende do tema.
+
+**Contraste:** os tons foram escolhidos para passar WCAG AA (>= 4.5:1). Ao mexer, refaça a
+conta — o sistema é usado o dia inteiro numa fábrica.
+
+**`src/lib` está nos `content` do Tailwind.** Precisa continuar: `helpers.ts` e `kanban-ui.ts`
+montam classes por string, e o Tailwind só gera a classe que enxerga no código.
 
 ## Módulos existentes
 
@@ -42,6 +107,8 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | `/clientes` | `src/app/clientes/page.tsx` | Lista, busca, edição inline, histórico de pedidos do cliente |
 | `/tabela-precos` | `src/app/tabela-precos/page.tsx` | Grade de preços Escolar/Empresarial por grupo × faixa de tamanho |
 | `/producao` | `src/app/producao/page.tsx` | Acompanhamento dos 8 setores; clique cicla pendente → em_andamento → concluido |
+| `/quadros` | `src/app/quadros/page.tsx` | Kanban livre: grid de quadros, com criar/renomear/arquivar/excluir |
+| `/quadros/[id]` | `src/app/quadros/[id]/page.tsx` + `components/kanban/QuadroBoard.tsx` | O quadro: listas lado a lado, cartões, drag-and-drop |
 | `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros |
 | `/relatorios` | `src/app/relatorios/page.tsx` | Fechamento mensal: receita, unidades, distribuição por complexidade |
 | `/configuracoes` | `src/app/configuracoes/page.tsx` | Catálogo de peças e personalizações — **grava só em `localStorage`**, não vai para o banco nem é compartilhado entre dispositivos |
@@ -58,16 +125,47 @@ Código compartilhado:
   `{ membro, permissoes, sair }`
 - `src/lib/supabase/client.ts` e `src/lib/supabase/server.ts` — clients de **autenticação**
   (`@supabase/ssr`, sessão em cookies)
-- `src/lib/store.ts` — **todo** o acesso a dados passa por aqui (exceto `tabela-precos`, ver abaixo)
+- `src/lib/store.ts` — acesso a dados de pedidos/clientes/terceirizadas (exceto
+  `tabela-precos` e o Kanban, ver abaixo)
 - `src/lib/supabase.ts` — client singleton, anon key, **sem sessão**; é o que o `store.ts` usa
   para dados de negócio. Não confundir com os clients de auth acima
+- `src/lib/kanban.ts` — acesso a dados do Kanban. **Usa o client AUTENTICADO**, não o
+  anônimo — ver "Dois clients Supabase" abaixo. Nunca misture com `store.ts`
+- `src/lib/kanban-ui.ts` — apresentação do Kanban: `CORES_LISTA`, `badgePrazo`,
+  `descreverFalhaKanban`, `pedidoConcluido`, `porPosicao`
+- `src/lib/erros.ts` — `classificarErro`: traduz erro do Supabase em `TipoFalha`
+  (`offline`/`rede`/`conflito`/`permissao`/`validacao`). Cada tela escreve o próprio texto,
+  porque a consequência muda — usada por `/tabela-precos` e pelo Kanban
+- `src/components/kanban/` — `QuadroBoard`, `ColunaLista`, `CartaoKanban`, `PainelCartao`,
+  `Modal`, `BannerErro`, `CriarCartaoDoPedido`
 - `src/lib/helpers.ts` — `CATALOGO`, `PERSONALIZACOES`, `TAMANHOS`, `calcularComplexidade`, `STATUS_CONFIG`, `SETOR_LABELS`, `totalPecas`
 - `src/types/index.ts` — todos os tipos do domínio
 - `src/components/FotoUpload.tsx` — upload de fotos por peça, com lightbox
 
+## Dois clients Supabase — leia antes de escrever qualquer query
+
+O sistema tem **dois** clients com semânticas diferentes. Escolher o errado não dá erro:
+dá **zero linhas em silêncio**.
+
+| Client | Onde | Sessão? | Usado por | Tabelas |
+|---|---|---|---|---|
+| Anônimo | `src/lib/supabase.ts` | **Não** | `store.ts`, `/tabela-precos` | `pedidos`, `clientes`, `terceirizadas`, `tabela_precos` — todas **sem RLS** |
+| Autenticado | `src/lib/supabase/client.ts` (`@supabase/ssr`, cookies) | Sim | `src/lib/kanban.ts`, auth | `quadros`, `listas`, `cards` — todas **com RLS** |
+
+Regra prática:
+
+- Mexendo em **quadros/listas/cards** → `src/lib/kanban.ts`, client autenticado. Com o
+  anônimo, `auth.uid()` é null dentro do banco, toda policy falha e a query volta vazia
+  **sem erro nenhum**.
+- Mexendo em **pedidos/clientes/terceirizadas** → `store.ts`, como sempre.
+
+Isto é **dívida técnica conhecida e assumida**, não um descuido: a Fase B (ligar RLS nas
+tabelas antigas e migrar o `store.ts` para o client autenticado) segue pendente. Enquanto
+ela não acontece, os dois convivem.
+
 ## Modelo de dados
 
-Quatro tabelas + um bucket de Storage. Schema versionado em `supabase/migrations/`.
+Sete tabelas + um bucket de Storage. Schema versionado em `supabase/migrations/`.
 
 ### `pedidos`
 
@@ -114,6 +212,38 @@ id uuid pk · grupo text · produto text · faixa_tamanho text · valor numeric 
 Sem constraint de unicidade em `(grupo, produto, faixa_tamanho)` — por isso a tela de preços
 apaga tudo e reinsere em vez de fazer upsert.
 
+### `quadros`, `listas`, `cards` — Kanban livre
+
+**As três únicas tabelas do sistema com RLS LIGADO.** Registro histórico do SQL em
+`supabase/migrations/007_kanban.sql` (rodado manualmente pelo dono; o arquivo é reconstrução,
+não export).
+
+```
+quadros  id uuid pk · titulo · descricao · arquivado bool · created_at · updated_at
+listas   id uuid pk · quadro_id fk→quadros · titulo · posicao numeric · cor text
+                    · created_at · updated_at
+cards    id uuid pk · lista_id fk→listas · titulo · descricao · posicao numeric
+                    · perfis_visiveis text[] · pedido_id fk→pedidos (opcional)
+                    · prazo date · concluido bool · created_at · updated_at
+```
+
+Pontos que mudam como se escreve código contra elas:
+
+- **`posicao` é numeric de propósito.** Mover um item grava **uma** linha, com a média das
+  posições vizinhas (`posicaoEntre`, `kanban.ts`) — não reindexa a lista. Quando a folga
+  entre vizinhos aperta (< 0.0001), `posicaoEntre` devolve `null` e o chamador renormaliza
+  aquela lista. Não troque por integer sem reescrever isso.
+- **`perfis_visiveis` nulo = público.** Array vazio é tratado como nulo no mapeamento, porque
+  um cartão restrito a ninguém é sempre engano.
+- **A visibilidade por perfil vale no banco, não só na tela.** A policy de select em `cards`
+  filtra por `meu_perfil()`; o quadro não "esconde" cartões, ele simplesmente não os recebe.
+
+### `public.meu_perfil()`
+
+Função `security definer`, `search_path` fixo em `public`. Devolve o `perfil` do usuário
+logado lendo `equipe` por `auth.uid()`. É o que as policies de RLS do Kanban consultam —
+policy nenhuma lê `equipe` diretamente.
+
 ### `equipe`
 
 Tabela de usuários do sistema. **Criada e populada manualmente pelo dono** — não há tela de
@@ -121,8 +251,13 @@ cadastro, e nenhuma migration deste repo a cria.
 
 ```
 id · nome · perfil · auth_user_id → auth.users(id)
-check (perfil in ('gestor', 'recepcionista', 'costureira'))
+check (perfil in ('gestor', 'recepcionista', 'designer', 'corte', 'costureira',
+                  'estamparia_serigrafia', 'estamparia_sublimacao', 'acabamento'))
 ```
+
+São **8 perfis**. Dois administrativos (`gestor`, `recepcionista`) com acesso total, e seis
+de chão de fábrica que compartilham o mesmo objeto `LEITURA_PRODUCAO` em `permissoes.ts`:
+leem `/pedidos`, operam `/producao`, leem `/quadros`, e nada além disso.
 
 `auth_user_id` liga a linha ao usuário do Supabase Auth. É por ele que o middleware
 (`src/middleware.ts`) e o layout raiz descobrem nome e perfil de quem está logado. Usuário
@@ -144,7 +279,7 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
 - Os arquivos de migration têm **prefixos duplicados**: existem dois `002_` e dois `004_`.
   `004_pedido_imagem.sql` e `004_vetorizacao.sql` criam a mesma coluna `vetorizacao`
   (ambos com `if not exists`, então é idempotente, mas confuso). Numere a próxima a partir
-  de `005_`.
+  de `008_`.
 - Colunas órfãs, criadas por migration e **não usadas em nenhum lugar do código**:
   `pedidos.imagem` e `clientes.responsavel_empresa`. Não assuma que estão populadas.
 
@@ -171,6 +306,16 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
    costura, estamparia_silk, prensa_dtf, prensa_sublimacao, acabamento
    (`types/index.ts:29-38`). Pedido novo nasce com `atendimento: 'concluido'` e o resto
    pendente (`store.ts:107-116`).
+8. **`/producao` e `/quadros` são módulos diferentes, e nenhum substitui o outro.**
+   `/producao` é a fonte da verdade do progresso real dos pedidos pelos 8 setores; o Kanban
+   é um quadro de tarefas livres. Exportar um pedido para cartão **não** muda nada no pedido.
+9. **Cartão a partir de pedido é sugestão, nunca automação.** A ação só aparece com os 8
+   setores concluídos, e nada é criado sem alguém escolher quadro, lista e confirmar — o
+   texto vem pré-preenchido só para poupar digitação.
+10. **No Kanban, a tela nunca mostra o que o banco não tem.** Arrastar é otimista, mas se a
+    gravação falhar a posição **volta** e um banner diz explicitamente que não salvou
+    (`QuadroBoard.tsx`, função `gravar`). Este projeto já teve exatamente esse bug na tela
+    de preços — não reintroduza "salvou na tela, não salvou no banco".
 
 ## Convenções de trabalho
 
@@ -195,17 +340,25 @@ em cookies. `src/middleware.ts` exige sessão em toda rota que não seja `/login
 `/login`. Com sessão em `/login` → rota inicial do perfil.
 
 **Existe autorização por perfil**, com a matriz em `src/lib/permissoes.ts` como fonte única.
-Gestor e recepcionista têm acesso total; costureira lê `/pedidos` e opera `/producao`. O
-middleware bloqueia por URL e a sidebar esconde o que o perfil não pode abrir — os dois
-consultam a **mesma** função `podeAcessarRota`, então menu e bloqueio não divergem.
+Gestor e recepcionista têm acesso total; os seis perfis de produção leem `/pedidos`, operam
+`/producao` e leem `/quadros`. O middleware bloqueia por URL e a sidebar esconde o que o
+perfil não pode abrir — os dois consultam a **mesma** função `podeAcessarRota`, então menu e
+bloqueio não divergem.
+
+**O Kanban tem RLS de verdade.** `quadros`, `listas` e `cards` estão com RLS ligado, com
+policies que leem o perfil por `public.meu_perfil()` (`007_kanban.sql`), e o acesso passa
+pelo client autenticado (`src/lib/kanban.ts`). Nestas três tabelas, e só nelas, a permissão
+vale **no banco**: um perfil de produção não consegue escrever nem ver cartão restrito nem
+por fora da interface.
 
 ### O que continua desprotegido (Fase B — NÃO feita)
 
-> **O login protege a aplicação, não o banco.** Essa distinção é a coisa mais importante
-> desta seção.
+> **Nas tabelas antigas, o login protege a aplicação, não o banco.** Essa distinção é a
+> coisa mais importante desta seção.
 
-**RLS segue desabilitado nas tabelas de negócio** — `pedidos`, `clientes`, `terceirizadas`
-(`supabase/migrations/001_initial.sql:47-49`) e `tabela_precos` (`002_tabela_precos.sql:10`).
+**RLS segue desabilitado nas tabelas de negócio antigas** — `pedidos`, `clientes`,
+`terceirizadas` (`supabase/migrations/001_initial.sql:47-49`) e `tabela_precos`
+(`002_tabela_precos.sql:10`). O Kanban é a exceção, não a nova regra.
 
 **A anon key continua no bundle do browser** (`NEXT_PUBLIC_SUPABASE_ANON_KEY`, lida em
 `src/lib/supabase.ts:3-4`), e todo o `store.ts` grava com ela. Como o RLS está desligado,
@@ -214,12 +367,19 @@ Supabase, sem passar pelo login**. As permissões de perfil valem dentro do app;
 no banco.
 
 Concretamente, isso significa que hoje a costureira é impedida de excluir um pedido **pela
-interface**, mas nada no banco a impediria de fazê-lo por fora dela.
+interface**, mas nada no banco a impediria de fazê-lo por fora dela. Já um cartão do Kanban
+que ela não pode ver, ela não vê nem por fora — essa é a diferença entre as duas metades do
+sistema.
 
-**Fechar o RLS é a Fase B e não foi feita nesta sessão.** Envolve: ligar RLS nas quatro
-tabelas, escrever policies que leiam o perfil a partir de `equipe` via `auth.uid()`, e trocar
-o client anônimo do `store.ts` pelo client autenticado — hoje o `store.ts` usa um client
-**sem sessão**, então nenhuma policy baseada em `auth.uid()` funcionaria com ele.
+**Fechar o RLS das quatro tabelas antigas é a Fase B e continua pendente.** Envolve: ligar
+RLS nelas, escrever policies com `meu_perfil()` (a função já existe — foi criada para o
+Kanban), e trocar o client anônimo do `store.ts` pelo client autenticado — hoje o `store.ts`
+usa um client **sem sessão**, então nenhuma policy baseada em `auth.uid()` funcionaria com
+ele. O Kanban já é o modelo de como isso deve ficar.
+
+Um detalhe a lembrar na Fase B: `numerosDePedidos` (`kanban.ts`) lê `pedidos` pelo client
+autenticado e só funciona porque `pedidos` está sem RLS. Ao ligar RLS lá, essa query precisa
+de policy de leitura, senão os links de pedido somem dos cartões.
 
 **Fotos são públicas.** O bucket `pedido-fotos` devolve `getPublicUrl` (`store.ts:314`);
 quem tiver a URL vê a imagem, sem autenticação.

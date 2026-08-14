@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Save, Info } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { classificarErro, sufixoCodigo } from '@/lib/erros'
 
 const FAIXAS = ['0-02', '04-06', '08-10', '12-14', 'P/M/G', 'GG']
 
@@ -87,41 +88,34 @@ type StatusMsg = { tipo: 'ok' | 'err' | 'local' | 'aviso'; texto: string }
 // e NÃO foi gravado no banco — salvar local não é salvar no Supabase.
 const SO_LOCAL = 'As alterações ficaram só neste navegador e ainda NÃO estão no banco.'
 
+// A classificação do erro vem de @/lib/erros (compartilhada com o Kanban); o
+// texto continua aqui, porque a consequência é específica desta tela — o
+// rascunho ficou no localStorage.
 function descreverErro(err: unknown): StatusMsg {
-  const e = err as { code?: string; message?: string; details?: string } | null
-  const code = e?.code ?? ''
-  const msg = e?.message ?? ''
+  const falha = classificarErro(err)
+  const cod = sufixoCodigo(falha)
 
-  // Falha de rede: o supabase-js devolve code vazio e prefixa a mensagem com FetchError.
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { tipo: 'local', texto: `Sem conexão com a internet. ${SO_LOCAL} Salve de novo quando reconectar.` }
+  switch (falha.tipo) {
+    case 'offline':
+      return { tipo: 'local', texto: `Sem conexão com a internet. ${SO_LOCAL} Salve de novo quando reconectar.` }
+    case 'rede':
+      return { tipo: 'local', texto: `Servidor inacessível no momento. ${SO_LOCAL} Salve de novo quando a conexão voltar.` }
+    // Sem a constraint única, o PostgREST rejeita o ON CONFLICT do upsert.
+    case 'conflito':
+      return {
+        tipo: 'err',
+        texto: `O banco não tem a constraint única (${ON_CONFLICT}), necessária para salvar. Nada foi gravado. ${SO_LOCAL} Avise o administrador.`,
+      }
+    case 'permissao':
+      return { tipo: 'err', texto: `Sem permissão para gravar na tabela de preços. Nada foi gravado. ${SO_LOCAL}` }
+    case 'validacao':
+      return {
+        tipo: 'err',
+        texto: `O banco rejeitou os dados${cod}: ${falha.details || falha.message || 'valor inválido'}. Nada foi gravado. ${SO_LOCAL}`,
+      }
+    default:
+      return { tipo: 'err', texto: `Erro ao salvar${cod}: ${falha.message || 'falha desconhecida'}. Nada foi gravado. ${SO_LOCAL}` }
   }
-  if (msg.startsWith('FetchError') || (!code && /fetch|network|failed to fetch/i.test(msg))) {
-    return { tipo: 'local', texto: `Servidor inacessível no momento. ${SO_LOCAL} Salve de novo quando a conexão voltar.` }
-  }
-
-  // Sem a constraint única, o PostgREST rejeita o ON CONFLICT do upsert.
-  if (code === '42P10' || /on conflict/i.test(msg)) {
-    return {
-      tipo: 'err',
-      texto: `O banco não tem a constraint única (${ON_CONFLICT}), necessária para salvar. Nada foi gravado. ${SO_LOCAL} Avise o administrador.`,
-    }
-  }
-
-  // Permissão / RLS.
-  if (code === '42501' || code === 'PGRST301' || code === '401' || code === '403' || /permission|row-level security|not authorized/i.test(msg)) {
-    return { tipo: 'err', texto: `Sem permissão para gravar na tabela de preços. Nada foi gravado. ${SO_LOCAL}` }
-  }
-
-  // Validação: violações de constraint (23xxx) e tipo/formato inválido (22xxx).
-  if (code.startsWith('23') || code.startsWith('22')) {
-    return {
-      tipo: 'err',
-      texto: `O banco rejeitou os dados${code ? ` (${code})` : ''}: ${e?.details || msg || 'valor inválido'}. Nada foi gravado. ${SO_LOCAL}`,
-    }
-  }
-
-  return { tipo: 'err', texto: `Erro ao salvar${code ? ` (${code})` : ''}: ${msg || 'falha desconhecida'}. Nada foi gravado. ${SO_LOCAL}` }
 }
 
 export default function TabelaPrecosPage() {
@@ -216,14 +210,14 @@ export default function TabelaPrecosPage() {
   }
 
   if (loading) {
-    return <div className="text-gray-400 text-sm p-8">Carregando tabela de preços...</div>
+    return <div className="text-fraco text-sm p-8">Carregando tabela de preços...</div>
   }
 
   return (
     <div className="space-y-6 pb-24">
       <div>
-        <h1 className="text-2xl font-bold text-nice-800">Tabela de Preços</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Preços de confecção por produto e faixa de tamanho</p>
+        <h1 className="text-2xl font-bold text-titulo">Tabela de Preços</h1>
+        <p className="text-sm text-suave mt-0.5">Preços de confecção por produto e faixa de tamanho</p>
       </div>
 
       {/* Nota de escopo */}
@@ -244,22 +238,22 @@ export default function TabelaPrecosPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                <tr className="bg-superficie-2 text-xs text-suave uppercase tracking-wide">
                   <th className="text-left px-5 py-2.5 font-semibold min-w-48">Produto</th>
                   {FAIXAS.map(f => (
                     <th key={f} className="text-center px-3 py-2.5 font-semibold whitespace-nowrap">{f}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-borda">
                 {grupo.produtos.map(prod => (
-                  <tr key={prod.nome} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-2.5 font-medium text-gray-700 whitespace-nowrap">{prod.nome}</td>
+                  <tr key={prod.nome} className="hover:bg-superficie-2 transition-colors">
+                    <td className="px-5 py-2.5 font-medium text-conteudo whitespace-nowrap">{prod.nome}</td>
                     {FAIXAS.map((f, fi) => {
                       if (prod.precos[fi] === null) {
                         return (
                           <td key={f} className="px-3 py-2 text-center">
-                            <span className="text-gray-300 text-sm">—</span>
+                            <span className="text-fraco text-sm">—</span>
                           </td>
                         )
                       }
@@ -270,7 +264,7 @@ export default function TabelaPrecosPage() {
                             type="number"
                             min={0}
                             step={0.01}
-                            className="w-20 text-center border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-nice-400 focus:border-nice-400 bg-white"
+                            className="w-20 text-center border border-borda rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-nice-400 focus:border-nice-400 bg-superficie"
                             value={precos[key] ?? ''}
                             onChange={e => updatePreco(key, e.target.value)}
                           />
@@ -286,7 +280,7 @@ export default function TabelaPrecosPage() {
       ))}
 
       {/* Botão salvar fixo */}
-      <div className="fixed bottom-0 left-0 md:left-60 right-0 bg-white border-t border-gray-200 px-6 py-4 flex items-start justify-between gap-4 z-30">
+      <div className="fixed bottom-0 left-0 md:left-60 right-0 bg-superficie border-t border-borda px-6 py-4 flex items-start justify-between gap-4 z-30">
         <div className="text-sm flex-1 min-w-0" role="status" aria-live="polite">
           {statusMsg?.tipo === 'ok'    && <span className="text-green-600 font-medium">{statusMsg.texto}</span>}
           {statusMsg?.tipo === 'aviso' && <span className="text-yellow-700 font-medium">{statusMsg.texto}</span>}

@@ -43,7 +43,7 @@ export default function FotoUpload({ pecaId, fotos, onChange }: Props) {
             <img
               src={url}
               alt={`Foto ${i + 1}`}
-              className="w-20 h-20 object-cover rounded-xl border border-gray-200 cursor-pointer"
+              className="w-20 h-20 object-cover rounded-xl border border-borda cursor-pointer"
               onClick={() => setLightbox(url)}
             />
             <button
@@ -70,17 +70,17 @@ export default function FotoUpload({ pecaId, fotos, onChange }: Props) {
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
           className={clsx(
-            'w-20 h-20 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-1 hover:border-nice-400 hover:bg-nice-50 transition-colors',
+            'w-20 h-20 border-2 border-dashed border-borda rounded-xl flex flex-col items-center justify-center gap-1 hover:border-nice-400 hover:bg-marca-suave transition-colors',
             uploading && 'opacity-50 cursor-wait'
           )}
           title="Adicionar foto"
         >
           {uploading ? (
-            <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+            <Loader2 className="w-5 h-5 text-fraco animate-spin" />
           ) : (
             <>
-              <ImagePlus className="w-5 h-5 text-gray-400" />
-              <span className="text-xs text-gray-400">Foto</span>
+              <ImagePlus className="w-5 h-5 text-fraco" />
+              <span className="text-xs text-fraco">Foto</span>
             </>
           )}
         </button>
@@ -101,7 +101,7 @@ export default function FotoUpload({ pecaId, fotos, onChange }: Props) {
           onClick={() => setLightbox(null)}
         >
           <button
-            className="absolute top-4 right-4 text-white hover:text-gray-300"
+            className="absolute top-4 right-4 text-white hover:text-fraco"
             onClick={() => setLightbox(null)}
           >
             <X className="w-7 h-7" />

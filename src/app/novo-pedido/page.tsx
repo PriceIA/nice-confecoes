@@ -254,8 +254,8 @@ export default function NovoPedidoPage() {
   return (
     <div className="max-w-4xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-nice-800">Novo Pedido</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Preencha os dados do cliente e as peças do pedido</p>
+        <h1 className="text-2xl font-bold text-titulo">Novo Pedido</h1>
+        <p className="text-sm text-suave mt-0.5">Preencha os dados do cliente e as peças do pedido</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -263,12 +263,12 @@ export default function NovoPedidoPage() {
 
           {/* Dados do cliente */}
           <div className="card space-y-4">
-            <h2 className="font-semibold text-nice-800 text-base">Dados do Cliente</h2>
+            <h2 className="font-semibold text-titulo text-base">Dados do Cliente</h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 relative">
                 <label className="label">Buscar Cliente *</label>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fraco" />
                   <input className="input pl-9" placeholder="Digite o nome para buscar ou cadastrar..."
                     value={buscaCliente}
                     onChange={e => handleBuscaChange(e.target.value)}
@@ -277,29 +277,29 @@ export default function NovoPedidoPage() {
                   />
                 </div>
                 {sugestoesAbertas && buscaCliente && (
-                  <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                  <div className="absolute z-10 left-0 right-0 mt-1 bg-superficie border border-borda rounded-xl shadow-lg overflow-hidden">
                     {sugestoes.length > 0 ? sugestoes.map(c => (
                       <button key={c.id} type="button" onClick={() => selecionarCliente(c)}
-                        className="w-full text-left px-4 py-2.5 hover:bg-nice-50 transition-colors flex items-center justify-between">
+                        className="w-full text-left px-4 py-2.5 hover:bg-marca-suave transition-colors flex items-center justify-between">
                         <div>
-                          <div className="text-sm font-medium text-gray-800">{c.nome}</div>
+                          <div className="text-sm font-medium text-conteudo">{c.nome}</div>
                           {c.empresa && (
-                            <div className="text-xs text-gray-400">
+                            <div className="text-xs text-fraco">
                               {c.empresa}{c.responsavel ? ` — ${c.responsavel}` : ''}
                             </div>
                           )}
                         </div>
-                        <span className="text-xs text-gray-400">{c.telefone}</span>
+                        <span className="text-xs text-fraco">{c.telefone}</span>
                       </button>
                     )) : (
-                      <div className="px-4 py-2.5 text-xs text-gray-400 flex items-center gap-2">
+                      <div className="px-4 py-2.5 text-xs text-fraco flex items-center gap-2">
                         <UserPlus className="w-3.5 h-3.5" /> Nenhum cliente encontrado — será cadastrado um novo
                       </div>
                     )}
                   </div>
                 )}
                 {clienteSelecionado && (
-                  <p className="text-xs text-nice-600 mt-1.5">Cliente cadastrado selecionado.</p>
+                  <p className="text-xs text-marca-texto mt-1.5">Cliente cadastrado selecionado.</p>
                 )}
               </div>
               <div>
@@ -337,7 +337,7 @@ export default function NovoPedidoPage() {
 
           {/* Tipo, Data e Consultor */}
           <div className="card space-y-4">
-            <h2 className="font-semibold text-nice-800 text-base">Configurações do Pedido</h2>
+            <h2 className="font-semibold text-titulo text-base">Configurações do Pedido</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label">Tipo</label>
@@ -345,7 +345,7 @@ export default function NovoPedidoPage() {
                   {([['normal', 'Normal'], ['urgente', 'Urgente'], ['grande_volume', 'Grande Volume']] as const).map(([v, l]) => (
                     <button key={v} type="button" onClick={() => setTipo(v)}
                       className={clsx('flex-1 py-2 rounded-xl text-xs font-semibold border transition-colors',
-                        tipo === v ? 'bg-nice-500 text-white border-nice-500' : 'bg-white border-gray-200 text-gray-600 hover:border-nice-300')}>
+                        tipo === v ? 'bg-nice-500 text-white border-nice-500' : 'bg-superficie border-borda text-suave hover:border-nice-300')}>
                       {l}
                     </button>
                   ))}
@@ -382,7 +382,7 @@ export default function NovoPedidoPage() {
           {/* Peças */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-nice-800 text-base">Peças</h2>
+              <h2 className="font-semibold text-titulo text-base">Peças</h2>
               <button type="button" onClick={() => setPecas(p => [...p, novaPeca()])} className="btn-secondary text-sm">
                 <PlusCircle className="w-4 h-4" /> Adicionar Peça
               </button>
@@ -396,7 +396,7 @@ export default function NovoPedidoPage() {
                 <div key={peca.id} className="card border-l-4 border-l-nice-400 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-nice-700">Peça {pi + 1}</span>
+                      <span className="text-sm font-semibold text-marca-texto">Peça {pi + 1}</span>
                       <span className={clsx('badge text-xs', cc.bg, cc.color)}>{cc.label}</span>
                     </div>
                     {pecas.length > 1 && (
@@ -440,7 +440,7 @@ export default function NovoPedidoPage() {
                             className={clsx('px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors',
                               peca.personalizacoes.includes(value as Personalizacao)
                                 ? 'bg-nice-500 text-white border-nice-500'
-                                : 'bg-white border-gray-200 text-gray-600 hover:border-nice-300')}>
+                                : 'bg-superficie border-borda text-suave hover:border-nice-300')}>
                             {label}
                           </button>
                         ))}
@@ -461,10 +461,10 @@ export default function NovoPedidoPage() {
                         onChange={e => updatePeca(peca.id, { valorUnitario: parseFloat(e.target.value) || 0 })} />
                     </div>
                     <div className="flex items-end pb-1">
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-suave">
                         Subtotal:{' '}
-                        <span className="font-semibold text-nice-700">R$ {subtotalPeca.toFixed(2)}</span>
-                        <span className="text-gray-400 ml-1">({qtdPeca} un.)</span>
+                        <span className="font-semibold text-marca-texto">R$ {subtotalPeca.toFixed(2)}</span>
+                        <span className="text-fraco ml-1">({qtdPeca} un.)</span>
                       </p>
                     </div>
                   </div>
@@ -488,7 +488,7 @@ export default function NovoPedidoPage() {
                             </select>
                             <input type="number" min={1} className="input w-24" value={t.quantidade}
                               onChange={e => updateTamanho(peca.id, ti, { quantidade: parseInt(e.target.value) || 1 })} />
-                            <span className="text-xs text-gray-400">un.</span>
+                            <span className="text-xs text-fraco">un.</span>
                             {peca.tamanhos.length > 1 && (
                               <button type="button" onClick={() => removeTamanho(peca.id, ti)}
                                 className="text-red-400 hover:text-red-600">
@@ -504,7 +504,7 @@ export default function NovoPedidoPage() {
                         </div>
                       ))}
                       <button type="button" onClick={() => addTamanho(peca.id)}
-                        className="text-nice-600 text-xs font-medium hover:underline flex items-center gap-1 mt-1">
+                        className="text-marca-texto text-xs font-medium hover:underline flex items-center gap-1 mt-1">
                         <PlusCircle className="w-3.5 h-3.5" /> Adicionar tamanho
                       </button>
                     </div>
@@ -532,21 +532,21 @@ export default function NovoPedidoPage() {
           {/* Pagamentos / Parcelas */}
           <div className="card space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-nice-800 text-base">Pagamentos</h2>
+              <h2 className="font-semibold text-titulo text-base">Pagamentos</h2>
               <button type="button" onClick={addParcela} className="btn-secondary text-sm">
                 <PlusCircle className="w-4 h-4" /> Adicionar parcela
               </button>
             </div>
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+            <div className="flex items-center gap-3 p-3 bg-superficie-2 rounded-xl">
               <input type="checkbox" id="vetorizacao" checked={vetorizacao.necessaria}
                 onChange={e => setVetorizacao(v => ({ ...v, necessaria: e.target.checked }))}
                 className="w-4 h-4 accent-nice-500 cursor-pointer" />
-              <label htmlFor="vetorizacao" className="text-sm font-medium text-gray-700 cursor-pointer flex-1">
+              <label htmlFor="vetorizacao" className="text-sm font-medium text-conteudo cursor-pointer flex-1">
                 Vetorização necessária
               </label>
               {vetorizacao.necessaria && (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500">R$</span>
+                  <span className="text-xs text-suave">R$</span>
                   <input type="number" min={0} step={0.01} className="input w-24 py-1 text-sm"
                     value={vetorizacao.valor}
                     onChange={e => setVetorizacao(v => ({ ...v, valor: parseFloat(e.target.value) || 0 }))} />
@@ -556,9 +556,9 @@ export default function NovoPedidoPage() {
 
             <div className="space-y-3">
               {parcelas.map((parcela, pi) => (
-                <div key={parcela.id} className="border border-gray-100 rounded-xl p-4 space-y-3">
+                <div key={parcela.id} className="border border-borda rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Parcela {pi + 1}</span>
+                    <span className="text-sm font-medium text-conteudo">Parcela {pi + 1}</span>
                     {parcelas.length > 1 && (
                       <button type="button" onClick={() => removeParcela(parcela.id)}
                         className="text-red-400 hover:text-red-600 transition-colors">
@@ -587,7 +587,7 @@ export default function NovoPedidoPage() {
                       <input type="checkbox" id={`pago-${parcela.id}`} checked={parcela.pago}
                         onChange={e => updateParcela(parcela.id, { pago: e.target.checked })}
                         className="w-4 h-4 accent-nice-500" />
-                      <label htmlFor={`pago-${parcela.id}`} className="text-sm text-gray-700 cursor-pointer">Pago</label>
+                      <label htmlFor={`pago-${parcela.id}`} className="text-sm text-conteudo cursor-pointer">Pago</label>
                     </div>
                   </div>
                 </div>
@@ -595,16 +595,16 @@ export default function NovoPedidoPage() {
             </div>
             <div className="border-t pt-3 space-y-1.5 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Total</span>
-                <span className="font-semibold text-nice-700">R$ {totalParcelas.toFixed(2)}</span>
+                <span className="text-suave">Total</span>
+                <span className="font-semibold text-marca-texto">R$ {totalParcelas.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Total pago</span>
+                <span className="text-suave">Total pago</span>
                 <span className="font-medium text-green-600">R$ {totalPago.toFixed(2)}</span>
               </div>
               {saldo > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Saldo restante</span>
+                  <span className="text-suave">Saldo restante</span>
                   <span className="font-semibold text-orange-600">R$ {saldo.toFixed(2)}</span>
                 </div>
               )}
@@ -615,26 +615,26 @@ export default function NovoPedidoPage() {
         {/* Resumo lateral */}
         <div className="lg:col-span-1">
           <div className="card sticky top-8 space-y-4">
-            <h2 className="font-semibold text-nice-800 text-base">Resumo</h2>
+            <h2 className="font-semibold text-titulo text-base">Resumo</h2>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Total de peças</span>
-                <span className="font-semibold text-nice-700">{totalUnidades} un.</span>
+                <span className="text-suave">Total de peças</span>
+                <span className="font-semibold text-marca-texto">{totalUnidades} un.</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Tipos de peças</span>
+                <span className="text-suave">Tipos de peças</span>
                 <span className="font-semibold">{pecas.length}</span>
               </div>
               {consultorFinal && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Consultor</span>
-                  <span className="font-semibold text-gray-700">{consultorFinal}</span>
+                  <span className="text-suave">Consultor</span>
+                  <span className="font-semibold text-conteudo">{consultorFinal}</span>
                 </div>
               )}
             </div>
 
             <div className="border-t pt-3">
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Peças</p>
+              <p className="text-xs text-suave font-medium uppercase tracking-wide mb-2">Peças</p>
               <div className="space-y-1.5">
                 {pecas.map(p => {
                   const cc = COMPLEXIDADE_CONFIG[p.complexidade]
@@ -644,11 +644,11 @@ export default function NovoPedidoPage() {
                     <div key={p.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className={clsx('badge text-xs', cc.bg, cc.color)}>{p.complexidade}</span>
-                        <span className="text-xs text-gray-600 truncate max-w-20">{p.tipo}</span>
+                        <span className="text-xs text-suave truncate max-w-20">{p.tipo}</span>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs text-gray-400">{qtd} un.</div>
-                        {sub > 0 && <div className="text-xs font-semibold text-nice-700">R$ {sub.toFixed(2)}</div>}
+                        <div className="text-xs text-fraco">{qtd} un.</div>
+                        {sub > 0 && <div className="text-xs font-semibold text-marca-texto">R$ {sub.toFixed(2)}</div>}
                       </div>
                     </div>
                   )
@@ -658,8 +658,8 @@ export default function NovoPedidoPage() {
 
             <div className="border-t pt-3 space-y-1.5">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Tipo</span>
-                <span className={clsx('font-medium', tipo === 'urgente' ? 'text-red-600' : 'text-gray-700')}>
+                <span className="text-suave">Tipo</span>
+                <span className={clsx('font-medium', tipo === 'urgente' ? 'text-red-600' : 'text-conteudo')}>
                   {tipo === 'normal' ? 'Normal' : tipo === 'urgente' ? 'Urgente' : 'Grande Volume'}
                 </span>
               </div>
@@ -667,21 +667,21 @@ export default function NovoPedidoPage() {
                 <>
                   {vetorizacao.necessaria && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Vetorização</span>
-                      <span className="font-medium text-nice-700">R$ {vetorizacao.valor.toFixed(2)}</span>
+                      <span className="text-suave">Vetorização</span>
+                      <span className="font-medium text-marca-texto">R$ {vetorizacao.valor.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Total</span>
-                    <span className="font-semibold text-nice-700">R$ {totalGeral.toFixed(2)}</span>
+                    <span className="text-suave">Total</span>
+                    <span className="font-semibold text-marca-texto">R$ {totalGeral.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Pago</span>
+                    <span className="text-suave">Pago</span>
                     <span className="font-medium text-green-600">R$ {totalPago.toFixed(2)}</span>
                   </div>
                   {saldo > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Saldo</span>
+                      <span className="text-suave">Saldo</span>
                       <span className="font-semibold text-orange-600">R$ {saldo.toFixed(2)}</span>
                     </div>
                   )}

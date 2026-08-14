@@ -68,16 +68,16 @@ export default function ConfiguracoesPage() {
   return (
     <div className="max-w-3xl space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-nice-800">Configurações</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Personalize o catálogo de peças e as personalizações disponíveis nos pedidos</p>
+        <h1 className="text-2xl font-bold text-titulo">Configurações</h1>
+        <p className="text-sm text-suave mt-0.5">Personalize o catálogo de peças e as personalizações disponíveis nos pedidos</p>
       </div>
 
       {/* Seção 1: Catálogo por categoria */}
       <div className="card space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-semibold text-nice-800 text-base">Tipos de Peça por Categoria</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Aparece no seletor de tipo ao criar um novo pedido</p>
+            <h2 className="font-semibold text-titulo text-base">Tipos de Peça por Categoria</h2>
+            <p className="text-xs text-fraco mt-0.5">Aparece no seletor de tipo ao criar um novo pedido</p>
           </div>
           <button onClick={salvarCatalogo} className="btn-primary text-sm">
             <Save className="w-4 h-4" />
@@ -88,20 +88,20 @@ export default function ConfiguracoesPage() {
         <div className="space-y-6">
           {Object.entries(catalogo).map(([categoria, tipos]) => (
             <div key={categoria} className="space-y-3">
-              <h3 className="text-sm font-semibold text-gray-700 pb-1 border-b border-gray-100">{categoria}</h3>
+              <h3 className="text-sm font-semibold text-conteudo pb-1 border-b border-borda">{categoria}</h3>
               <div className="flex flex-wrap gap-2">
                 {tipos.map(tipo => (
                   <span key={tipo}
-                    className="flex items-center gap-1.5 bg-gray-100 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-xl">
+                    className="flex items-center gap-1.5 bg-superficie-3 text-conteudo text-xs font-medium px-3 py-1.5 rounded-xl">
                     {tipo}
                     <button type="button" onClick={() => removeTipo(categoria, tipo)}
-                      className="text-gray-400 hover:text-red-500 transition-colors">
+                      className="text-fraco hover:text-red-500 transition-colors">
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </span>
                 ))}
                 {tipos.length === 0 && (
-                  <span className="text-xs text-gray-400 italic">Nenhum tipo cadastrado</span>
+                  <span className="text-xs text-fraco italic">Nenhum tipo cadastrado</span>
                 )}
               </div>
               <div className="flex gap-2">
@@ -125,8 +125,8 @@ export default function ConfiguracoesPage() {
       <div className="card space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-semibold text-nice-800 text-base">Personalizações</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Técnicas de personalização disponíveis ao criar um pedido</p>
+            <h2 className="font-semibold text-titulo text-base">Personalizações</h2>
+            <p className="text-xs text-fraco mt-0.5">Técnicas de personalização disponíveis ao criar um pedido</p>
           </div>
           <button onClick={salvarPersonalizacoes} className="btn-primary text-sm">
             <Save className="w-4 h-4" />
@@ -137,7 +137,7 @@ export default function ConfiguracoesPage() {
         <div className="flex flex-wrap gap-2">
           {personalizacoes.map(p => (
             <span key={p.value}
-              className="flex items-center gap-1.5 bg-nice-50 text-nice-700 text-xs font-medium px-3 py-1.5 rounded-xl border border-nice-200">
+              className="flex items-center gap-1.5 bg-marca-suave text-marca-texto text-xs font-medium px-3 py-1.5 rounded-xl border border-marca-borda">
               {p.label}
               <button type="button" onClick={() => removePersonalizacao(p.value)}
                 className="text-nice-400 hover:text-red-500 transition-colors">
@@ -146,7 +146,7 @@ export default function ConfiguracoesPage() {
             </span>
           ))}
           {personalizacoes.length === 0 && (
-            <span className="text-xs text-gray-400 italic">Nenhuma personalização cadastrada</span>
+            <span className="text-xs text-fraco italic">Nenhuma personalização cadastrada</span>
           )}
         </div>
 

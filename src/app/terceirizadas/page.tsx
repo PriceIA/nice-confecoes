@@ -10,12 +10,12 @@ const TIPO_CONFIG = {
   costura:     { label: 'Costura',      color: 'text-blue-600',   bg: 'bg-blue-50' },
   dtf:         { label: 'DTF',          color: 'text-purple-600', bg: 'bg-purple-50' },
   sublimacao:  { label: 'Sublimação',   color: 'text-orange-600', bg: 'bg-orange-50' },
-  bordado:     { label: 'Bordado',      color: 'text-nice-600',   bg: 'bg-nice-50' },
+  bordado:     { label: 'Bordado',      color: 'text-marca-texto',   bg: 'bg-marca-suave' },
 }
 
 const STATUS_TC = {
   enviado:   { label: 'Enviado',   icon: Truck,         color: 'text-blue-500',  bg: 'bg-blue-50' },
-  retornado: { label: 'Retornado', icon: CheckCircle2,  color: 'text-nice-500',  bg: 'bg-nice-50' },
+  retornado: { label: 'Retornado', icon: CheckCircle2,  color: 'text-nice-500',  bg: 'bg-marca-suave' },
   pago:      { label: 'Pago',      icon: CheckCircle2,  color: 'text-green-600', bg: 'bg-green-50' },
 }
 
@@ -60,8 +60,8 @@ export default function TerceirizadasPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-nice-800">Terceirizadas</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Controle de envios e pagamentos</p>
+          <h1 className="text-2xl font-bold text-titulo">Terceirizadas</h1>
+          <p className="text-sm text-suave mt-0.5">Controle de envios e pagamentos</p>
         </div>
         <button onClick={() => setModal(true)} className="btn-primary">
           <PlusCircle className="w-4 h-4" /> Registrar Envio
@@ -75,8 +75,8 @@ export default function TerceirizadasPage() {
             <Clock className="w-5 h-5 text-orange-500" />
           </div>
           <div>
-            <div className="text-xl font-bold text-nice-800">R$ {totalAPagar.toFixed(2)}</div>
-            <div className="text-xs text-gray-400">A pagar</div>
+            <div className="text-xl font-bold text-titulo">R$ {totalAPagar.toFixed(2)}</div>
+            <div className="text-xs text-fraco">A pagar</div>
           </div>
         </div>
         <div className="card flex items-center gap-4">
@@ -84,17 +84,17 @@ export default function TerceirizadasPage() {
             <Truck className="w-5 h-5 text-blue-500" />
           </div>
           <div>
-            <div className="text-xl font-bold text-nice-800">{lista.filter(t => t.status === 'enviado').length}</div>
-            <div className="text-xs text-gray-400">Aguardando retorno</div>
+            <div className="text-xl font-bold text-titulo">{lista.filter(t => t.status === 'enviado').length}</div>
+            <div className="text-xs text-fraco">Aguardando retorno</div>
           </div>
         </div>
         <div className="card flex items-center gap-4">
-          <div className="w-10 h-10 bg-nice-50 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-marca-suave rounded-xl flex items-center justify-center">
             <CheckCircle2 className="w-5 h-5 text-nice-500" />
           </div>
           <div>
-            <div className="text-xl font-bold text-nice-800">{lista.filter(t => t.status === 'retornado').length}</div>
-            <div className="text-xs text-gray-400">Retornados</div>
+            <div className="text-xl font-bold text-titulo">{lista.filter(t => t.status === 'retornado').length}</div>
+            <div className="text-xs text-fraco">Retornados</div>
           </div>
         </div>
       </div>
@@ -102,12 +102,12 @@ export default function TerceirizadasPage() {
       {/* Lista */}
       <div className="card p-0 overflow-hidden">
         {lista.length === 0 ? (
-          <div className="py-20 text-center text-gray-400 text-sm">Nenhum registro de terceirizada.</div>
+          <div className="py-20 text-center text-fraco text-sm">Nenhum registro de terceirizada.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                <tr className="bg-superficie-2 text-xs text-suave uppercase tracking-wide">
                   <th className="text-left px-6 py-3 font-semibold">Prestadora</th>
                   <th className="text-left px-6 py-3 font-semibold">Tipo</th>
                   <th className="text-left px-6 py-3 font-semibold">Pedido</th>
@@ -117,19 +117,19 @@ export default function TerceirizadasPage() {
                   <th className="px-6 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-borda">
                 {lista.map(t => {
                   const tc = TIPO_CONFIG[t.tipo]
                   const sc = STATUS_TC[t.status]
                   const StatusIcon = sc.icon
                   return (
-                    <tr key={t.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 font-medium text-gray-800">{t.nome}</td>
+                    <tr key={t.id} className="hover:bg-superficie-2">
+                      <td className="px-6 py-4 font-medium text-conteudo">{t.nome}</td>
                       <td className="px-6 py-4"><span className={clsx('badge', tc.bg, tc.color)}>{tc.label}</span></td>
-                      <td className="px-6 py-4 text-gray-600">{t.numeroPedido ? `#${t.numeroPedido}` : '—'}</td>
-                      <td className="px-6 py-4 text-gray-500">{format(new Date(t.dataEnvio), 'dd/MM/yyyy')}</td>
+                      <td className="px-6 py-4 text-suave">{t.numeroPedido ? `#${t.numeroPedido}` : '—'}</td>
+                      <td className="px-6 py-4 text-suave">{format(new Date(t.dataEnvio), 'dd/MM/yyyy')}</td>
                       <td className="px-6 py-4">
-                        <div className="font-medium text-gray-800">R$ {t.valorCombinado.toFixed(2)}</div>
+                        <div className="font-medium text-conteudo">R$ {t.valorCombinado.toFixed(2)}</div>
                         {t.valorPago > 0 && <div className="text-xs text-green-600">Pago: R$ {t.valorPago.toFixed(2)}</div>}
                       </td>
                       <td className="px-6 py-4">
@@ -140,7 +140,7 @@ export default function TerceirizadasPage() {
                       <td className="px-6 py-4">
                         {t.status !== 'pago' && (
                           <button onClick={() => avancarStatus(t.id, t.status)}
-                            className="text-nice-600 text-xs font-medium hover:underline">
+                            className="text-marca-texto text-xs font-medium hover:underline">
                             {t.status === 'enviado' ? 'Marcar retorno' : 'Marcar pago'}
                           </button>
                         )}
@@ -157,8 +157,8 @@ export default function TerceirizadasPage() {
       {/* Modal */}
       {modal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4">
-            <h2 className="font-bold text-nice-800 text-lg">Registrar Envio</h2>
+          <div className="bg-superficie rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4">
+            <h2 className="font-bold text-titulo text-lg">Registrar Envio</h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="label">Prestadora *</label>

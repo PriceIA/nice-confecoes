@@ -7,6 +7,8 @@ import { getPedidoById, atualizarPedido } from '@/lib/store'
 import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade } from '@/lib/helpers'
 import { Pedido, Peca, StatusPedido, StatusSetor, ProgressoSetor, Personalizacao, TamanhoQuantidade } from '@/types'
 import FotoUpload from '@/components/FotoUpload'
+import CriarCartaoDoPedido from '@/components/kanban/CriarCartaoDoPedido'
+import { pedidoConcluido } from '@/lib/kanban-ui'
 import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
 import Link from 'next/link'
@@ -45,7 +47,7 @@ function PrintHeader({ pedido }: { pedido: Pedido }) {
     <div className="flex items-start justify-between border-b-2 border-black pb-2 mb-3">
       <div>
         <div className="text-2xl font-extrabold tracking-tight leading-none">Nice Confecções</div>
-        <div className="text-[10px] text-gray-600 mt-1">Pedido #{pedido.numero}</div>
+        <div className="text-[10px] text-suave mt-1">Pedido #{pedido.numero}</div>
       </div>
       <div className="text-right text-[11px] leading-tight">
         <div>Data do Pedido: {format(new Date(pedido.dataEntrada), 'dd/MM/yy')}</div>
@@ -110,7 +112,7 @@ export default function DetalhePedidoPage() {
 
   useEffect(() => { carregar() }, [id])
 
-  if (!pedido) return <div className="text-gray-400 text-sm">Carregando...</div>
+  if (!pedido) return <div className="text-fraco text-sm">Carregando...</div>
 
   const sc = STATUS_CONFIG[pedido.status]
 
@@ -216,7 +218,7 @@ export default function DetalhePedidoPage() {
   const setorIcone = (s: StatusSetor) => {
     if (s === 'concluido') return <CheckCircle2 className="w-4 h-4 text-nice-500" />
     if (s === 'em_andamento') return <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
-    return <Circle className="w-4 h-4 text-gray-300" />
+    return <Circle className="w-4 h-4 text-fraco" />
   }
 
   const totalParcelas = pedido.parcelas.reduce((a, p) => a + (p.valor || 0), 0)
@@ -234,11 +236,11 @@ export default function DetalhePedidoPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-nice-800">Pedido #{pedido.numero}</h1>
+              <h1 className="text-2xl font-bold text-titulo">Pedido #{pedido.numero}</h1>
               <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
               {pedido.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600">urgente</span>}
             </div>
-            <p className="text-sm text-gray-400 mt-0.5">Entrada: {format(new Date(pedido.dataEntrada), 'dd/MM/yyyy')}</p>
+            <p className="text-sm text-fraco mt-0.5">Entrada: {format(new Date(pedido.dataEntrada), 'dd/MM/yyyy')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -257,17 +259,17 @@ export default function DetalhePedidoPage() {
       {editando && (
         <div className="card space-y-6 border-2 border-nice-300">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-nice-800 text-base flex items-center gap-2">
+            <h2 className="font-semibold text-titulo text-base flex items-center gap-2">
               <Pencil className="w-4 h-4 text-nice-500" /> Editando Pedido
             </h2>
-            <button onClick={cancelarEdicao} className="text-gray-400 hover:text-gray-600 p-1">
+            <button onClick={cancelarEdicao} className="text-fraco hover:text-suave p-1">
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Edit: Cliente */}
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide border-b pb-1">Dados do Cliente</h3>
+            <h3 className="text-xs font-semibold text-fraco uppercase tracking-wide border-b pb-1">Dados do Cliente</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Nome *</label>
@@ -309,15 +311,15 @@ export default function DetalhePedidoPage() {
 
           {/* Edit: Peças */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide border-b pb-1">Peças</h3>
+            <h3 className="text-xs font-semibold text-fraco uppercase tracking-wide border-b pb-1">Peças</h3>
             {editPecas.map((peca, pi) => {
               const cc = COMPLEXIDADE_CONFIG[peca.complexidade]
               const catalogoKeys = Object.keys(CATALOGO)
               return (
-                <div key={peca.id} className="border border-gray-100 rounded-xl p-4 space-y-3">
+                <div key={peca.id} className="border border-borda rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-700">Peça {pi + 1}</span>
+                      <span className="text-sm font-semibold text-conteudo">Peça {pi + 1}</span>
                       <span className={clsx('badge text-xs', cc.bg, cc.color)}>{cc.label}</span>
                     </div>
                     {editPecas.length > 1 && (
@@ -368,7 +370,7 @@ export default function DetalhePedidoPage() {
                             className={clsx('px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors',
                               peca.personalizacoes.includes(value as Personalizacao)
                                 ? 'bg-nice-500 text-white border-nice-500'
-                                : 'bg-white border-gray-200 text-gray-600 hover:border-nice-300')}>
+                                : 'bg-superficie border-borda text-suave hover:border-nice-300')}>
                             {label}
                           </button>
                         ))}
@@ -407,7 +409,7 @@ export default function DetalhePedidoPage() {
                             </select>
                             <input type="number" min={1} className="input w-24" value={t.quantidade}
                               onChange={e => updateEditTamanho(peca.id, ti, { quantidade: parseInt(e.target.value) || 1 })} />
-                            <span className="text-xs text-gray-400">un.</span>
+                            <span className="text-xs text-fraco">un.</span>
                             {peca.tamanhos.length > 1 && (
                               <button type="button" onClick={() => removeEditTamanho(peca.id, ti)}
                                 className="text-red-400 hover:text-red-600">
@@ -423,7 +425,7 @@ export default function DetalhePedidoPage() {
                         </div>
                       ))}
                       <button type="button" onClick={() => addEditTamanho(peca.id)}
-                        className="text-nice-600 text-xs font-medium hover:underline flex items-center gap-1 mt-1">
+                        className="text-marca-texto text-xs font-medium hover:underline flex items-center gap-1 mt-1">
                         <PlusCircle className="w-3.5 h-3.5" /> Adicionar tamanho
                       </button>
                     </div>
@@ -459,47 +461,47 @@ export default function DetalhePedidoPage() {
 
           {/* Cliente */}
           <div className="card space-y-3">
-            <h2 className="font-semibold text-nice-800">Cliente</h2>
+            <h2 className="font-semibold text-titulo">Cliente</h2>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-gray-400 text-xs">Nome</span><p className="font-medium text-gray-800">{pedido.cliente.nome}</p></div>
-              {pedido.cliente.empresa && <div><span className="text-gray-400 text-xs">Empresa</span><p className="font-medium text-gray-800">{pedido.cliente.empresa}</p></div>}
-              {pedido.cliente.responsavel && <div><span className="text-gray-400 text-xs">Responsável</span><p className="font-medium text-gray-800">{pedido.cliente.responsavel}</p></div>}
-              {pedido.cliente.telefone && <div><span className="text-gray-400 text-xs">Telefone</span><p className="font-medium text-gray-800">{pedido.cliente.telefone}</p></div>}
-              {pedido.cliente.email && <div><span className="text-gray-400 text-xs">E-mail</span><p className="font-medium text-gray-800">{pedido.cliente.email}</p></div>}
-              {pedido.cliente.documento && <div><span className="text-gray-400 text-xs">CNPJ/CPF</span><p className="font-medium text-gray-800">{pedido.cliente.documento}</p></div>}
-              {pedido.cliente.endereco && <div className="col-span-2"><span className="text-gray-400 text-xs">Endereço</span><p className="font-medium text-gray-800">{pedido.cliente.endereco}</p></div>}
+              <div><span className="text-fraco text-xs">Nome</span><p className="font-medium text-conteudo">{pedido.cliente.nome}</p></div>
+              {pedido.cliente.empresa && <div><span className="text-fraco text-xs">Empresa</span><p className="font-medium text-conteudo">{pedido.cliente.empresa}</p></div>}
+              {pedido.cliente.responsavel && <div><span className="text-fraco text-xs">Responsável</span><p className="font-medium text-conteudo">{pedido.cliente.responsavel}</p></div>}
+              {pedido.cliente.telefone && <div><span className="text-fraco text-xs">Telefone</span><p className="font-medium text-conteudo">{pedido.cliente.telefone}</p></div>}
+              {pedido.cliente.email && <div><span className="text-fraco text-xs">E-mail</span><p className="font-medium text-conteudo">{pedido.cliente.email}</p></div>}
+              {pedido.cliente.documento && <div><span className="text-fraco text-xs">CNPJ/CPF</span><p className="font-medium text-conteudo">{pedido.cliente.documento}</p></div>}
+              {pedido.cliente.endereco && <div className="col-span-2"><span className="text-fraco text-xs">Endereço</span><p className="font-medium text-conteudo">{pedido.cliente.endereco}</p></div>}
             </div>
           </div>
 
           {/* Peças */}
           <div className="card space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-nice-800">Peças ({totalPecas(pedido)} un.)</h2>
+              <h2 className="font-semibold text-titulo">Peças ({totalPecas(pedido)} un.)</h2>
             </div>
             {pedido.pecas.map((p, i) => {
               const cc = COMPLEXIDADE_CONFIG[p.complexidade]
               const qtd = p.tamanhos.reduce((a, t) => a + t.quantidade, 0)
               return (
-                <div key={p.id} className="border border-gray-100 rounded-xl p-4 space-y-3">
+                <div key={p.id} className="border border-borda rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm text-gray-800">Peça {i + 1} — {p.tipo}</span>
+                      <span className="font-medium text-sm text-conteudo">Peça {i + 1} — {p.tipo}</span>
                       <span className={clsx('badge', cc.bg, cc.color)}>{cc.label}</span>
                     </div>
-                    <span className="text-sm text-gray-500 font-medium">{qtd} un.</span>
+                    <span className="text-sm text-suave font-medium">{qtd} un.</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-xs text-gray-500">
-                    {p.cor && <div><span className="font-medium text-gray-400">Cor:</span> {p.cor}</div>}
+                  <div className="grid grid-cols-3 gap-2 text-xs text-suave">
+                    {p.cor && <div><span className="font-medium text-fraco">Cor:</span> {p.cor}</div>}
                     {p.personalizacoes.length > 0 && (
                       <div className="col-span-2">
-                        <span className="font-medium text-gray-400">Person.:</span> {p.personalizacoes.join(', ')}
-                        {p.corPersonalizacao && <span className="ml-1 text-gray-500">({p.corPersonalizacao})</span>}
+                        <span className="font-medium text-fraco">Person.:</span> {p.personalizacoes.join(', ')}
+                        {p.corPersonalizacao && <span className="ml-1 text-suave">({p.corPersonalizacao})</span>}
                       </div>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {p.tamanhos.map((t, ti) => (
-                      <span key={ti} className="px-2 py-0.5 bg-nice-50 text-nice-700 rounded-lg text-xs font-medium">
+                      <span key={ti} className="px-2 py-0.5 bg-marca-suave text-marca-texto rounded-lg text-xs font-medium">
                         {t.tamanho === 'SOB_MEDIDA'
                           ? `Sob Medida${t.medidaEspecial ? ': ' + t.medidaEspecial : ''}`
                           : t.tamanho
@@ -507,12 +509,12 @@ export default function DetalhePedidoPage() {
                       </span>
                     ))}
                   </div>
-                  {p.observacoes && <p className="text-xs text-gray-500 italic">{p.observacoes}</p>}
+                  {p.observacoes && <p className="text-xs text-suave italic">{p.observacoes}</p>}
                   {p.fotos && p.fotos.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {p.fotos.map((url, fi) => (
                         <img key={fi} src={url} alt={`Foto ${fi + 1} — Peça ${i + 1}`}
-                          className="w-20 h-20 object-cover rounded-xl border border-gray-200 cursor-pointer"
+                          className="w-20 h-20 object-cover rounded-xl border border-borda cursor-pointer"
                           onClick={() => window.open(url, '_blank')} />
                       ))}
                     </div>
@@ -522,33 +524,35 @@ export default function DetalhePedidoPage() {
             })}
           </div>
 
-          {/* Parcelas */}
-          {pedido.parcelas.length > 0 && (
+          {/* Parcelas — some inteira para quem não pode ver dinheiro. Esconder
+              só os valores deixaria vazar quantas parcelas existem e quais já
+              foram pagas, que também é informação financeira. */}
+          {permissoes.verFinanceiro && pedido.parcelas.length > 0 && (
             <div className="card space-y-4">
-              <h2 className="font-semibold text-nice-800">Pagamentos</h2>
+              <h2 className="font-semibold text-titulo">Pagamentos</h2>
               <div className="space-y-2">
                 {pedido.parcelas.map((p, i) => (
                   <div key={p.id}
                     className={clsx('flex items-center justify-between px-4 py-3 rounded-xl border text-sm',
-                      p.pago ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100')}>
+                      p.pago ? 'bg-green-50 border-green-200' : 'bg-superficie-2 border-borda')}>
                     <div className="flex items-center gap-3">
                       <input type="checkbox" checked={p.pago}
                         disabled={!permissoes.editarPedido}
                         onChange={e => marcarParcelaPaga(p.id, e.target.checked)}
                         className="w-4 h-4 accent-nice-500 cursor-pointer disabled:cursor-default" />
                       <div>
-                        <p className={clsx('font-medium', p.pago ? 'text-green-700' : 'text-gray-700')}>
+                        <p className={clsx('font-medium', p.pago ? 'text-green-700' : 'text-conteudo')}>
                           {p.descricao || `Parcela ${i + 1}`}
                         </p>
                         {p.dataPrevista && (
-                          <p className="text-xs text-gray-400">
+                          <p className="text-xs text-fraco">
                             Previsto: {format(new Date(p.dataPrevista + 'T00:00:00'), 'dd/MM/yyyy')}
                             {p.dataPagamento && ` · Pago: ${format(new Date(p.dataPagamento + 'T00:00:00'), 'dd/MM/yyyy')}`}
                           </p>
                         )}
                       </div>
                     </div>
-                    <span className={clsx('font-semibold', p.pago ? 'text-green-700' : 'text-gray-700')}>
+                    <span className={clsx('font-semibold', p.pago ? 'text-green-700' : 'text-conteudo')}>
                       R$ {(p.valor || 0).toFixed(2)}
                     </span>
                   </div>
@@ -556,16 +560,16 @@ export default function DetalhePedidoPage() {
               </div>
               <div className="border-t pt-3 space-y-1.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Total</span>
-                  <span className="font-semibold text-nice-700">R$ {totalParcelas.toFixed(2)}</span>
+                  <span className="text-suave">Total</span>
+                  <span className="font-semibold text-marca-texto">R$ {totalParcelas.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Pago</span>
+                  <span className="text-suave">Pago</span>
                   <span className="font-medium text-green-600">R$ {totalPago.toFixed(2)}</span>
                 </div>
                 {saldo > 0 && (
                   <div className="flex justify-between border-t pt-2">
-                    <span className="text-gray-500">Saldo restante</span>
+                    <span className="text-suave">Saldo restante</span>
                     <span className="font-semibold text-orange-600">R$ {saldo.toFixed(2)}</span>
                   </div>
                 )}
@@ -575,7 +579,7 @@ export default function DetalhePedidoPage() {
 
           {/* Progresso setores */}
           <div className="card space-y-4">
-            <h2 className="font-semibold text-nice-800">Progresso por Setor</h2>
+            <h2 className="font-semibold text-titulo">Progresso por Setor</h2>
             <div className="space-y-2">
               {(Object.keys(pedido.progresso) as (keyof ProgressoSetor)[]).map(setor => {
                 const status = pedido.progresso[setor]
@@ -584,41 +588,47 @@ export default function DetalhePedidoPage() {
                     disabled={!permissoes.editarPedido}
                     className={clsx(
                       'w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm disabled:cursor-default',
-                      status === 'concluido' ? 'bg-nice-50 border-nice-200' :
+                      status === 'concluido' ? 'bg-marca-suave border-marca-borda' :
                       status === 'em_andamento' ? 'bg-orange-50 border-orange-200' :
-                      'bg-gray-50 border-gray-100 hover:border-gray-200'
+                      'bg-superficie-2 border-borda hover:border-borda'
                     )}>
                     <div className="flex items-center gap-3">
                       {setorIcone(status)}
-                      <span className={clsx('font-medium', status === 'concluido' ? 'text-nice-700' : status === 'em_andamento' ? 'text-orange-600' : 'text-gray-500')}>
+                      <span className={clsx('font-medium', status === 'concluido' ? 'text-marca-texto' : status === 'em_andamento' ? 'text-orange-600' : 'text-suave')}>
                         {SETOR_LABELS[setor]}
                       </span>
                     </div>
                     <span className={clsx('text-xs font-semibold capitalize',
-                      status === 'concluido' ? 'text-nice-600' : status === 'em_andamento' ? 'text-orange-500' : 'text-gray-400')}>
+                      status === 'concluido' ? 'text-marca-texto' : status === 'em_andamento' ? 'text-orange-500' : 'text-fraco')}>
                       {status === 'pendente' ? 'pendente' : status === 'em_andamento' ? 'em andamento' : 'concluído'}
                     </span>
                   </button>
                 )
               })}
             </div>
-            <p className="text-xs text-gray-400">Clique em um setor para avançar o status</p>
+            <p className="text-xs text-fraco">Clique em um setor para avançar o status</p>
           </div>
         </div>
 
         {/* Sidebar lateral */}
         <div className="space-y-4">
+          {/* Pedido pronto: oferece virar cartão no Kanban. Sugestão, não
+              automação — quem cria decide se aceita o texto sugerido. */}
+          {permissoes.editarKanban && pedidoConcluido(pedido) && (
+            <CriarCartaoDoPedido pedido={pedido} />
+          )}
+
           {/* Status */}
           {permissoes.editarPedido && (
           <div className="card space-y-3">
-            <h2 className="font-semibold text-nice-800 text-sm">Alterar Status</h2>
+            <h2 className="font-semibold text-titulo text-sm">Alterar Status</h2>
             <div className="space-y-1.5">
               {STATUS_LIST.map(s => {
                 const c = STATUS_CONFIG[s]
                 return (
                   <button key={s} onClick={() => mudarStatus(s)}
                     className={clsx('w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm border transition-all',
-                      pedido.status === s ? `${c.bg} ${c.color} border-current font-semibold` : 'border-transparent hover:bg-gray-50 text-gray-600')}>
+                      pedido.status === s ? `${c.bg} ${c.color} border-current font-semibold` : 'border-transparent hover:bg-superficie-2 text-suave')}>
                     {c.label}
                     {pedido.status === s && <ChevronRight className="w-3.5 h-3.5" />}
                   </button>
@@ -630,41 +640,41 @@ export default function DetalhePedidoPage() {
 
           {/* Datas e valor */}
           <div className="card space-y-3 text-sm">
-            <h2 className="font-semibold text-nice-800">Informações</h2>
+            <h2 className="font-semibold text-titulo">Informações</h2>
             <div className="space-y-2">
               {pedido.consultor && (
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Consultor</span>
-                  <span className="font-medium text-gray-700">{pedido.consultor}</span>
+                  <span className="text-fraco">Consultor</span>
+                  <span className="font-medium text-conteudo">{pedido.consultor}</span>
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-gray-400">Entrega</span>
+                <span className="text-fraco">Entrega</span>
                 <span className="font-medium">{format(new Date(pedido.dataEntrega), 'dd/MM/yyyy')}</span>
               </div>
-              {pedido.vetorizacao?.necessaria && (
+              {permissoes.verFinanceiro && pedido.vetorizacao?.necessaria && (
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Vetorização</span>
-                  <span className="font-medium text-nice-700">R$ {pedido.vetorizacao.valor.toFixed(2)}</span>
+                  <span className="text-fraco">Vetorização</span>
+                  <span className="font-medium text-marca-texto">R$ {pedido.vetorizacao.valor.toFixed(2)}</span>
                 </div>
               )}
-              {pedido.parcelas.length === 0 && (
+              {permissoes.verFinanceiro && pedido.parcelas.length === 0 && (
                 <>
                   <div className="flex justify-between">
-                    <span className="text-gray-400">Total</span>
-                    <span className="font-semibold text-nice-700">
+                    <span className="text-fraco">Total</span>
+                    <span className="font-semibold text-marca-texto">
                       {pedido.valorTotal > 0 ? `R$ ${pedido.valorTotal.toFixed(2)}` : '—'}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-400">Pago</span>
+                    <span className="text-fraco">Pago</span>
                     <span className="font-medium text-green-600">
                       {pedido.valorPago > 0 ? `R$ ${pedido.valorPago.toFixed(2)}` : '—'}
                     </span>
                   </div>
                   {pedido.valorTotal > 0 && pedido.valorPago < pedido.valorTotal && (
                     <div className="flex justify-between border-t pt-2">
-                      <span className="text-gray-400">Restante</span>
+                      <span className="text-fraco">Restante</span>
                       <span className="font-semibold text-orange-600">R$ {(pedido.valorTotal - pedido.valorPago).toFixed(2)}</span>
                     </div>
                   )}
@@ -675,8 +685,8 @@ export default function DetalhePedidoPage() {
 
           {pedido.observacoes && (
             <div className="card space-y-2">
-              <h2 className="font-semibold text-nice-800 text-sm">Observações</h2>
-              <p className="text-sm text-gray-600">{pedido.observacoes}</p>
+              <h2 className="font-semibold text-titulo text-sm">Observações</h2>
+              <p className="text-sm text-suave">{pedido.observacoes}</p>
             </div>
           )}
         </div>
@@ -757,7 +767,7 @@ export default function DetalhePedidoPage() {
                   {p.fotos && p.fotos.length > 0 ? (
                     <img src={p.fotos[0]} alt={`Foto da peça ${i + 1}`} className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-[9px] text-gray-400 text-center px-1">Sem foto</span>
+                    <span className="text-[9px] text-fraco text-center px-1">Sem foto</span>
                   )}
                 </div>
                 <table className="flex-1 text-[11px] border border-black">
@@ -794,7 +804,11 @@ export default function DetalhePedidoPage() {
         )
       })}
 
-      {/* Página final: resumo e pagamento */}
+      {/* Página final: resumo e pagamento.
+          Só sai no papel para quem pode ver dinheiro. As páginas por peça
+          acima continuam saindo para todo mundo — são a ordem de produção, e é
+          delas que o chão de fábrica precisa. */}
+      {permissoes.verFinanceiro && (
       <div>
         <PrintHeader pedido={pedido} />
         <ClienteTabela pedido={pedido} resumida />
@@ -884,6 +898,7 @@ export default function DetalhePedidoPage() {
           )}
         </div>
       </div>
+      )}
     </div>
     </>
   )

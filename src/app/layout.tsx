@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import AppShell from '@/components/layout/AppShell'
 import { AuthProvider, type Membro } from '@/components/AuthProvider'
+import { SCRIPT_TEMA, TemaProvider } from '@/components/TemaProvider'
 import { criarClienteServidor } from '@/lib/supabase/server'
 import type { Perfil } from '@/lib/permissoes'
 
@@ -29,11 +30,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html lang="pt-BR">
+    // suppressHydrationWarning: o script abaixo põe a classe `dark` no <html>
+    // antes da hidratação, então o HTML do servidor e o do cliente divergem
+    // nesse atributo de propósito.
+    <html lang="pt-BR" suppressHydrationWarning>
+      <head>
+        {/* Aplica o tema ANTES da primeira pintura. Se isso rodasse só no
+            React, a tela apareceria clara e piscaria para escura. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
       <body>
-        <AuthProvider membro={membro}>
-          <AppShell>{children}</AppShell>
-        </AuthProvider>
+        <TemaProvider>
+          <AuthProvider membro={membro}>
+            <AppShell>{children}</AppShell>
+          </AuthProvider>
+        </TemaProvider>
       </body>
     </html>
   )
