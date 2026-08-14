@@ -371,6 +371,18 @@ interface**, mas nada no banco a impediria de fazê-lo por fora dela. Já um car
 que ela não pode ver, ela não vê nem por fora — essa é a diferença entre as duas metades do
 sistema.
 
+**O mesmo vale para o `verFinanceiro`.** Os perfis de chão de fábrica não veem mais nenhum
+valor em `/pedidos/[id]` — nem na tela, nem na impressão. Mas `getPedidoById` faz
+`select('*')`, então `valor_total`, `valor_pago` e o array `parcelas` **continuam trafegando
+para o navegador deles**: basta abrir a aba Network do DevTools para ler. E, como `pedidos`
+está sem RLS e a anon key está no bundle, dá para consultar a tabela direto pela API do
+Supabase sem nem passar pelo app.
+
+Ou seja: `verFinanceiro` é controle de **interface**, não de banco — decisão consciente,
+registrada aqui como parte da Fase B. Fechar de verdade exige RLS em `pedidos` com policy de
+coluna (ou uma view sem as colunas de dinheiro) e o `store.ts` no client autenticado, como o
+Kanban já faz.
+
 **Fechar o RLS das quatro tabelas antigas é a Fase B e continua pendente.** Envolve: ligar
 RLS nelas, escrever policies com `meu_perfil()` (a função já existe — foi criada para o
 Kanban), e trocar o client anônimo do `store.ts` pelo client autenticado — hoje o `store.ts`
