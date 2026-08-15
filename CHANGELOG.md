@@ -10,6 +10,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ### Adicionado
 
+- **Autoria por setor em `/producao`.** Cada setor de `pedidos.progresso` passa a guardar
+  quem fez a última mudança e quando — `{ status, atualizadoPor?, atualizadoEm? }` em vez de
+  só o status. Gravado a partir de `useMembro().nome` no momento do clique, em `/producao` e
+  no card "Progresso por Setor" de `/pedidos/[id]`. Aparece como texto pequeno sob o setor
+  ("Vera, 14/08 14:30"); setor nunca tocado, ou pedido gravado antes desta mudança, não
+  mostra nada — sem inventar autor. **Sem migration**: `progresso` é JSONB sem schema, os
+  dois formatos convivem no banco, e `normalizarProgresso` (`src/lib/store.ts`) converte
+  ambos na leitura. O mecanismo de clique (pendente → em_andamento → concluído) e quem pode
+  clicar em cada tela não mudaram.
 - **Tema claro/escuro em todo o sistema**, alternável pelo usuário.
   - Fonte única em variáveis CSS (`:root` e `.dark` em `src/app/globals.css`) para superfície,
     texto, borda e marca. As classes utilitárias (`.card`, `.btn-*`, `.input`, `.label`)

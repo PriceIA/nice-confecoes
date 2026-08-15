@@ -306,6 +306,17 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
    costura, estamparia_silk, prensa_dtf, prensa_sublimacao, acabamento
    (`types/index.ts:29-38`). Pedido novo nasce com `atendimento: 'concluido'` e o resto
    pendente (`store.ts:107-116`).
+
+   Cada setor guarda `EntradaProgresso { status, atualizadoPor?, atualizadoEm? }`, não só o
+   status — quem clicou por último e quando, gravado a partir de `useMembro().nome` no
+   momento do clique (`/producao` e o card "Progresso por Setor" em `/pedidos/[id]`).
+   `atualizadoPor`/`atualizadoEm` só existem depois de um clique real: o `atendimento`
+   nasce concluído sem autor (é o sistema criando o pedido, ninguém clicou), e pedidos
+   gravados antes desta mudança guardam só a string do status, sem o objeto. Como
+   `progresso` é JSONB sem schema, os dois formatos convivem no banco — é
+   `normalizarProgresso` (`store.ts`) que converte ambos para o formato atual **na leitura**,
+   então o resto do código nunca vê o formato antigo. Setor sem autor registrado
+   simplesmente não mostra o rodapé de "quem/quando" na tela.
 8. **`/producao` e `/quadros` são módulos diferentes, e nenhum substitui o outro.**
    `/producao` é a fonte da verdade do progresso real dos pedidos pelos 8 setores; o Kanban
    é um quadro de tarefas livres. Exportar um pedido para cartão **não** muda nada no pedido.

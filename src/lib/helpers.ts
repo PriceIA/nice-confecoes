@@ -1,4 +1,5 @@
-import { Complexidade, Personalizacao } from '@/types'
+import { Complexidade, EntradaProgresso, Personalizacao } from '@/types'
+import { format } from 'date-fns'
 
 export const CATALOGO = {
   Esportivo: ['Camiseta sublimada futebol', 'Short sublimado', 'Rashguard', 'Bermuda Jiu-jitsu/MMA', 'Bermuda Muay Thai'],
@@ -62,4 +63,13 @@ export function totalPecas(pedido: { pecas: { tamanhos: { quantidade: number }[]
 
 export function formatarTelefone(v: string) {
   return v.replace(/\D/g, '').replace(/^(\d{2})(\d{5})(\d{4}).*/, '($1) $2-$3')
+}
+
+/**
+ * "Vera, 14/08 14:30" para um setor já tocado; `null` para setor intocado ou
+ * pedido antigo sem esse registro — o chamador simplesmente não desenha nada.
+ */
+export function autorSetorTexto(entrada: EntradaProgresso): string | null {
+  if (!entrada.atualizadoPor || !entrada.atualizadoEm) return null
+  return `${entrada.atualizadoPor}, ${format(new Date(entrada.atualizadoEm), 'dd/MM HH:mm')}`
 }

@@ -28,15 +28,32 @@ export interface Peca {
   fotos: string[]
 }
 
+/**
+ * Status de um setor, mais quem mexeu por último e quando.
+ *
+ * `atualizadoPor`/`atualizadoEm` só existem a partir de um CLIQUE — nunca são
+ * inventados. Pedido novo nasce com `atendimento: 'concluido'` sem autor
+ * (é o sistema criando, não alguém clicando), e pedidos gravados antes desta
+ * mudança não têm o campo nenhum. `normalizarProgresso` (store.ts) garante que
+ * todo pedido lido do banco chega aqui com os dois campos ausentes nesses
+ * casos, nunca com valor inventado.
+ */
+export interface EntradaProgresso {
+  status: StatusSetor
+  atualizadoPor?: string
+  /** ISO 8601. */
+  atualizadoEm?: string
+}
+
 export interface ProgressoSetor {
-  atendimento: StatusSetor
-  compra: StatusSetor
-  corte: StatusSetor
-  costura: StatusSetor
-  estamparia_silk: StatusSetor
-  prensa_dtf: StatusSetor
-  prensa_sublimacao: StatusSetor
-  acabamento: StatusSetor
+  atendimento: EntradaProgresso
+  compra: EntradaProgresso
+  corte: EntradaProgresso
+  costura: EntradaProgresso
+  estamparia_silk: EntradaProgresso
+  prensa_dtf: EntradaProgresso
+  prensa_sublimacao: EntradaProgresso
+  acabamento: EntradaProgresso
 }
 
 export interface Parcela {

@@ -4,8 +4,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ArrowLeft, Printer, ChevronRight, CheckCircle2, Circle, Loader2, Pencil, Save, X, PlusCircle, Trash2 } from 'lucide-react'
 import { getPedidoById, atualizarPedido } from '@/lib/store'
-import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade } from '@/lib/helpers'
-import { Pedido, Peca, StatusPedido, StatusSetor, ProgressoSetor, Personalizacao, TamanhoQuantidade } from '@/types'
+import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade, autorSetorTexto } from '@/lib/helpers'
+import { Pedido, Peca, StatusPedido, StatusSetor, ProgressoSetor, EntradaProgresso, Personalizacao, TamanhoQuantidade } from '@/types'
 import FotoUpload from '@/components/FotoUpload'
 import CriarCartaoDoPedido from '@/components/kanban/CriarCartaoDoPedido'
 import { pedidoConcluido } from '@/lib/kanban-ui'
@@ -93,7 +93,7 @@ function ClienteTabela({ pedido, resumida }: { pedido: Pedido; resumida?: boolea
 export default function DetalhePedidoPage() {
   const { id } = useParams()
   const router = useRouter()
-  const { permissoes } = useMembro()
+  const { membro, permissoes } = useMembro()
   const [pedido, setPedido] = useState<Pedido | null>(null)
 
   const [editando, setEditando] = useState(false)
@@ -198,9 +198,14 @@ export default function DetalhePedidoPage() {
 
   async function ciclarSetor(setor: keyof ProgressoSetor) {
     const ciclo: StatusSetor[] = ['pendente', 'em_andamento', 'concluido']
-    const atual = pedido!.progresso[setor]
+    const atual = pedido!.progresso[setor].status
     const proximo = ciclo[(ciclo.indexOf(atual) + 1) % ciclo.length]
-    const progresso = { ...pedido!.progresso, [setor]: proximo }
+    const entrada: EntradaProgresso = {
+      status: proximo,
+      atualizadoPor: membro?.nome,
+      atualizadoEm: new Date().toISOString(),
+    }
+    const progresso = { ...pedido!.progresso, [setor]: entrada }
     await atualizarPedido(pedido!.id, { progresso })
     carregar()
   }
@@ -582,7 +587,9 @@ export default function DetalhePedidoPage() {
             <h2 className="font-semibold text-titulo">Progresso por Setor</h2>
             <div className="space-y-2">
               {(Object.keys(pedido.progresso) as (keyof ProgressoSetor)[]).map(setor => {
-                const status = pedido.progresso[setor]
+                const entrada = pedido.progresso[setor]
+                const status = entrada.status
+                const autor = autorSetorTexto(entrada)
                 return (
                   <button key={setor} onClick={() => ciclarSetor(setor)}
                     disabled={!permissoes.editarPedido}
@@ -594,9 +601,12 @@ export default function DetalhePedidoPage() {
                     )}>
                     <div className="flex items-center gap-3">
                       {setorIcone(status)}
-                      <span className={clsx('font-medium', status === 'concluido' ? 'text-marca-texto' : status === 'em_andamento' ? 'text-orange-600' : 'text-suave')}>
-                        {SETOR_LABELS[setor]}
-                      </span>
+                      <div className="flex flex-col items-start">
+                        <span className={clsx('font-medium', status === 'concluido' ? 'text-marca-texto' : status === 'em_andamento' ? 'text-orange-600' : 'text-suave')}>
+                          {SETOR_LABELS[setor]}
+                        </span>
+                        {autor && <span className="text-[11px] font-normal text-fraco">{autor}</span>}
+                      </div>
                     </div>
                     <span className={clsx('text-xs font-semibold capitalize',
                       status === 'concluido' ? 'text-marca-texto' : status === 'em_andamento' ? 'text-orange-500' : 'text-fraco')}>
@@ -698,16 +708,16 @@ export default function DetalhePedidoPage() {
       {pedido.pecas.map((p, i) => {
         const cc = COMPLEXIDADE_CONFIG[p.complexidade]
         const statusPersonalizacao = combinarStatus([
-          pedido.progresso.estamparia_silk,
-          pedido.progresso.prensa_dtf,
-          pedido.progresso.prensa_sublimacao,
+          pedido.progresso.estamparia_silk.status,
+          pedido.progresso.prensa_dtf.status,
+          pedido.progresso.prensa_sublimacao.status,
         ])
         const setoresLinha: { label: string; status: StatusSetor }[] = [
-          { label: 'Matéria Prima', status: pedido.progresso.compra },
-          { label: 'Corte', status: pedido.progresso.corte },
+          { label: 'Matéria Prima', status: pedido.progresso.compra.status },
+          { label: 'Corte', status: pedido.progresso.corte.status },
           { label: 'Personalização', status: statusPersonalizacao },
-          { label: 'Costura', status: pedido.progresso.costura },
-          { label: 'Acabamento', status: pedido.progresso.acabamento },
+          { label: 'Costura', status: pedido.progresso.costura.status },
+          { label: 'Acabamento', status: pedido.progresso.acabamento.status },
           { label: 'Loja', status: 'pendente' },
         ]
         return (

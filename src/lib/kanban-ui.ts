@@ -135,7 +135,7 @@ export function badgePrazo(prazo: string | null, concluido = false): BadgePrazo 
 /** Um pedido está pronto para virar cartão quando os 8 setores estão concluídos. */
 export function pedidoConcluido(pedido: Pedido): boolean {
   const setores = Object.values(pedido.progresso ?? {})
-  return setores.length > 0 && setores.every(s => s === 'concluido')
+  return setores.length > 0 && setores.every(s => s.status === 'concluido')
 }
 
 export function tituloSugerido(pedido: Pedido): string {

@@ -2,14 +2,16 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getPedidos, atualizarPedido } from '@/lib/store'
-import { SETOR_LABELS, STATUS_CONFIG } from '@/lib/helpers'
-import { Pedido, ProgressoSetor, StatusSetor } from '@/types'
+import { SETOR_LABELS, STATUS_CONFIG, autorSetorTexto } from '@/lib/helpers'
+import { useMembro } from '@/components/AuthProvider'
+import { EntradaProgresso, Pedido, ProgressoSetor, StatusSetor } from '@/types'
 import { CheckCircle2, Circle, Loader2, ArrowRight } from 'lucide-react'
 import clsx from 'clsx'
 
 const SETORES = Object.keys(SETOR_LABELS) as (keyof ProgressoSetor)[]
 
 export default function ProducaoPage() {
+  const { membro } = useMembro()
   const [pedidos, setPedidos] = useState<Pedido[]>([])
 
   const carregar = async () => {
@@ -23,9 +25,14 @@ export default function ProducaoPage() {
     const p = pedidos.find(x => x.id === pedidoId)
     if (!p) return
     const ciclo: StatusSetor[] = ['pendente', 'em_andamento', 'concluido']
-    const atual = p.progresso[setor]
+    const atual = p.progresso[setor].status
     const proximo = ciclo[(ciclo.indexOf(atual) + 1) % ciclo.length]
-    await atualizarPedido(pedidoId, { progresso: { ...p.progresso, [setor]: proximo } })
+    const entrada: EntradaProgresso = {
+      status: proximo,
+      atualizadoPor: membro?.nome,
+      atualizadoEm: new Date().toISOString(),
+    }
+    await atualizarPedido(pedidoId, { progresso: { ...p.progresso, [setor]: entrada } })
     carregar()
   }
 
@@ -50,7 +57,7 @@ export default function ProducaoPage() {
         <div className="space-y-4">
           {pedidos.map(pedido => {
             const sc = STATUS_CONFIG[pedido.status]
-            const concluidos = SETORES.filter(s => pedido.progresso[s] === 'concluido').length
+            const concluidos = SETORES.filter(s => pedido.progresso[s].status === 'concluido').length
             const progPct = Math.round((concluidos / SETORES.length) * 100)
             return (
               <div key={pedido.id} className="card space-y-4">
@@ -84,17 +91,22 @@ export default function ProducaoPage() {
                 {/* Setores */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {SETORES.map(setor => {
-                    const status = pedido.progresso[setor]
+                    const entrada = pedido.progresso[setor]
+                    const status = entrada.status
+                    const autor = autorSetorTexto(entrada)
                     return (
                       <button key={setor} onClick={() => ciclarSetor(pedido.id, setor)}
                         className={clsx(
-                          'flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all text-left',
+                          'flex flex-col gap-1 px-3 py-2 rounded-xl border text-xs font-medium transition-all text-left',
                           status === 'concluido' ? 'bg-marca-suave border-marca-borda text-marca-texto' :
                           status === 'em_andamento' ? 'bg-orange-50 border-orange-200 text-orange-600' :
                           'bg-superficie-2 border-borda text-fraco hover:border-borda'
                         )}>
-                        {statusIcon(status)}
-                        <span className="truncate">{SETOR_LABELS[setor]}</span>
+                        <span className="flex items-center gap-2">
+                          {statusIcon(status)}
+                          <span className="truncate">{SETOR_LABELS[setor]}</span>
+                        </span>
+                        {autor && <span className="text-[10px] font-normal opacity-70 truncate">{autor}</span>}
                       </button>
                     )
                   })}

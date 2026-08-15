@@ -1,6 +1,30 @@
-import { Cliente, Parcela, Pedido, ProgressoSetor, Terceirizada } from '@/types'
+import { Cliente, Parcela, Pedido, ProgressoSetor, StatusSetor, Terceirizada } from '@/types'
 import { addBusinessDays, format } from 'date-fns'
 import { supabase } from './supabase'
+
+const SETORES_PROGRESSO = [
+  'atendimento', 'compra', 'corte', 'costura',
+  'estamparia_silk', 'prensa_dtf', 'prensa_sublimacao', 'acabamento',
+] as const
+
+/**
+ * Normaliza `progresso` vindo do banco para o formato atual.
+ *
+ * Pedidos gravados antes desta mudança guardam `{ corte: 'pendente', ... }` —
+ * string direto, sem autor. JSONB não tem schema, então o banco nunca vai
+ * "migrar" isso sozinho; é aqui, na leitura, que os dois formatos convergem.
+ * Pedido com o formato novo passa por isso e sai igual.
+ */
+function normalizarProgresso(raw: any): ProgressoSetor {
+  const out = {} as ProgressoSetor
+  for (const setor of SETORES_PROGRESSO) {
+    const v = raw?.[setor]
+    out[setor] = typeof v === 'string'
+      ? { status: v as StatusSetor }
+      : { status: (v?.status ?? 'pendente') as StatusSetor, atualizadoPor: v?.atualizadoPor, atualizadoEm: v?.atualizadoEm }
+  }
+  return out
+}
 
 function mapCliente(row: any): Cliente {
   return {
@@ -44,7 +68,7 @@ function mapPedido(row: any): Pedido {
     parcelas,
     dataEntrada: row.data_entrada,
     dataEntrega: row.data_entrega,
-    progresso: row.progresso,
+    progresso: normalizarProgresso(row.progresso),
     observacoes: row.observacoes ?? '',
     valorTotal,
     valorPago,
@@ -104,15 +128,16 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
   console.log('[criarPedido] cliente ok:', cliente.id)
   const numero = await gerarNumero()
   console.log('[criarPedido] numero gerado:', numero)
+  // Sem autor: é o sistema criando o pedido, ninguém clicou em nada ainda.
   const progresso: ProgressoSetor = {
-    atendimento: 'concluido',
-    compra: 'pendente',
-    corte: 'pendente',
-    costura: 'pendente',
-    estamparia_silk: 'pendente',
-    prensa_dtf: 'pendente',
-    prensa_sublimacao: 'pendente',
-    acabamento: 'pendente',
+    atendimento: { status: 'concluido' },
+    compra: { status: 'pendente' },
+    corte: { status: 'pendente' },
+    costura: { status: 'pendente' },
+    estamparia_silk: { status: 'pendente' },
+    prensa_dtf: { status: 'pendente' },
+    prensa_sublimacao: { status: 'pendente' },
+    acabamento: { status: 'pendente' },
   }
 
   const parcelas = dados.parcelas ?? []
