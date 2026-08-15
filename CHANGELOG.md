@@ -8,17 +8,54 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
-### Adicionado
+### Kanban, tema claro/escuro, controle financeiro por perfil e rastro de autoria
 
-- **Autoria por setor em `/producao`.** Cada setor de `pedidos.progresso` passa a guardar
-  quem fez a última mudança e quando — `{ status, atualizadoPor?, atualizadoEm? }` em vez de
-  só o status. Gravado a partir de `useMembro().nome` no momento do clique, em `/producao` e
-  no card "Progresso por Setor" de `/pedidos/[id]`. Aparece como texto pequeno sob o setor
-  ("Vera, 14/08 14:30"); setor nunca tocado, ou pedido gravado antes desta mudança, não
-  mostra nada — sem inventar autor. **Sem migration**: `progresso` é JSONB sem schema, os
-  dois formatos convivem no banco, e `normalizarProgresso` (`src/lib/store.ts`) converte
-  ambos na leitura. O mecanismo de clique (pendente → em_andamento → concluído) e quem pode
-  clicar em cada tela não mudaram.
+Branch `feat/kanban-e-tema-escuro`, mesclada em `main` depois de teste visual do dono como
+gestor e como perfil de chão de fábrica (Alex, estamparia_serigrafia).
+
+- **Kanban de quadros livres** (`/quadros` e `/quadros/[id]`) — módulo novo, separado da
+  `/producao`. Quadros → listas → cartões, no espírito do Trello.
+  - `/quadros`: grid de quadros com contagem de listas e cartões; criar, renomear, arquivar
+    e excluir (só gestor/recepcionista). Estado vazio com CTA.
+  - `/quadros/[id]`: listas lado a lado com rolagem horizontal, título editável inline,
+    contador, cor de destaque e "Adicionar cartão" no rodapé. Cartão mostra título, trecho da
+    descrição, badge de prazo com destaque por urgência (atrasado vermelho, ≤3 dias laranja,
+    ≤7 dias amarelo) e etiqueta com cadeado quando `perfis_visiveis` não é nulo. Clicar abre
+    um painel com título, descrição, prazo, perfis visíveis e vínculo com um pedido.
+  - **Drag-and-drop** com `@dnd-kit`: cartão entre listas e dentro da lista, e listas entre
+    si (pelo punho no cabeçalho). Otimista com **rollback**: gravação que falha desfaz o
+    movimento na tela e mostra um banner explícito — o projeto já teve o bug de "salvou na
+    tela, não salvou no banco" na tela de preços, e não se repete aqui.
+  - **Camada de acesso própria** (`src/lib/kanban.ts`), usando o client **autenticado** do
+    `@supabase/ssr`. As tabelas do Kanban têm RLS baseada em `auth.uid()`; com o client
+    anônimo do `store.ts` as queries voltariam **zero linhas em silêncio**. Os dois clients
+    agora convivem — documentado no `CLAUDE.md`, e a Fase B (RLS nas tabelas antigas) segue
+    pendente.
+  - **5 perfis novos** em `src/lib/permissoes.ts` (`designer`, `corte`,
+    `estamparia_serigrafia`, `estamparia_sublimacao`, `acabamento`), somando 8. Os seis
+    perfis de produção compartilham um único objeto `LEITURA_PRODUCAO` — mesmo acesso da
+    costureira, mais leitura de `/quadros`. Novo campo de permissão `editarKanban`,
+    exclusivo de gestor e recepcionista.
+  - **Exportar pedido concluído para cartão**
+    (`src/components/kanban/CriarCartaoDoPedido.tsx`). Em `/pedidos/[id]`, com os 8 setores
+    concluídos, aparece "Criar cartão no Kanban": seletor de quadro e lista, com título,
+    descrição e prazo pré-preenchidos a partir do pedido e totalmente editáveis. Grava
+    `pedido_id`, e o cartão passa a mostrar link de volta. É **opcional e sugerido, nunca
+    automático**.
+  - `src/lib/erros.ts` — `classificarErro`, extraída de `/tabela-precos` (que passa a
+    importá-la em vez de manter a cópia local; mensagens idênticas), agora compartilhada.
+  - `src/components/kanban/Modal.tsx` — primeiro modal reutilizável do projeto, com
+    fechamento por Esc e por clique no fundo.
+  - Item "Quadros" na sidebar, depois de Produção.
+  - `supabase/migrations/007_kanban.sql`: **registro histórico** do SQL executado
+    manualmente pelo dono — `public.meu_perfil()`, as tabelas `quadros`/`listas`/`cards`
+    com RLS e policies, e a expansão do CHECK de `equipe` para 8 perfis. Reconstruído a
+    partir da descrição, não exportado do banco.
+  - `supabase/migrations/008_kanban_updated_at.sql`: registro histórico da coluna
+    `updated_at` em `quadros`, `listas` e `cards` — faltava em `listas`, e mudar a cor de
+    uma lista falhava com `PGRST204`. `quadros` e `cards` entraram junto por terem o mesmo
+    risco (renomear quadro e **arrastar cartão** dependem do mesmo campo).
+
 - **Tema claro/escuro em todo o sistema**, alternável pelo usuário.
   - Fonte única em variáveis CSS (`:root` e `.dark` em `src/app/globals.css`) para superfície,
     texto, borda e marca. As classes utilitárias (`.card`, `.btn-*`, `.input`, `.label`)
@@ -39,43 +76,46 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
     para texto branco no tema escuro.
   - **Impressão continua clara**: o bloco `@media print` redefine as variáveis para os valores
     claros e força fundo branco, mesmo com o tema escuro ativo.
-- `supabase/migrations/008_kanban_updated_at.sql`: registro histórico da coluna `updated_at`
-  em `quadros`, `listas` e `cards`.
+  - **`src/lib` estava fora dos `content` do Tailwind desde o primeiro commit.** O Tailwind
+    só gera a classe que enxerga no código, e `STATUS_CONFIG`/`COMPLEXIDADE_CONFIG`
+    (`helpers.ts`) e `badgePrazo`/`CORES_LISTA` (`kanban-ui.ts`) montam classe por string.
+    Achado ao testar o tema: as tarjas "Aprovado" (`bg-blue-100`) e "Entregue"
+    (`bg-green-100`) saíam **sem fundo nenhum** em produção, os badges de prazo e
+    complexidade também, e a cor âmbar de lista do Kanban não aparecia.
+  - **Contraste de texto abaixo de WCAG AA no tema claro.** `--texto-fraco` era o antigo
+    `gray-400`, com 2.54:1 sobre branco, em ~100 rótulos e legendas; e os badges de status
+    usavam o tom `-600` sobre fundo `-100` (P4 ficava em 3.11:1). Ambos ajustados um tom, nos
+    dois temas. Mínimo agora: 6.03:1 no escuro, 4.5:1 no claro.
 
-- **Kanban de quadros livres** (`/quadros` e `/quadros/[id]`) — módulo novo, separado da
-  `/producao`. Quadros → listas → cartões, no espírito do Trello.
-  - `/quadros`: grid de quadros com contagem de listas e cartões; criar, renomear, arquivar
-    e excluir (só gestor/recepcionista). Estado vazio com CTA.
-  - `/quadros/[id]`: listas lado a lado com rolagem horizontal, título editável inline,
-    contador, cor de destaque e "Adicionar cartão" no rodapé. Cartão mostra título, trecho da
-    descrição, badge de prazo com destaque por urgência (atrasado vermelho, ≤3 dias laranja,
-    ≤7 dias amarelo) e etiqueta com cadeado quando `perfis_visiveis` não é nulo. Clicar abre
-    um painel com título, descrição, prazo, perfis visíveis e vínculo com um pedido.
-  - **Drag-and-drop** com `@dnd-kit`: cartão entre listas e dentro da lista, e listas entre
-    si (pelo punho no cabeçalho).
-- **Camada de acesso própria do Kanban** (`src/lib/kanban.ts`), usando o client
-  **autenticado** do `@supabase/ssr`. As tabelas do Kanban têm RLS baseada em `auth.uid()`;
-  com o client anônimo do `store.ts` as queries voltariam **zero linhas em silêncio**. Os
-  dois clients agora convivem — documentado no `CLAUDE.md`, e a Fase B segue pendente.
-- **5 perfis novos** em `src/lib/permissoes.ts` (`designer`, `corte`,
-  `estamparia_serigrafia`, `estamparia_sublimacao`, `acabamento`), somando 8. Os seis perfis
-  de produção compartilham um único objeto `LEITURA_PRODUCAO` — mesmo acesso da costureira,
-  mais leitura de `/quadros`. Novo campo de permissão `editarKanban`, exclusivo de gestor e
-  recepcionista.
-- **Exportar pedido concluído para cartão** (`src/components/kanban/CriarCartaoDoPedido.tsx`).
-  Em `/pedidos/[id]`, com os 8 setores concluídos, aparece "Criar cartão no Kanban": seletor
-  de quadro e lista, com título, descrição e prazo pré-preenchidos a partir do pedido e
-  totalmente editáveis. Grava `pedido_id`, e o cartão passa a mostrar link de volta.
-  É **opcional e sugerido, nunca automático**.
-- `src/lib/erros.ts` — `classificarErro`, extraída de `/tabela-precos`, agora compartilhada.
-  Classifica o erro (`offline`/`rede`/`conflito`/`permissao`/`validacao`); o texto continua
-  em cada tela, porque a consequência de falhar é diferente em cada uma.
-- `src/components/kanban/Modal.tsx` — primeiro modal reutilizável do projeto, com fechamento
-  por Esc e por clique no fundo (os overlays existentes não têm nenhum dos dois).
-- `supabase/migrations/007_kanban.sql`: **registro histórico** do SQL executado manualmente
-  pelo dono — `public.meu_perfil()`, as tabelas `quadros`/`listas`/`cards` com RLS e
-  policies, e a expansão do CHECK de `equipe` para 8 perfis. Reconstruído a partir da
-  descrição, não exportado do banco.
+- **Bloqueio de dados financeiros por perfil.** Os seis perfis de chão de fábrica viam a
+  seção "Pagamentos" completa em `/pedidos/[id]` — parcelas, total, pago — apesar de já não
+  terem acesso a `/dashboard`, `/relatorios` e `/tabela-precos`. Novo campo
+  `verFinanceiro` em `src/lib/permissoes.ts` (`true` só para gestor/recepcionista) fecha
+  **quatro** pontos, não um: a seção "Pagamentos" inteira (não só os valores — quantas
+  parcelas existem e quais estão pagas também é dado financeiro), o bloco
+  Total/Pago/Restante no card "Informações" quando o pedido não tem parcelas, o valor da
+  Vetorização, e a página final de resumo/pagamento da ficha A4 de impressão.
+  - Verificado na tela, não só por leitura de código: logado como Alex
+    (estamparia_serigrafia), nenhuma ocorrência de `R$` no **DOM inteiro** dos 7 pedidos
+    reais do banco (checado no HTML cru, não só no texto visível), e a página financeira
+    não existe no DOM da impressão. Logado como gestor, tudo continua aparecendo normalmente.
+  - **Limitação conhecida, registrada no `CLAUDE.md`**: o controle é de interface, não de
+    banco. `getPedidoById` faz `select('*')`, então `valor_total`/`valor_pago`/`parcelas`
+    continuam trafegando para o navegador de qualquer perfil — dá para ler pela aba Network
+    do DevTools, ou direto da API do Supabase com a anon key, já que `pedidos` segue sem
+    RLS. Decisão consciente do dono: fica como parte da Fase B já conhecida, sem correção
+    nesta branch.
+
+- **Autoria por setor em `/producao`.** Cada setor de `pedidos.progresso` passa a guardar
+  quem fez a última mudança e quando — `{ status, atualizadoPor?, atualizadoEm? }` em vez de
+  só o status. Gravado a partir de `useMembro().nome` no momento do clique, em `/producao` e
+  no card "Progresso por Setor" de `/pedidos/[id]`. Aparece como texto pequeno sob o setor
+  ("Vera, 14/08 21:47"); setor nunca tocado, ou pedido gravado antes desta mudança, não
+  mostra nada — sem inventar autor. **Sem migration**: `progresso` é JSONB sem schema, os
+  dois formatos convivem no banco, e `normalizarProgresso` (`src/lib/store.ts`) converte
+  ambos na leitura. O mecanismo de clique (pendente → em_andamento → concluído) e quem pode
+  clicar em cada tela não mudaram — cada setor sempre foi independente, sem ordem
+  sequencial entre eles, confirmado no histórico desde a v1.
 
 ### Adicionado (sessões anteriores)
 - `CLAUDE.md` na raiz: contexto permanente do projeto — stack, identidade visual, módulos,
@@ -111,10 +151,6 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
   para `/producao`. Gestor e recepcionista seguem com acesso total, sem mudança.
 
 ### Alterado
-- `src/app/tabela-precos/page.tsx`: `descreverErro` passa a montar o texto a partir de
-  `classificarErro` (`src/lib/erros.ts`). As mensagens continuam **idênticas** — só a
-  classificação saiu do arquivo para ser reaproveitada pelo Kanban.
-- `src/components/layout/Sidebar.tsx`: item "Quadros" no menu, depois de Produção.
 - **"Pedro"/"Administrador" deixaram de ser hardcoded.** Nome e perfil na sidebar e o
   consultor responsável em `/novo-pedido` passam a vir do usuário autenticado
   (`src/components/layout/Sidebar.tsx`, `src/app/novo-pedido/page.tsx`).
@@ -131,21 +167,6 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
   Toda falha diz explicitamente que as alterações ficaram só no navegador e **não** no banco.
 
 ### Corrigido
-- **`src/lib` estava fora dos `content` do Tailwind desde o primeiro commit**
-  (`tailwind.config.ts`). O Tailwind só gera a classe que enxerga no código, e
-  `STATUS_CONFIG`/`COMPLEXIDADE_CONFIG` (`helpers.ts`) e `badgePrazo`/`CORES_LISTA`
-  (`kanban-ui.ts`) montam classe por string. Resultado: tudo que existia **só** nesses
-  arquivos nunca virou CSS — as tarjas "Aprovado" (`bg-blue-100`) e "Entregue"
-  (`bg-green-100`) saíam **sem fundo nenhum**, assim como `bg-yellow-100`/`bg-orange-100` dos
-  badges de prazo e complexidade, e a cor âmbar de lista do Kanban não aparecia.
-- **Mudar a cor de uma lista do Kanban falhava com `PGRST204`**, porque `atualizarLista`
-  manda `updated_at` e a coluna não existia em `listas`. Coluna adicionada manualmente pelo
-  dono; versionada em `008_kanban_updated_at.sql`, junto com `quadros` e `cards`, que têm o
-  mesmo update e o mesmo risco (afetava também **arrastar cartão**).
-- **Contraste de texto abaixo de WCAG AA no tema claro.** `--texto-fraco` era o antigo
-  `gray-400`, com 2.54:1 sobre branco, em ~100 rótulos e legendas; e os badges de status
-  usavam o tom `-600` sobre fundo `-100` (P4 ficava em 3.11:1). Ambos ajustados um tom, nos
-  dois temas. Mínimo agora: 6.03:1 no escuro, 4.5:1 no claro.
 - **O cálculo automático de preço por peça nunca funcionou** (`src/app/novo-pedido/page.tsx`).
   O `select` pedia a coluna `preco_unitario`, que não existe em `tabela_precos` — o nome real
   é `valor`. O PostgREST devolvia `42703`, `data` vinha `null` e o guard `if (data)` engolia
