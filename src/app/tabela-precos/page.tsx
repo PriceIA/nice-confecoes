@@ -3,60 +3,7 @@ import { useEffect, useState } from 'react'
 import { Save, Info } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { classificarErro, sufixoCodigo } from '@/lib/erros'
-
-const FAIXAS = ['0-02', '04-06', '08-10', '12-14', 'P/M/G', 'GG']
-
-type ProdutoPreco = { nome: string; precos: (number | null)[] }
-type GrupoTabela = { grupo: string; produtos: ProdutoPreco[] }
-
-const DADOS_PADRAO: GrupoTabela[] = [
-  {
-    grupo: 'CAMISETA/REGATA',
-    produtos: [
-      // "M Curta" e "Regata" são uma linha só na tabela oficial
-      // ("Manga Curta/Regata"), por isso compartilham os mesmos preços.
-      { nome: 'M Curta',            precos: [26.40, 29.70, 32.30, 34.00, 38.30,  41.80] },
-      { nome: 'Regata',             precos: [26.40, 29.70, 32.30, 34.00, 38.30,  41.80] },
-      { nome: 'Manga Longa',        precos: [29.10, 33.70, 39.70, 42.70, 50.40,  52.00] },
-      { nome: 'Camiseta Algodão',   precos: [29.80, 32.90, 35.80, 37.50, 42.20,  47.20] },
-      { nome: 'Jardineira Curta',   precos: [48.40, 54.50, 66.60, 71.70, 90.80,  null] },
-      { nome: 'Jardineira Longa',   precos: [49.30, 67.80, 76.60, 88.10, 102.90, null] },
-    ],
-  },
-  {
-    grupo: 'CONJUNTO HELANÇA',
-    produtos: [
-      { nome: 'Conjunto Helança',   precos: [94.60,  107.20, 124.60, 145.50, 176.80, 195.00] },
-      { nome: 'Blusa',              precos: [57.00,  61.40,  72.30,  82.80,  96.10,  108.50] },
-      { nome: 'Blusa c/ Capuz',     precos: [62.00,  71.00,  86.30,  96.10,  108.50, 127.20] },
-      { nome: 'Calça',              precos: [37.30,  45.90,  52.10,  62.60,  81.00,  86.30]  },
-      { nome: 'Bailarina/Legging',  precos: [37.30,  45.90,  52.10,  62.60,  81.00,  86.30]  },
-      { nome: 'Corsário',           precos: [34.40,  36.90,  41.70,  45.70,  53.60,  57.00]  },
-    ],
-  },
-  {
-    grupo: 'CONJUNTO MOLETOM',
-    produtos: [
-      { nome: 'Conjunto Moletom',    precos: [117.00, 140.50, 160.10, 179.60, 214.30, 243.70] },
-      { nome: 'Blusa',               precos: [65.40,  80.80,  87.80,  102.50, 121.00, 140.50] },
-      { nome: 'Blusa c/ Capuz',      precos: [76.60,  86.40,  97.10,  117.00, 132.30, 158.80] },
-      { nome: 'Calça',               precos: [51.50,  59.90,  72.40,  76.60,  93.30,  103.00] },
-      { nome: 'Shorts Saia Inteira', precos: [38.00,  41.00,  48.50,  52.50,  58.50,  68.00]  },
-      { nome: 'Shorts Saia Meia',    precos: [34.50,  37.50,  44.50,  48.50,  53.00,  62.50]  },
-    ],
-  },
-  {
-    grupo: 'CONJUNTO TACTEL',
-    produtos: [
-      { nome: 'Conjunto Tactel',          precos: [118.25, 142.00, 162.10, 173.80, 215.00, 245.00] },
-      { nome: 'Blusa',                    precos: [58.90,  63.30,  89.20,  105.70, 124.00, 145.00] },
-      { nome: 'Blusa c/ Capuz',           precos: [77.90,  85.30,  92.40,  115.40, 125.30, 151.90] },
-      { nome: 'Calça c/ Forro',           precos: [48.90,  57.40,  71.60,  75.40,  88.70,  98.40]  },
-      { nome: 'Calça s/ Forro',           precos: [37.60,  45.80,  52.00,  62.50,  80.60,  86.20]  },
-      { nome: 'Bermuda Helança e Tactel', precos: [27.10,  36.20,  39.20,  41.80,  48.00,  58.00]  },
-    ],
-  },
-]
+import { FAIXAS, GRUPOS_PRECO_ESCOLAR } from '@/lib/precosEscolar'
 
 type PrecoMap = Record<string, number | null>
 
@@ -66,7 +13,7 @@ function makeKey(grupo: string, produto: string, faixa: string) {
 
 function defaultPrecos(): PrecoMap {
   const map: PrecoMap = {}
-  for (const g of DADOS_PADRAO) {
+  for (const g of GRUPOS_PRECO_ESCOLAR) {
     for (const p of g.produtos) {
       FAIXAS.forEach((f, i) => {
         const v = p.precos[i]
@@ -167,7 +114,7 @@ export default function TabelaPrecosPage() {
     const puladas: string[] = []
     const now = new Date().toISOString()
 
-    for (const g of DADOS_PADRAO) {
+    for (const g of GRUPOS_PRECO_ESCOLAR) {
       for (const p of g.produtos) {
         FAIXAS.forEach((f, i) => {
           // Combinação que não existe no catálogo: nunca teve célula editável.
@@ -224,16 +171,17 @@ export default function TabelaPrecosPage() {
       <div className="flex items-start gap-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm text-yellow-800">
         <Info className="w-4 h-4 mt-0.5 shrink-0 text-yellow-600" />
         <span>
-          <strong>Tabela de preços — Escolar e Empresarial.</strong>{' '}
-          As categorias Esportivo e Acessórios terão tabelas próprias em breve.
+          <strong>Tabela de preços — Escolar.</strong>{' '}
+          As categorias Empresarial, Esportivo e Acessórios ainda não têm preço cadastrado;
+          terão tabelas próprias quando os valores forem definidos.
         </span>
       </div>
 
       {/* Cards por grupo */}
-      {DADOS_PADRAO.map(grupo => (
+      {GRUPOS_PRECO_ESCOLAR.map(grupo => (
         <div key={grupo.grupo} className="card p-0 overflow-hidden">
           <div className="bg-nice-600 px-5 py-3">
-            <h2 className="text-white font-bold text-sm tracking-wide">{grupo.grupo}</h2>
+            <h2 className="text-white font-bold text-sm tracking-wide uppercase">{grupo.grupo}</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

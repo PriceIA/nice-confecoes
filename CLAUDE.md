@@ -105,8 +105,9 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | `/pedidos/[id]` | `src/app/pedidos/[id]/page.tsx` | Detalhe e edição ampla, progresso por setor, parcelas, layout de impressão A4 (bloco `print:block` em `:681`) |
 | `/novo-pedido` | `src/app/novo-pedido/page.tsx` | Cadastro: cliente com autocomplete, peças, tamanhos, personalizações, parcelas, fotos, vetorização |
 | `/clientes` | `src/app/clientes/page.tsx` | Lista, busca, edição inline, histórico de pedidos do cliente |
-| `/tabela-precos` | `src/app/tabela-precos/page.tsx` | Grade de preços Escolar/Empresarial por grupo × faixa de tamanho |
+| `/tabela-precos` | `src/app/tabela-precos/page.tsx` | Grade de preços da categoria Escolar por grupo × faixa de tamanho. Empresarial/Esportivo/Acessórios ainda sem preço cadastrado |
 | `/producao` | `src/app/producao/page.tsx` | Acompanhamento dos 8 setores; clique cicla pendente → em_andamento → concluido |
+| `/entregas` | `src/app/entregas/page.tsx` | Fila de pedidos com os 8 setores concluídos, ainda não entregues; botão "Marcar como entregue". Só gestor/recepcionista |
 | `/quadros` | `src/app/quadros/page.tsx` | Kanban livre: grid de quadros, com criar/renomear/arquivar/excluir |
 | `/quadros/[id]` | `src/app/quadros/[id]/page.tsx` + `components/kanban/QuadroBoard.tsx` | O quadro: listas lado a lado, cartões, drag-and-drop |
 | `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros |
@@ -132,7 +133,12 @@ Código compartilhado:
 - `src/lib/kanban.ts` — acesso a dados do Kanban. **Usa o client AUTENTICADO**, não o
   anônimo — ver "Dois clients Supabase" abaixo. Nunca misture com `store.ts`
 - `src/lib/kanban-ui.ts` — apresentação do Kanban: `CORES_LISTA`, `badgePrazo`,
-  `descreverFalhaKanban`, `pedidoConcluido`, `porPosicao`
+  `descreverFalhaKanban`, `pedidoConcluido`, `porPosicao`. Apesar do nome, `pedidoConcluido`
+  e `badgePrazo` também são usados fora do Kanban — em `/pedidos/[id]` (botão "Criar cartão")
+  e em `/entregas` (fila e badge de prazo) — porque é o mesmo cálculo, não uma cópia
+- `src/lib/precosEscolar.ts` — fonte única dos preços padrão da categoria Escolar, com os
+  mesmos nomes de `grupo`/`produto` gravados no banco pela migration 006 (que por sua vez usa
+  os nomes do `CATALOGO`). Consumido só por `/tabela-precos`; ver "Preço: uma fonte só" abaixo
 - `src/lib/erros.ts` — `classificarErro`: traduz erro do Supabase em `TipoFalha`
   (`offline`/`rede`/`conflito`/`permissao`/`validacao`). Cada tela escreve o próprio texto,
   porque a consequência muda — usada por `/tabela-precos` e pelo Kanban
@@ -141,6 +147,26 @@ Código compartilhado:
 - `src/lib/helpers.ts` — `CATALOGO`, `PERSONALIZACOES`, `TAMANHOS`, `calcularComplexidade`, `STATUS_CONFIG`, `SETOR_LABELS`, `totalPecas`
 - `src/types/index.ts` — todos os tipos do domínio
 - `src/components/FotoUpload.tsx` — upload de fotos por peça, com lightbox
+
+## Preço da categoria Escolar — uma fonte só
+
+`/tabela-precos` e o cálculo automático de `/novo-pedido` já usaram nomes de peça e de grupo
+diferentes entre si (`DADOS_PADRAO` de um lado, `CATALOGO` do outro) — a tela nunca mostrava
+os valores reais do banco, e editar um preço por ela gravava linhas paralelas que o cálculo
+automático nunca lia. Corrigido nesta sessão (17/08/2026). Ver `CHANGELOG.md` para o
+diagnóstico completo.
+
+**A regra agora:** `src/lib/precosEscolar.ts` é a única fonte dos nomes de `grupo`/`produto`
+e dos preços padrão da categoria Escolar, e os nomes ali são **exatamente** os gravados por
+`supabase/migrations/006_povoar_tabela_precos.sql`, que por sua vez usa os nomes de
+`CATALOGO.Escolar` (`src/lib/helpers.ts`) — porque é `tabelaPrecos[peca.tipo]` que
+`/novo-pedido` usa pra achar o preço. Os três (migration, `CATALOGO`, `precosEscolar.ts`)
+precisam concordar; renomear um sem os outros dois reabre a divergência.
+
+Empresarial, Esportivo e Acessórios não têm preço cadastrado em lugar nenhum — nem no banco,
+nem em nenhum PDF de referência do projeto. Não é bug: é dado que ainda não existe. Quando o
+dono definir os valores, a mesma estrutura de `precosEscolar.ts` serve de modelo pras outras
+categorias.
 
 ## Dois clients Supabase — leia antes de escrever qualquer query
 

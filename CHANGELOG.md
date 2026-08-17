@@ -8,6 +8,50 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Módulo de Entregas e unificação da tabela de preços
+
+Sessão de 17/08/2026, no PC principal (`A:\Projetos SAAS\nice-confeccoes`).
+
+- **Módulo de Entregas** (`/entregas`, `src/app/entregas/page.tsx`) — fila de pedidos com os
+  8 setores de produção concluídos e status ainda não `entregue`/`cancelado`, com botão
+  "Marcar como entregue" (grava `status: 'entregue'` via `atualizarPedido`, já existente em
+  `store.ts` — nenhuma tabela ou coluna nova).
+  - Reaproveita `pedidoConcluido` e `badgePrazo` (`src/lib/kanban-ui.ts`) em vez de
+    recalcular: mesmo gatilho que já libera "Criar cartão no Kanban" em `/pedidos/[id]`, e
+    mesmo badge de urgência de prazo que o Kanban já usa.
+  - Acesso só de gestor/recepcionista — mesma regra de quem já pode mudar status de pedido
+    (`editarPedido`). Rota fora de `LEITURA_PRODUCAO.rotas` (`src/lib/permissoes.ts`), então
+    os seis perfis de chão de fábrica não veem "Entregas" no menu nem conseguem abrir a URL
+    direto (middleware já bloqueia).
+  - Lista só pendentes, de propósito: pedido marcado sai da fila. Histórico de entregues
+    continua em `/pedidos`, filtrando por status "Entregue" — sem tela nova pra isso.
+
+### Corrigido
+- **`/tabela-precos` nunca mostrou nem gravou os preços reais do banco.** Causa raiz da
+  dívida técnica registrada nesta seção desde a sessão anterior: a tela tinha seu próprio
+  array (`DADOS_PADRAO`), com nomes de peça e de grupo diferentes dos gravados por
+  `supabase/migrations/006_povoar_tabela_precos.sql` — que usa os nomes de `CATALOGO`
+  (`src/lib/helpers.ts`), os mesmos que o cálculo automático de `/novo-pedido` já lia
+  corretamente. Resultado prático: a grade sempre exibiu valores hardcoded (que só por
+  coincidência começaram iguais aos oficiais), e salvar um preço pela tela gravava linhas
+  paralelas que o cálculo automático nunca lia — as 142 linhas reais ficavam intocadas.
+  - Extraído `src/lib/precosEscolar.ts`: fonte única dos nomes de grupo/produto e dos preços
+    padrão da categoria Escolar, com os mesmos nomes gravados no banco. `/tabela-precos`
+    passa a consumir esse módulo em vez de `DADOS_PADRAO`, que foi removido.
+  - De quebra, corrigida uma colisão de nomes dentro do próprio `DADOS_PADRAO`: `'Blusa'`
+    era reusado para Helança, Moletom e Tactel (três preços diferentes), e se essas linhas
+    algum dia fossem lidas de volta pelo `/novo-pedido`, uma sobrescreveria a outra em
+    silêncio. Os nomes completos do `CATALOGO` (`'Blusa Helança'`, `'Blusa Moletom'`,
+    `'Blusa Tactel'`) são únicos por construção.
+  - Confirmado que **Empresarial nunca teve preço cadastrado** — nem no banco, nem no PDF de
+    referência do projeto (que apesar do nome "Escolar e empresarial" só tem dados de
+    Escolar). Não é regressão desta sessão; fica registrado pra quando os valores forem
+    definidos. O aviso da tela foi corrigido pra não insinuar que só falta
+    Esportivo/Acessórios.
+  - **Zero SQL, zero mudança nos dados.** As 142 linhas gravadas pela migration 006
+    continuam exatamente como estão — só o código de `/tabela-precos` mudou.
+  - Verificado com `npx tsc --noEmit` limpo (projeto inteiro) antes de devolver os arquivos.
+
 ### Kanban, tema claro/escuro, controle financeiro por perfil e rastro de autoria
 
 Branch `feat/kanban-e-tema-escuro`, mesclada em `main` depois de teste visual do dono como
@@ -186,18 +230,6 @@ gestor e como perfil de chão de fábrica (Alex, estamparia_serigrafia).
   pela API do Supabase, sem passar pelo login. Fechar o RLS é a Fase B e **não foi feita**.
 - Removida a operação de `DELETE` em massa em `tabela_precos` disparada do browser com a
   anon key. A tela de preços não emite mais nenhum `DELETE`.
-
-### Dívida técnica
-- **`/tabela-precos` e o cálculo automático de `/novo-pedido` usam taxonomias diferentes.**
-  O cálculo busca o preço por `tabelaPrecos[peca.tipo]`, onde `peca.tipo` é um nome do
-  `CATALOGO` (`src/lib/helpers.ts`) e o `grupo` é ignorado. A tela de preços monta a chave
-  como `grupo + produto + faixa` a partir do `DADOS_PADRAO` (`src/app/tabela-precos/page.tsx`),
-  que tem outros nomes de grupo e de produto. Consequência prática: **editar um preço pela
-  tela não altera o valor usado no cálculo automático**, e vice-versa — as linhas gravadas
-  pelos dois caminhos convivem em paralelo na mesma tabela. Unificar exige eleger a
-  identidade canônica do produto, extrair `CATALOGO` e `DADOS_PADRAO` para um módulo único
-  (junto com as faixas, hoje duplicadas entre `FAIXAS` e `getFaixaTamanho`) e migrar as
-  chaves já gravadas.
 
 ---
 

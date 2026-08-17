@@ -106,6 +106,8 @@ const ACESSO_TOTAL: Permissoes = {
 /**
  * Chão de fábrica: lê pedidos, opera a tela de produção, lê o Kanban, e nada
  * além disso. Sem /dashboard — ele expõe faturamento e total de clientes.
+ * Sem /entregas também, de propósito: marcar como entregue muda o status do
+ * pedido, mesma ação que já é exclusiva de quem tem `editarPedido`.
  *
  * Um objeto compartilhado, e não seis cópias: enquanto os perfis de produção
  * tiverem o mesmo acesso, isso fica dito uma vez só. Quando um deles precisar

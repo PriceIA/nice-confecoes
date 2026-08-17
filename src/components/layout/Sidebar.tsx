@@ -5,7 +5,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, ClipboardList, PlusCircle,
   Factory, Users, Users2, BarChart3, Scissors, Menu, X, Table2, Settings, LogOut,
-  KanbanSquare
+  KanbanSquare, PackageCheck
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useMembro } from '@/components/AuthProvider'
@@ -19,6 +19,10 @@ const NAV = [
   { href: '/tabela-precos',  label: 'Tabela de Preços', icon: Table2 },
   { href: '/novo-pedido',    label: 'Novo Pedido',      icon: PlusCircle },
   { href: '/producao',       label: 'Produção',         icon: Factory },
+  // Fila de pedidos com os 8 setores concluídos, prontos pra sair. Só
+  // gestor/recepcionista — mesma regra de quem pode mudar status de pedido
+  // (src/lib/permissoes.ts). Não está em LEITURA_PRODUCAO.rotas de propósito.
+  { href: '/entregas',       label: 'Entregas',         icon: PackageCheck },
   // Módulo separado da Produção: aqui são tarefas livres, lá é o progresso real
   // dos pedidos pelos 8 setores.
   { href: '/quadros',        label: 'Quadros',          icon: KanbanSquare },
