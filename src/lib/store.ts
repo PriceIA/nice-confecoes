@@ -1,6 +1,15 @@
 import { Cliente, Parcela, Pedido, ProgressoSetor, StatusSetor, Terceirizada } from '@/types'
 import { addBusinessDays, format } from 'date-fns'
 import { supabase } from './supabase'
+import { criarClienteBrowser } from './supabase/client'
+
+// Fase B: pedidos/clientes/terceirizadas ganharam RLS baseada em auth.uid()
+// (ver CLAUDE.md, "Estado de segurança atual"). O client anônimo de
+// './supabase' não carrega sessão — auth.uid() vira null dentro do banco e
+// toda policy falha em silêncio, exatamente o bug que o Kanban já evitava
+// usando criarClienteBrowser(). Este arquivo passa a fazer o mesmo, função por
+// função, igual a src/lib/kanban.ts. `supabase` (anônimo) continua importado
+// só para o Storage de fotos, que não entrou na Fase B.
 
 const SETORES_PROGRESSO = [
   'atendimento', 'compra', 'corte', 'costura',
@@ -95,6 +104,7 @@ function mapTerceirizada(row: any): Terceirizada {
 }
 
 async function gerarNumero(): Promise<string> {
+  const supabase = criarClienteBrowser()
   const ano = new Date().getFullYear()
   const { count, error } = await supabase.from('pedidos').select('*', { count: 'exact', head: true })
   if (error) throw error
@@ -104,6 +114,7 @@ async function gerarNumero(): Promise<string> {
 
 // Pedidos
 export async function getPedidos(): Promise<Pedido[]> {
+  const supabase = criarClienteBrowser()
   const { data, error } = await supabase
     .from('pedidos')
     .select('*, clientes(*)')
@@ -113,6 +124,7 @@ export async function getPedidos(): Promise<Pedido[]> {
 }
 
 export async function getPedidoById(id: string): Promise<Pedido | undefined> {
+  const supabase = criarClienteBrowser()
   const { data, error } = await supabase
     .from('pedidos')
     .select('*, clientes(*)')
@@ -123,6 +135,7 @@ export async function getPedidoById(id: string): Promise<Pedido | undefined> {
 }
 
 export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEntrada' | 'progresso'>): Promise<Pedido> {
+  const supabase = criarClienteBrowser()
   console.log('[criarPedido] iniciando, dados cliente:', dados.cliente)
   const cliente = await buscarOuCriarCliente(dados.cliente)
   console.log('[criarPedido] cliente ok:', cliente.id)
@@ -178,6 +191,25 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
 }
 
 export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promise<void> {
+  const supabase = criarClienteBrowser()
+
+  // Atualização só de progresso (clique num setor em /producao ou no card
+  // "Progresso por Setor" em /pedidos/[id]): todo perfil com editarProducao
+  // pode fazer isso, mas não pode tocar em mais nada do pedido. RLS bloqueia
+  // UPDATE direto na tabela pra quem não é gestor/recepcionista — por isso
+  // este caso, e só ele, passa pela função atualizar_progresso_pedido
+  // (security definer), que só aceita gravar a coluna progresso. Ver
+  // supabase/migrations/009_rls_fase_b.sql.
+  const chaves = Object.keys(dados)
+  if (chaves.length === 1 && chaves[0] === 'progresso') {
+    const { error } = await supabase.rpc('atualizar_progresso_pedido', {
+      p_pedido_id: id,
+      p_progresso: dados.progresso,
+    })
+    if (error) throw error
+    return
+  }
+
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (dados.consultor !== undefined) update.consultor = dados.consultor
   if (dados.tipo !== undefined) update.tipo = dados.tipo
@@ -205,12 +237,14 @@ export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promi
 }
 
 export async function deletarPedido(id: string): Promise<void> {
+  const supabase = criarClienteBrowser()
   const { error } = await supabase.from('pedidos').delete().eq('id', id)
   if (error) throw error
 }
 
 // Terceirizadas
 export async function getTerceirizadas(): Promise<Terceirizada[]> {
+  const supabase = criarClienteBrowser()
   const { data, error } = await supabase
     .from('terceirizadas')
     .select('*')
@@ -220,6 +254,7 @@ export async function getTerceirizadas(): Promise<Terceirizada[]> {
 }
 
 export async function criarTerceirizada(dados: Omit<Terceirizada, 'id'>): Promise<Terceirizada> {
+  const supabase = criarClienteBrowser()
   const { data, error } = await supabase
     .from('terceirizadas')
     .insert({
@@ -243,6 +278,7 @@ export async function criarTerceirizada(dados: Omit<Terceirizada, 'id'>): Promis
 }
 
 export async function atualizarTerceirizada(id: string, dados: Partial<Terceirizada>): Promise<void> {
+  const supabase = criarClienteBrowser()
   const update: Record<string, unknown> = {}
   if (dados.nome !== undefined) update.nome = dados.nome
   if (dados.tipo !== undefined) update.tipo = dados.tipo
@@ -263,6 +299,7 @@ export async function atualizarTerceirizada(id: string, dados: Partial<Terceiriz
 
 // Clientes
 export async function getClientes(): Promise<Cliente[]> {
+  const supabase = criarClienteBrowser()
   const { data, error } = await supabase
     .from('clientes')
     .select('*')
@@ -272,6 +309,7 @@ export async function getClientes(): Promise<Cliente[]> {
 }
 
 export async function criarCliente(dados: Omit<Cliente, 'id' | 'dataCadastro'>): Promise<Cliente> {
+  const supabase = criarClienteBrowser()
   const { data, error } = await supabase
     .from('clientes')
     .insert({
@@ -290,6 +328,7 @@ export async function criarCliente(dados: Omit<Cliente, 'id' | 'dataCadastro'>):
 }
 
 export async function atualizarCliente(id: string, dados: Partial<Cliente>): Promise<void> {
+  const supabase = criarClienteBrowser()
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (dados.nome !== undefined) update.nome = dados.nome
   if (dados.empresa !== undefined) update.empresa = dados.empresa
@@ -304,6 +343,7 @@ export async function atualizarCliente(id: string, dados: Partial<Cliente>): Pro
 }
 
 export async function buscarOuCriarCliente(dados: Omit<Cliente, 'id' | 'dataCadastro'>): Promise<Cliente> {
+  const supabase = criarClienteBrowser()
   if (dados.telefone) {
     const { data, error } = await supabase
       .from('clientes')

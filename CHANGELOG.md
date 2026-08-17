@@ -8,6 +8,41 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase B — RLS em pedidos/clientes/terceirizadas/tabela_precos (código pronto, SQL ainda não rodado)
+
+Sessão de 17/08/2026, no PC principal. **Este bloco descreve trabalho ainda não implantado**
+— ver `CLAUDE.md`, seção "Fase B", pra ordem exata de deploy + execução antes de considerar
+isto concluído.
+
+- **`src/lib/store.ts` migrado do client anônimo pro autenticado** (`criarClienteBrowser()`),
+  função por função — mesmo padrão de `src/lib/kanban.ts`. Único ponto que continua no client
+  anônimo é `uploadFotoPeca` (Storage de `pedido-fotos`), que não entrou nesta fase.
+- **`atualizarPedido` ganhou um desvio pra updates só de `progresso`**: em vez de `UPDATE`
+  direto (que RLS vai bloquear pra quem não é gestor/recepcionista), chama a função de banco
+  `atualizar_progresso_pedido` via `.rpc()`. Os dois call sites que batem nesse caso (clique de
+  setor em `/producao` e em `/pedidos/[id]`) não mudaram de assinatura — a rota é decidida
+  olhando as chaves do payload.
+- **`src/app/tabela-precos/page.tsx`** trocou `import { supabase }` por
+  `criarClienteBrowser()` local, dentro de `carregar()` e `salvar()`.
+- **`supabase/migrations/009_rls_fase_b.sql`** (NÃO executado) — liga RLS em `pedidos`,
+  `clientes`, `terceirizadas` e `tabela_precos`, seguindo o padrão de `007_kanban.sql`
+  (policies via `meu_perfil()`). Decisões registradas nos comentários do arquivo e em
+  `CLAUDE.md`: SELECT de `pedidos`/`clientes` liberado pra qualquer perfil com linha em
+  `equipe` (evita quebrar o join de nome do cliente pros perfis de produção); escrita
+  restrita a gestor/recepcionista nas quatro tabelas; e uma função `security definer`
+  (`atualizar_progresso_pedido`) que deixa os 8 perfis gravarem só a coluna `progresso`,
+  contornando a falta de RLS por coluna no Postgres.
+- **`supabase/migrations/009_rls_fase_b_auditoria.sql`** (NOVO, só leitura) — checklist de
+  SELECTs pra rodar antes da execução: confirma que o RLS ainda está desligado, que
+  `meu_perfil()` e `equipe` estão como esperado, e tira uma contagem "antes" das 4 tabelas.
+- **Mascaramento de coluna financeira (`verFinanceiro` no banco) ficou de fora desta fase**,
+  de propósito — permanece controle só de interface, como já era. Decisão registrada em
+  `CLAUDE.md` como candidata a uma Fase B2 separada.
+- Verificado com `npx tsc --noEmit` limpo (projeto inteiro) depois de todas as edições.
+- **Pendente:** commit + push + confirmar deploy na Vercel, DEPOIS rodar a auditoria e só
+  então a migration no Supabase SQL Editor. Nenhuma dessas quatro ações foi feita nesta
+  sessão — só o código e o SQL foram preparados e entregues.
+
 ### Módulo de Entregas e unificação da tabela de preços
 
 Sessão de 17/08/2026, no PC principal (`A:\Projetos SAAS\nice-confeccoes`).

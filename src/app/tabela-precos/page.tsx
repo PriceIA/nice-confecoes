@@ -1,9 +1,14 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Save, Info } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { criarClienteBrowser } from '@/lib/supabase/client'
 import { classificarErro, sufixoCodigo } from '@/lib/erros'
 import { FAIXAS, GRUPOS_PRECO_ESCOLAR } from '@/lib/precosEscolar'
+
+// Fase B: tabela_precos ganhou RLS baseada em auth.uid() — precisa do client
+// autenticado (@supabase/ssr), não do singleton anônimo de '@/lib/supabase'.
+// Ver CLAUDE.md, "Estado de segurança atual", e src/lib/kanban.ts pro mesmo
+// padrão já em uso desde o Kanban.
 
 type PrecoMap = Record<string, number | null>
 
@@ -74,6 +79,7 @@ export default function TabelaPrecosPage() {
   useEffect(() => {
     async function carregar() {
       try {
+        const supabase = criarClienteBrowser()
         const { data, error } = await supabase.from('tabela_precos').select('grupo, produto, faixa_tamanho, valor')
         if (!error && data && data.length > 0) {
           const map: PrecoMap = defaultPrecos()
@@ -133,6 +139,7 @@ export default function TabelaPrecosPage() {
 
     try {
       if (linhas.length > 0) {
+        const supabase = criarClienteBrowser()
         const { error } = await supabase
           .from('tabela_precos')
           .upsert(linhas, { onConflict: ON_CONFLICT })

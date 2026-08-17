@@ -127,9 +127,11 @@ Código compartilhado:
 - `src/lib/supabase/client.ts` e `src/lib/supabase/server.ts` — clients de **autenticação**
   (`@supabase/ssr`, sessão em cookies)
 - `src/lib/store.ts` — acesso a dados de pedidos/clientes/terceirizadas (exceto
-  `tabela-precos` e o Kanban, ver abaixo)
-- `src/lib/supabase.ts` — client singleton, anon key, **sem sessão**; é o que o `store.ts` usa
-  para dados de negócio. Não confundir com os clients de auth acima
+  `tabela-precos` e o Kanban, ver abaixo). Desde a Fase B, usa `criarClienteBrowser()`
+  (client autenticado) função por função, igual `kanban.ts` — só `uploadFotoPeca` continua no
+  client anônimo, porque Storage não entrou na Fase B
+- `src/lib/supabase.ts` — client singleton, anon key, **sem sessão**; hoje só usado pelo
+  Storage (`uploadFotoPeca`, `store.ts`). Não confundir com os clients de auth acima
 - `src/lib/kanban.ts` — acesso a dados do Kanban. **Usa o client AUTENTICADO**, não o
   anônimo — ver "Dois clients Supabase" abaixo. Nunca misture com `store.ts`
 - `src/lib/kanban-ui.ts` — apresentação do Kanban: `CORES_LISTA`, `badgePrazo`,
@@ -175,19 +177,21 @@ dá **zero linhas em silêncio**.
 
 | Client | Onde | Sessão? | Usado por | Tabelas |
 |---|---|---|---|---|
-| Anônimo | `src/lib/supabase.ts` | **Não** | `store.ts`, `/tabela-precos` | `pedidos`, `clientes`, `terceirizadas`, `tabela_precos` — todas **sem RLS** |
-| Autenticado | `src/lib/supabase/client.ts` (`@supabase/ssr`, cookies) | Sim | `src/lib/kanban.ts`, auth | `quadros`, `listas`, `cards` — todas **com RLS** |
+| Anônimo | `src/lib/supabase.ts` | **Não** | só `uploadFotoPeca` (`store.ts`), Storage de `pedido-fotos` | nenhuma tabela — só o bucket |
+| Autenticado | `src/lib/supabase/client.ts` (`@supabase/ssr`, cookies) | Sim | `store.ts`, `/tabela-precos`, `src/lib/kanban.ts`, auth | `pedidos`, `clientes`, `terceirizadas`, `tabela_precos`, `quadros`, `listas`, `cards` — todas **com RLS** |
 
-Regra prática:
+`store.ts` segue o padrão de `kanban.ts`: cada função exportada cria seu próprio
+`criarClienteBrowser()` localmente, em vez de um singleton no topo do arquivo.
 
-- Mexendo em **quadros/listas/cards** → `src/lib/kanban.ts`, client autenticado. Com o
-  anônimo, `auth.uid()` é null dentro do banco, toda policy falha e a query volta vazia
-  **sem erro nenhum**.
-- Mexendo em **pedidos/clientes/terceirizadas** → `store.ts`, como sempre.
+Regra prática hoje: **toda tabela de negócio já é RLS + client autenticado.** Não existe
+mais tabela de negócio no client anônimo — se for escrever uma query nova em `store.ts` ou
+`/tabela-precos`, use `criarClienteBrowser()`, nunca importe `supabase` de `./supabase`.
 
-Isto é **dívida técnica conhecida e assumida**, não um descuido: a Fase B (ligar RLS nas
-tabelas antigas e migrar o `store.ts` para o client autenticado) segue pendente. Enquanto
-ela não acontece, os dois convivem.
+**Status: código pronto, aguardando o dono rodar a migration.** Esta troca (client +
+`supabase/migrations/009_rls_fase_b.sql`, que liga o RLS de fato nas 4 tabelas) foi feita em
+17/08/2026 mas depende de ordem de deploy — ver "Estado de segurança atual" abaixo antes de
+assumir que já está em produção. Enquanto a migration não roda, as tabelas continuam sem RLS
+no banco (o client autenticado funciona normalmente mesmo sem RLS — só não força nada ainda).
 
 ## Modelo de dados
 
@@ -388,47 +392,74 @@ pelo client autenticado (`src/lib/kanban.ts`). Nestas três tabelas, e só nelas
 vale **no banco**: um perfil de produção não consegue escrever nem ver cartão restrito nem
 por fora da interface.
 
-### O que continua desprotegido (Fase B — NÃO feita)
+### Fase B — código pronto, SQL ainda NÃO executado (17/08/2026)
 
-> **Nas tabelas antigas, o login protege a aplicação, não o banco.** Essa distinção é a
-> coisa mais importante desta seção.
+> **Nas tabelas antigas, hoje o login protege a aplicação, não o banco.** Essa distinção
+> continua valendo até o dono rodar `009_rls_fase_b.sql` — o código já está pronto, mas o
+> banco só muda quando o SQL for colado no Supabase SQL Editor.
 
-**RLS segue desabilitado nas tabelas de negócio antigas** — `pedidos`, `clientes`,
-`terceirizadas` (`supabase/migrations/001_initial.sql:47-49`) e `tabela_precos`
-(`002_tabela_precos.sql:10`). O Kanban é a exceção, não a nova regra.
+**O que já mudou no código, ainda não implantado:** `src/lib/store.ts` e
+`src/app/tabela-precos/page.tsx` trocaram o client anônimo pelo `criarClienteBrowser()`
+(autenticado), função por função, igual `kanban.ts`. `atualizarPedido` ganhou um desvio: um
+update cujo payload é **só** `{ progresso }` (os cliques de setor em `/producao` e em
+`/pedidos/[id]`) passa a chamar a função de banco `atualizar_progresso_pedido` via `.rpc()`
+em vez de um `UPDATE` direto — ver decisão 4 abaixo.
+
+**O que falta, nesta ordem exata:**
+
+1. Rodar `npm run build` local, conferir, commitar e dar push do código acima (já passou por
+   `tsc --noEmit` limpo neste computador, mas vale conferir de novo antes do commit).
+2. Confirmar o deploy na Vercel (produção rodando o código novo).
+3. **Só então**, colar `supabase/migrations/009_rls_fase_b_auditoria.sql` (só leitura) no SQL
+   Editor e conferir os resultados.
+4. Colar `supabase/migrations/009_rls_fase_b.sql` (liga o RLS de verdade) no SQL Editor.
+
+**A ordem é irreversível na prática — não inverta.** Se o SQL rodar antes do deploy, o app em
+produção continua um tempo com o client ANTIGO (anônimo, sem sessão) contra tabelas que
+passaram a exigir `auth.uid()`: toda policy falha, e todo mundo — gestor incluído — passa a
+ver listas vazias e updates que não gravam, **sem erro nenhum na tela**. É o mesmo modo de
+falha "RLS que barra não dá erro, dá zero linhas" que este documento já registrava antes.
+
+**Decisões tomadas nesta sessão, registradas aqui porque foram feitas sem confirmação
+item-a-item do dono** (ele pediu para seguir com o que der pra fazer em vez de parar em
+pergunta — decisão dele, mas os defaults abaixo são meus e merecem uma olhada):
+
+1. `pedidos` e `clientes` ganham SELECT liberado pra **qualquer perfil com linha em
+   `equipe`** (não só gestor/recepcionista) — os seis perfis de chão de fábrica leem
+   `/pedidos` e `/producao`, que mostram nome/empresa do cliente via join; restringir SELECT
+   de `clientes` quebraria esse join em silêncio.
+2. INSERT/UPDATE/DELETE em `pedidos`/`clientes`, e tudo em `terceirizadas`/`tabela_precos`,
+   ficam só pra gestor/recepcionista — espelha o que a interface já permite hoje.
+3. Nenhum mascaramento de coluna: `verFinanceiro` **continua sendo controle só de
+   interface** (ver abaixo) — decisão de deixar isso fora desta migration e tratar como uma
+   Fase B2 separada, se e quando for priorizada.
+4. RLS é por **linha**, não por coluna — não dá pra restringir UPDATE em `pedidos` a "só a
+   coluna progresso" com uma policy comum. Por isso `pedidos_write` bloqueia UPDATE direto
+   pra quem não é gestor/recepcionista, e os 8 perfis com `editarProducao` passam por
+   `atualizar_progresso_pedido` (`security definer`) — que só grava a coluna `progresso`,
+   nunca o resto da linha.
 
 **A anon key continua no bundle do browser** (`NEXT_PUBLIC_SUPABASE_ANON_KEY`, lida em
-`src/lib/supabase.ts:3-4`), e todo o `store.ts` grava com ela. Como o RLS está desligado,
-**quem extrair a anon key do bundle lê e escreve em qualquer tabela direto pela API do
-Supabase, sem passar pelo login**. As permissões de perfil valem dentro do app; não valem
-no banco.
+`src/lib/supabase.ts:3-4`) — depois da Fase B ela só serve pro Storage de fotos
+(`uploadFotoPeca`), que não tem RLS (buckets não usam RLS de tabela) e continua público por
+URL, então isso não é regressão.
 
-Concretamente, isso significa que hoje a costureira é impedida de excluir um pedido **pela
-interface**, mas nada no banco a impediria de fazê-lo por fora dela. Já um cartão do Kanban
-que ela não pode ver, ela não vê nem por fora — essa é a diferença entre as duas metades do
-sistema.
+**O `verFinanceiro` segue sendo controle de interface, não de banco**, mesmo depois da Fase
+B. Os perfis de chão de fábrica não veem valor em `/pedidos/[id]` — nem na tela, nem na
+impressão — mas `getPedidoById` faz `select('*')`, então `valor_total`, `valor_pago` e
+`parcelas` continuam trafegando pro navegador deles (Network do DevTools mostra). A Fase B
+fecha o acesso **direto ao banco por fora do app** (sem passar pelo login), mas não mascara
+coluna por perfil dentro de uma sessão válida — isso exigiria uma view sem as colunas de
+dinheiro, ou RLS de coluna via função, e fica pra uma Fase B2 hipotética.
 
-**O mesmo vale para o `verFinanceiro`.** Os perfis de chão de fábrica não veem mais nenhum
-valor em `/pedidos/[id]` — nem na tela, nem na impressão. Mas `getPedidoById` faz
-`select('*')`, então `valor_total`, `valor_pago` e o array `parcelas` **continuam trafegando
-para o navegador deles**: basta abrir a aba Network do DevTools para ler. E, como `pedidos`
-está sem RLS e a anon key está no bundle, dá para consultar a tabela direto pela API do
-Supabase sem nem passar pelo app.
+Um detalhe já coberto na migration: `numerosDePedidos` (`kanban.ts`) lê `pedidos` pelo client
+autenticado — a policy `pedidos_select` (item 1 acima) cobre esse caso, então os links de
+pedido no Kanban não somem quando o RLS entrar.
 
-Ou seja: `verFinanceiro` é controle de **interface**, não de banco — decisão consciente,
-registrada aqui como parte da Fase B. Fechar de verdade exige RLS em `pedidos` com policy de
-coluna (ou uma view sem as colunas de dinheiro) e o `store.ts` no client autenticado, como o
-Kanban já faz.
-
-**Fechar o RLS das quatro tabelas antigas é a Fase B e continua pendente.** Envolve: ligar
-RLS nelas, escrever policies com `meu_perfil()` (a função já existe — foi criada para o
-Kanban), e trocar o client anônimo do `store.ts` pelo client autenticado — hoje o `store.ts`
-usa um client **sem sessão**, então nenhuma policy baseada em `auth.uid()` funcionaria com
-ele. O Kanban já é o modelo de como isso deve ficar.
-
-Um detalhe a lembrar na Fase B: `numerosDePedidos` (`kanban.ts`) lê `pedidos` pelo client
-autenticado e só funciona porque `pedidos` está sem RLS. Ao ligar RLS lá, essa query precisa
-de policy de leitura, senão os links de pedido somem dos cartões.
+`/api/keep-alive` **continua no client anônimo de propósito** (o cron da Vercel não tem
+sessão) — depois da migration, o `select id limit 1` dele passa a devolver zero linhas (RLS
+filtra, não erra), mas o endpoint só checa `error`, então continua respondendo 200 OK. Nada a
+mudar lá.
 
 **Fotos são públicas.** O bucket `pedido-fotos` devolve `getPublicUrl` (`store.ts:314`);
 quem tiver a URL vê a imagem, sem autenticação.
