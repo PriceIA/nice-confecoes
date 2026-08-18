@@ -8,11 +8,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
-### Fase B — RLS em pedidos/clientes/terceirizadas/tabela_precos (código pronto, SQL ainda não rodado)
+### Fase B — RLS em pedidos/clientes/terceirizadas/tabela_precos
 
-Sessão de 17/08/2026, no PC principal. **Este bloco descreve trabalho ainda não implantado**
-— ver `CLAUDE.md`, seção "Fase B", pra ordem exata de deploy + execução antes de considerar
-isto concluído.
+Sessão de 17–18/08/2026, no PC principal. Código preparado em 17/08, commit/push/deploy e
+execução da migration em 18/08. Ver `CLAUDE.md`, seção "Fase B", para o histórico completo.
 
 - **`src/lib/store.ts` migrado do client anônimo pro autenticado** (`criarClienteBrowser()`),
   função por função — mesmo padrão de `src/lib/kanban.ts`. Único ponto que continua no client
@@ -24,24 +23,38 @@ isto concluído.
   olhando as chaves do payload.
 - **`src/app/tabela-precos/page.tsx`** trocou `import { supabase }` por
   `criarClienteBrowser()` local, dentro de `carregar()` e `salvar()`.
-- **`supabase/migrations/009_rls_fase_b.sql`** (NÃO executado) — liga RLS em `pedidos`,
-  `clientes`, `terceirizadas` e `tabela_precos`, seguindo o padrão de `007_kanban.sql`
-  (policies via `meu_perfil()`). Decisões registradas nos comentários do arquivo e em
-  `CLAUDE.md`: SELECT de `pedidos`/`clientes` liberado pra qualquer perfil com linha em
-  `equipe` (evita quebrar o join de nome do cliente pros perfis de produção); escrita
+- **`supabase/migrations/009_rls_fase_b.sql`** (EXECUTADO pelo dono em 18/08/2026) — liga RLS
+  em `pedidos`, `clientes`, `terceirizadas` e `tabela_precos`, seguindo o padrão de
+  `007_kanban.sql` (policies via `meu_perfil()`). Decisões registradas nos comentários do
+  arquivo e em `CLAUDE.md`: SELECT de `pedidos`/`clientes` liberado pra qualquer perfil com
+  linha em `equipe` (evita quebrar o join de nome do cliente pros perfis de produção); escrita
   restrita a gestor/recepcionista nas quatro tabelas; e uma função `security definer`
   (`atualizar_progresso_pedido`) que deixa os 8 perfis gravarem só a coluna `progresso`,
   contornando a falta de RLS por coluna no Postgres.
-- **`supabase/migrations/009_rls_fase_b_auditoria.sql`** (NOVO, só leitura) — checklist de
-  SELECTs pra rodar antes da execução: confirma que o RLS ainda está desligado, que
-  `meu_perfil()` e `equipe` estão como esperado, e tira uma contagem "antes" das 4 tabelas.
+- **`supabase/migrations/009_rls_fase_b_auditoria.sql`** (NOVO, só leitura, executado antes da
+  migration) — checklist de SELECTs: confirma RLS, `meu_perfil()`, `equipe` e conta linhas
+  "antes". Foi essa auditoria que pegou o problema abaixo antes de qualquer coisa quebrar.
+- **Achado real da auditoria, corrigido antes de executar:** `tabela_precos` já estava com
+  RLS ligado (diferente das outras três) com 4 policies provisórias liberando só o papel
+  `anon` — criadas fora deste repo, direto no painel do Supabase. Nenhuma valia pro papel
+  `authenticated`. `009_rls_fase_b.sql` foi corrigido pra dar `drop policy` nelas antes de
+  criar `tabela_precos_admin`. Sem essa correção, a troca de `/tabela-precos` pro client
+  autenticado teria ficado bloqueada por RLS — e ficou mesmo, por um instante: o deploy subiu
+  antes da migration rodar, e nesse intervalo a leitura da tela **parecia** funcionar (o
+  fallback de `localStorage` mascarou o bloqueio), só a tentativa de salvar expôs o erro
+  ("Sem permissão para gravar"). Ver `CLAUDE.md` pro relato completo.
+- **Efeito colateral do teste de gravação, corrigido na hora:** um preço de teste (Camiseta M
+  Curta, faixa 0-02, `26,40` → `27`) foi salvo de verdade no banco no meio do processo de
+  diagnóstico, porque o campo continuou com o valor de teste entre a tentativa bloqueada e a
+  migration rodar. Revertido e confirmado salvo de volta em `26,40` antes de fechar a sessão.
 - **Mascaramento de coluna financeira (`verFinanceiro` no banco) ficou de fora desta fase**,
   de propósito — permanece controle só de interface, como já era. Decisão registrada em
   `CLAUDE.md` como candidata a uma Fase B2 separada.
-- Verificado com `npx tsc --noEmit` limpo (projeto inteiro) depois de todas as edições.
-- **Pendente:** commit + push + confirmar deploy na Vercel, DEPOIS rodar a auditoria e só
-  então a migration no Supabase SQL Editor. Nenhuma dessas quatro ações foi feita nesta
-  sessão — só o código e o SQL foram preparados e entregues.
+- Verificado com `npx tsc --noEmit` limpo (projeto inteiro) antes do commit.
+- **Testado depois da migration:** `/tabela-precos` lendo e salvando de verdade (não mais
+  fallback), `/pedidos` carregando pro gestor, clique de setor em `/producao` gravando pela
+  função nova, e um perfil de chão de fábrica confirmado sem regressão em `/pedidos` e
+  `/producao`.
 
 ### Módulo de Entregas e unificação da tabela de preços
 

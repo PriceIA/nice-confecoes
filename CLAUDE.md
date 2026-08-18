@@ -187,11 +187,11 @@ Regra prática hoje: **toda tabela de negócio já é RLS + client autenticado.*
 mais tabela de negócio no client anônimo — se for escrever uma query nova em `store.ts` ou
 `/tabela-precos`, use `criarClienteBrowser()`, nunca importe `supabase` de `./supabase`.
 
-**Status: código pronto, aguardando o dono rodar a migration.** Esta troca (client +
-`supabase/migrations/009_rls_fase_b.sql`, que liga o RLS de fato nas 4 tabelas) foi feita em
-17/08/2026 mas depende de ordem de deploy — ver "Estado de segurança atual" abaixo antes de
-assumir que já está em produção. Enquanto a migration não roda, as tabelas continuam sem RLS
-no banco (o client autenticado funciona normalmente mesmo sem RLS — só não força nada ainda).
+**Status: em produção.** Esta troca (client + `supabase/migrations/009_rls_fase_b.sql`, que
+liga o RLS de fato nas 4 tabelas) foi feita e confirmada em 17–18/08/2026 — ver "Estado de
+segurança atual" abaixo para o histórico completo, incluindo um problema real encontrado e
+corrigido no meio do caminho (`tabela_precos` já tinha RLS ligado com policies antigas
+liberadas pro `anon`).
 
 ## Modelo de dados
 
@@ -244,9 +244,10 @@ apaga tudo e reinsere em vez de fazer upsert.
 
 ### `quadros`, `listas`, `cards` — Kanban livre
 
-**As três únicas tabelas do sistema com RLS LIGADO.** Registro histórico do SQL em
-`supabase/migrations/007_kanban.sql` (rodado manualmente pelo dono; o arquivo é reconstrução,
-não export).
+Foram as três primeiras tabelas do sistema com RLS ligado — desde a Fase B (18/08/2026),
+`pedidos`, `clientes`, `terceirizadas` e `tabela_precos` também têm. Registro histórico do
+SQL em `supabase/migrations/007_kanban.sql` (rodado manualmente pelo dono; o arquivo é
+reconstrução, não export).
 
 ```
 quadros  id uuid pk · titulo · descricao · arquivado bool · created_at · updated_at
@@ -386,39 +387,55 @@ Gestor e recepcionista têm acesso total; os seis perfis de produção leem `/pe
 perfil não pode abrir — os dois consultam a **mesma** função `podeAcessarRota`, então menu e
 bloqueio não divergem.
 
-**O Kanban tem RLS de verdade.** `quadros`, `listas` e `cards` estão com RLS ligado, com
-policies que leem o perfil por `public.meu_perfil()` (`007_kanban.sql`), e o acesso passa
-pelo client autenticado (`src/lib/kanban.ts`). Nestas três tabelas, e só nelas, a permissão
-vale **no banco**: um perfil de produção não consegue escrever nem ver cartão restrito nem
-por fora da interface.
+**O Kanban tem RLS de verdade — e agora as quatro tabelas antigas também.** `quadros`,
+`listas` e `cards` foram as primeiras, com policies que leem o perfil por
+`public.meu_perfil()` (`007_kanban.sql`), e o acesso passa pelo client autenticado
+(`src/lib/kanban.ts`). Desde a Fase B, `pedidos`, `clientes`, `terceirizadas` e
+`tabela_precos` seguem o mesmo modelo.
 
-### Fase B — código pronto, SQL ainda NÃO executado (17/08/2026)
+### Fase B — feita (17–18/08/2026)
 
-> **Nas tabelas antigas, hoje o login protege a aplicação, não o banco.** Essa distinção
-> continua valendo até o dono rodar `009_rls_fase_b.sql` — o código já está pronto, mas o
-> banco só muda quando o SQL for colado no Supabase SQL Editor.
+**RLS está ligado em `pedidos`, `clientes`, `terceirizadas` e `tabela_precos`, com policies
+via `meu_perfil()`, e `store.ts`/`tabela-precos` usam o client autenticado.** A distinção
+"login protege a aplicação, não o banco" que essa seção registrava não vale mais pras quatro
+tabelas de negócio — a permissão agora vale no banco, igual já valia no Kanban.
 
-**O que já mudou no código, ainda não implantado:** `src/lib/store.ts` e
-`src/app/tabela-precos/page.tsx` trocaram o client anônimo pelo `criarClienteBrowser()`
-(autenticado), função por função, igual `kanban.ts`. `atualizarPedido` ganhou um desvio: um
-update cujo payload é **só** `{ progresso }` (os cliques de setor em `/producao` e em
-`/pedidos/[id]`) passa a chamar a função de banco `atualizar_progresso_pedido` via `.rpc()`
-em vez de um `UPDATE` direto — ver decisão 4 abaixo.
+**O que mudou no código:** `src/lib/store.ts` e `src/app/tabela-precos/page.tsx` trocaram o
+client anônimo pelo `criarClienteBrowser()` (autenticado), função por função, igual
+`kanban.ts`. `atualizarPedido` ganhou um desvio: um update cujo payload é **só**
+`{ progresso }` (os cliques de setor em `/producao` e em `/pedidos/[id]`) passa a chamar a
+função de banco `atualizar_progresso_pedido` via `.rpc()` em vez de um `UPDATE` direto — ver
+decisão 4 abaixo.
 
-**O que falta, nesta ordem exata:**
+**Ordem seguida:** commit + push (`d5433ec`) → deploy confirmado "Ready" na Vercel →
+`009_rls_fase_b_auditoria.sql` (só leitura) rodado e conferido → `009_rls_fase_b.sql`
+executado com sucesso. Testado depois de rodar: `/tabela-precos` lendo e salvando de verdade
+(não mais o fallback de `localStorage`), `/pedidos` carregando pro gestor, clique de setor em
+`/producao` gravando pela função nova, e um perfil de chão de fábrica (testado pelo dono)
+confirmado conseguindo ler `/pedidos` e gravar em `/producao`.
 
-1. Rodar `npm run build` local, conferir, commitar e dar push do código acima (já passou por
-   `tsc --noEmit` limpo neste computador, mas vale conferir de novo antes do commit).
-2. Confirmar o deploy na Vercel (produção rodando o código novo).
-3. **Só então**, colar `supabase/migrations/009_rls_fase_b_auditoria.sql` (só leitura) no SQL
-   Editor e conferir os resultados.
-4. Colar `supabase/migrations/009_rls_fase_b.sql` (liga o RLS de verdade) no SQL Editor.
+**Problema real encontrado pela auditoria, corrigido antes de executar:** `tabela_precos` já
+estava com RLS ligado — diferente das outras três — com 4 policies provisórias
+(`tabela_precos_select_anon`/`insert_anon`/`update_anon`/`delete_anon`) criadas fora deste
+repo, direto no painel do Supabase, liberando só o papel `anon`. Nenhuma valia pro papel
+`authenticated`. Sem corrigir, a troca de `/tabela-precos` pro client autenticado teria ficado
+bloqueada por RLS assim que o deploy subisse — e confirmamos que ficou mesmo, por um instante:
+o deploy do código novo (`d5433ec`) subiu antes da migration rodar, e nesse intervalo a leitura
+da tela **parecia** funcionar (valores corretos na tela), mas era o fallback de `localStorage`
+mascarando um bloqueio real — só a tentativa de salvar expôs o erro ("Sem permissão para
+gravar"). `009_rls_fase_b.sql` foi corrigido pra dar `drop policy` nas 4 antigas antes de criar
+`tabela_precos_admin`, e a versão corrigida foi a que rodou. Fica registrado porque é
+exatamente o modo de falha "RLS que barra não dá erro" que este documento já alertava — só que
+desta vez com um agravante (o cache do navegador) que também escondeu o problema por um
+tempo.
 
-**A ordem é irreversível na prática — não inverta.** Se o SQL rodar antes do deploy, o app em
-produção continua um tempo com o client ANTIGO (anônimo, sem sessão) contra tabelas que
-passaram a exigir `auth.uid()`: toda policy falha, e todo mundo — gestor incluído — passa a
-ver listas vazias e updates que não gravam, **sem erro nenhum na tela**. É o mesmo modo de
-falha "RLS que barra não dá erro, dá zero linhas" que este documento já registrava antes.
+**Efeito colateral do teste, corrigido:** durante o teste de gravação (de propósito, pra
+provar o bloqueio), um preço de teste (`Camiseta M Curta`, faixa `0-02`, `26,40` → `27`) foi
+salvo de verdade no banco depois que a migration rodou, porque o campo continuou com o valor
+de teste entre a tentativa bloqueada e a migration. Corrigido na hora, voltado pra `26,40` e
+confirmado salvo. Fica registrado como lembrete: **depois de qualquer teste em
+`/tabela-precos`, sempre conferir se o valor voltou ao original antes de sair da tela** — não
+tem undo.
 
 **Decisões tomadas nesta sessão, registradas aqui porque foram feitas sem confirmação
 item-a-item do dono** (ele pediu para seguir com o que der pra fazer em vez de parar em
@@ -440,9 +457,9 @@ pergunta — decisão dele, mas os defaults abaixo são meus e merecem uma olhad
    nunca o resto da linha.
 
 **A anon key continua no bundle do browser** (`NEXT_PUBLIC_SUPABASE_ANON_KEY`, lida em
-`src/lib/supabase.ts:3-4`) — depois da Fase B ela só serve pro Storage de fotos
-(`uploadFotoPeca`), que não tem RLS (buckets não usam RLS de tabela) e continua público por
-URL, então isso não é regressão.
+`src/lib/supabase.ts:3-4`) — agora ela só serve pro Storage de fotos (`uploadFotoPeca`), que
+não tem RLS (buckets não usam RLS de tabela) e continua público por URL, então isso não é
+regressão.
 
 **O `verFinanceiro` segue sendo controle de interface, não de banco**, mesmo depois da Fase
 B. Os perfis de chão de fábrica não veem valor em `/pedidos/[id]` — nem na tela, nem na

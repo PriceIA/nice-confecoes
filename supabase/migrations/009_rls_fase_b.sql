@@ -1,8 +1,12 @@
 -- Fase B: liga RLS em pedidos, clientes, terceirizadas e tabela_precos.
 --
--- NÃO EXECUTADO PELO CLAUDE CODE. Rodar manualmente no Supabase SQL Editor,
--- SÓ DEPOIS que o código que troca store.ts (e /tabela-precos) para o client
--- autenticado (criarClienteBrowser(), @supabase/ssr) já estiver em produção.
+-- EXECUTADO PELO DONO em 18/08/2026, manualmente no Supabase SQL Editor, depois
+-- do deploy do código (commit d5433ec) confirmado "Ready" na Vercel e da
+-- auditoria (arquivo separado) conferida. NÃO foi executado pelo Claude Code —
+-- este arquivo é registro histórico do que rodou, igual 007_kanban.sql.
+-- Testado depois: /tabela-precos lendo e salvando, /pedidos carregando pro
+-- gestor, clique de setor em /producao gravando, perfil de chão de fábrica
+-- confirmado sem regressão.
 --
 -- ORDEM IMPORTA E É IRREVERSÍVEL NA PRÁTICA: se este SQL rodar antes do
 -- deploy do código novo, o app em produção continua lendo/gravando essas
@@ -60,6 +64,14 @@
 --    dele passa a devolver zero linhas (RLS filtra, não erra) — o endpoint
 --    só checa se veio `error`, então continua respondendo 200 OK. Nenhuma
 --    mudança necessária nesse arquivo.
+--
+-- 8. tabela_precos já tinha RLS ligado e 4 policies liberando `anon`
+--    (select/insert/update/delete), criadas fora deste repo, direto no
+--    painel. Auditoria de 17/08/2026 confirmou que nenhuma vale pro papel
+--    `authenticated` — a seção de tabela_precos abaixo dá DROP nelas antes
+--    de criar a policy nova, senão as duas conviveriam: a tela ficaria
+--    bloqueada pra quem está logado E a tabela continuaria gravável por
+--    fora com a anon key. As outras três tabelas não têm esse histórico.
 
 -- ---------------------------------------------------------------------------
 -- pedidos
@@ -108,9 +120,24 @@ create policy terceirizadas_admin on terceirizadas
 
 -- ---------------------------------------------------------------------------
 -- tabela_precos — mesma lógica: só quem acessa /tabela-precos e /novo-pedido.
+--
+-- DIFERENTE DAS OUTRAS TRÊS: esta tabela já estava com RLS ligado antes desta
+-- migration, com 4 policies provisórias liberando o papel `anon`
+-- (tabela_precos_select_anon/insert_anon/update_anon/delete_anon — criadas
+-- fora deste repo, direto no painel do Supabase, quando a tabela foi feita).
+-- Confirmado por auditoria em 17/08/2026: nenhuma delas vale pro papel
+-- `authenticated`, então, sem este DROP, a troca de `/tabela-precos` pro
+-- client autenticado ficaria bloqueada por RLS (zero linhas, sem erro) ao
+-- mesmo tempo em que a tabela continuaria gravável por fora via anon key —
+-- os dois problemas que a Fase B existe pra resolver, ao mesmo tempo.
 -- ---------------------------------------------------------------------------
 
 alter table tabela_precos enable row level security;
+
+drop policy if exists tabela_precos_select_anon on tabela_precos;
+drop policy if exists tabela_precos_insert_anon on tabela_precos;
+drop policy if exists tabela_precos_update_anon on tabela_precos;
+drop policy if exists tabela_precos_delete_anon on tabela_precos;
 
 drop policy if exists tabela_precos_admin on tabela_precos;
 create policy tabela_precos_admin on tabela_precos
