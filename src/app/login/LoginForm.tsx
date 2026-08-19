@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Scissors, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { LogoNiceN } from '@/components/LogoNiceN'
 import { criarClienteBrowser } from '@/lib/supabase/client'
 import BotaoTema from '@/components/BotaoTema'
 import { rotaInicialDe, type Perfil } from '@/lib/permissoes'
@@ -69,7 +70,7 @@ export default function LoginForm({ avisoInicial }: { avisoInicial: string | nul
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-nice-500 flex items-center justify-center shadow-md mb-3">
-            <Scissors className="w-7 h-7 text-white" />
+            <LogoNiceN className="w-12 h-11 text-white" />
           </div>
           <h1 className="text-xl font-bold text-titulo">Nice Confecções</h1>
           <p className="text-sm text-suave mt-0.5">Gestão de pedidos</p>

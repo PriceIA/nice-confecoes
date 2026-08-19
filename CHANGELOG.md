@@ -8,6 +8,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Ícone placeholder trocado pela marca N (login e sidebar)
+
+- Trocado o ícone placeholder da tela de login (`Scissors` do lucide-react, genérico) pela
+  marca real da Nice: o "N" cursivo extraído da logo oficial
+  (`LOGO_NICE_CONFECCOES.pdf`), agora em `src/components/LogoNiceN.tsx` (SVG com
+  `fill="currentColor"`, herda a cor do texto) e usado em `src/app/login/LoginForm.tsx`.
+- Ajustado o tamanho do `LogoNiceN` no badge do login de `w-8 h-6` para `w-12 h-11` — o N
+  estava pequeno demais dentro do quadrado verde de `w-14 h-14`.
+- Trocado também o mesmo ícone `Scissors` na sidebar (`src/components/layout/Sidebar.tsx`)
+  pelo `LogoNiceN`, nos dois badges (desktop `w-9 h-9` → ícone `w-8 h-7`; topbar mobile
+  `w-8 h-8` → ícone `w-7 h-6`), mantendo a proporção ~1.12:1 do SVG. Import do `Scissors`
+  removido do arquivo por não ser mais usado.
+
 ### Fase B — RLS em pedidos/clientes/terceirizadas/tabela_precos
 
 Sessão de 17–18/08/2026, no PC principal. Código preparado em 17/08, commit/push/deploy e

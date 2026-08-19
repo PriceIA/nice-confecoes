@@ -4,10 +4,11 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
   LayoutDashboard, ClipboardList, PlusCircle,
-  Factory, Users, Users2, BarChart3, Scissors, Menu, X, Table2, Settings, LogOut,
+  Factory, Users, Users2, BarChart3, Menu, X, Table2, Settings, LogOut,
   KanbanSquare, PackageCheck
 } from 'lucide-react'
 import clsx from 'clsx'
+import { LogoNiceN } from '@/components/LogoNiceN'
 import { useMembro } from '@/components/AuthProvider'
 import BotaoTema from '@/components/BotaoTema'
 import { PERFIL_LABEL, podeAcessarRota } from '@/lib/permissoes'
@@ -46,7 +47,7 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
       <div className="px-5 py-6 border-b border-nice-700">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-nice-400 flex items-center justify-center shadow-md">
-            <Scissors className="w-5 h-5 text-white" />
+            <LogoNiceN className="w-8 h-7 text-white" />
           </div>
           <div>
             <div className="text-white font-bold text-base leading-tight">Nice</div>
@@ -113,7 +114,7 @@ export default function Sidebar() {
       <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-nice-800 flex items-center justify-between px-4 z-40 shadow-xl print:hidden">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-nice-400 flex items-center justify-center shadow-md">
-            <Scissors className="w-4 h-4 text-white" />
+            <LogoNiceN className="w-7 h-6 text-white" />
           </div>
           <div className="text-white font-bold text-sm">Nice Confecções</div>
         </div>
