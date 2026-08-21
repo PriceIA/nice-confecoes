@@ -20,22 +20,62 @@ const FILTROS: { value: StatusPedido | 'todos'; label: string }[] = [
   { value: 'cancelado', label: 'Cancelado' },
 ]
 
+const ORDEM_CHAVE = 'nice-ordem-pedidos'
+
+type Ordem = 'entrada_desc' | 'entrada_asc' | 'entrega_asc' | 'entrega_desc'
+
+const ORDENS: { value: Ordem; label: string }[] = [
+  { value: 'entrada_desc', label: 'Mais recentes primeiro' },
+  { value: 'entrada_asc', label: 'Mais antigos primeiro' },
+  { value: 'entrega_asc', label: 'Entrega mais próxima' },
+  { value: 'entrega_desc', label: 'Entrega mais distante' },
+]
+
+function ordenarPedidos(pedidos: Pedido[], ordem: Ordem): Pedido[] {
+  const campo = ordem.startsWith('entrada') ? 'dataEntrada' : 'dataEntrega'
+  const asc = ordem.endsWith('_asc')
+
+  return [...pedidos].sort((a, b) => {
+    const va = a[campo]
+    const vb = b[campo]
+    // Sem data vai sempre pro fim, nas duas direções — não é "mais urgente"
+    // nem "mais distante", é ausência de dado.
+    if (!va && !vb) return b.numero.localeCompare(a.numero)
+    if (!va) return 1
+    if (!vb) return -1
+    const diff = new Date(va).getTime() - new Date(vb).getTime()
+    if (diff !== 0) return asc ? diff : -diff
+    return b.numero.localeCompare(a.numero)
+  })
+}
+
 export default function PedidosPage() {
   const { permissoes } = useMembro()
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [filtro, setFiltro] = useState<StatusPedido | 'todos'>('todos')
   const [busca, setBusca] = useState('')
+  const [ordem, setOrdem] = useState<Ordem>('entrada_desc')
 
   const carregar = async () => setPedidos(await getPedidos())
 
   useEffect(() => { carregar() }, [])
 
-  const filtrados = pedidos.filter(p => {
+  useEffect(() => {
+    const salva = localStorage.getItem(ORDEM_CHAVE)
+    if (salva && ORDENS.some(o => o.value === salva)) setOrdem(salva as Ordem)
+  }, [])
+
+  function mudarOrdem(valor: Ordem) {
+    setOrdem(valor)
+    localStorage.setItem(ORDEM_CHAVE, valor)
+  }
+
+  const filtrados = ordenarPedidos(pedidos.filter(p => {
     const matchStatus = filtro === 'todos' || p.status === filtro
     const q = busca.toLowerCase()
     const matchBusca = !q || p.cliente.nome.toLowerCase().includes(q) || p.numero.includes(q) || p.cliente.empresa?.toLowerCase().includes(q)
     return matchStatus && matchBusca
-  })
+  }), ordem)
 
   async function handleDeletar(id: string) {
     if (confirm('Deseja excluir este pedido?')) {
@@ -82,6 +122,10 @@ export default function PedidosPage() {
               </button>
             ))}
           </div>
+          <select className="input sm:w-56 print:hidden" value={ordem}
+            onChange={e => mudarOrdem(e.target.value as Ordem)}>
+            {ORDENS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
         </div>
       </div>
 

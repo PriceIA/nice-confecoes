@@ -8,6 +8,42 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase C0 — setor "não se aplica" e ordenação em /pedidos
+
+Sessão de 21/08/2026, a partir de `docs/fase-c0.md` (testes do Pedro em produção). Sem SQL
+— confirmado no passo 2 (seção 7 do documento): `atualizar_progresso_pedido`
+(`supabase/migrations/009_rls_fase_b.sql`) grava `progresso` sem validar os valores de
+status, então o quarto estado entra pelo mesmo caminho JSONB sem schema de sempre.
+
+- **`StatusSetor` ganha `nao_se_aplica`** (`src/types/index.ts`). Cobre pedido que nunca
+  passa por algum setor — ex.: camiseta lisa não passa por `estamparia_silk`/`prensa_dtf`.
+- **Modal "Pronto para envio?"** (`src/components/producao/ModalProntoParaEnvio.tsx`,
+  componente novo e compartilhado): abre ao concluir Acabamento/Embalagem quando sobra
+  setor pendente/em andamento, em `/producao` e no card "Progresso por Setor" de
+  `/pedidos/[id]`. A gravação de `acabamento: concluido` acontece **antes** do modal abrir
+  e nunca é desfeita por ele — só "Pular"/fechar/falha na segunda gravação. Pré-marca
+  `estamparia_silk`/`prensa_dtf`/`prensa_sublimacao`; deixa `compra`/`corte`/`costura`
+  desmarcados com aviso. Botão principal muda de texto ("Liberar para envio" vs "Salvar")
+  conforme sobra setor pendente. "Segunda porta": link "Este pedido está pronto para
+  envio?" no card de progresso de `/pedidos/[id]`, pra quem pulou o modal.
+- **`pedidoConcluido`** (`src/lib/kanban-ui.ts`) passa a aceitar `concluido` OU
+  `nao_se_aplica` nos 8 setores — é o ponto único que libera `/entregas` e o botão "Criar
+  cartão no Kanban" em `/pedidos/[id]`.
+- **Percentual de progresso em `/producao`**: setor `nao_se_aplica` sai do numerador e do
+  denominador. Denominador zero (hipotético) cai em 100%, não `NaN%`.
+- **`normalizarProgresso`** (`src/lib/store.ts`) fica permissiva com status desconhecido —
+  vira `pendente`, nunca `undefined`.
+- **Ficha A4 de impressão** (`/pedidos/[id]`): setor não aplicável imprime "—"; a linha
+  combinada de Personalização (silk/DTF/sublimação) só vira "—" quando os três não se
+  aplicam — bastando um concluído, a linha mostra concluído.
+- **Renomeado "Acabamento" → "Acabamento/Embalagem"** — só rótulo (`SETOR_LABELS` em
+  `src/lib/helpers.ts`, `PERFIL_LABEL` em `src/lib/permissoes.ts`). A chave `acabamento`
+  não muda em nenhum lugar (JSONB do banco, CHECK de `equipe`, tipos).
+- **Seletor de ordenação em `/pedidos`**: Mais recentes/Mais antigos (por `dataEntrada`),
+  Entrega mais próxima/distante (por `dataEntrega`). Ordena no cliente, depois de busca e
+  filtro; pedido sem `dataEntrega` sempre vai pro fim. Escolha guardada em `localStorage`
+  (`nice-ordem-pedidos`), padrão "Mais recentes primeiro".
+
 ### Ícone placeholder trocado pela marca N (login e sidebar)
 
 - Trocado o ícone placeholder da tela de login (`Scissors` do lucide-react, genérico) pela
