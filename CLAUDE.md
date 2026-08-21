@@ -107,7 +107,7 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | `/clientes` | `src/app/clientes/page.tsx` | Lista, busca, edição inline, histórico de pedidos do cliente |
 | `/tabela-precos` | `src/app/tabela-precos/page.tsx` | Grade de preços da categoria Escolar por grupo × faixa de tamanho. Empresarial/Esportivo/Acessórios ainda sem preço cadastrado |
 | `/producao` | `src/app/producao/page.tsx` | Acompanhamento dos 8 setores; clique cicla pendente → em_andamento → concluido |
-| `/entregas` | `src/app/entregas/page.tsx` | Fila de pedidos com os 8 setores concluídos, ainda não entregues; botão "Marcar como entregue". Só gestor/recepcionista |
+| `/entregas` | `src/app/entregas/page.tsx` | Fila de pedidos com os 8 setores concluídos ou não aplicáveis, ainda não entregues; botão "Marcar como entregue". Só gestor/recepcionista |
 | `/quadros` | `src/app/quadros/page.tsx` | Kanban livre: grid de quadros, com criar/renomear/arquivar/excluir |
 | `/quadros/[id]` | `src/app/quadros/[id]/page.tsx` + `components/kanban/QuadroBoard.tsx` | O quadro: listas lado a lado, cartões, drag-and-drop |
 | `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros |
@@ -239,8 +239,17 @@ valor_combinado numeric · valor_pago numeric · status · observacoes
 id uuid pk · grupo text · produto text · faixa_tamanho text · valor numeric · updated_at
 ```
 
-Sem constraint de unicidade em `(grupo, produto, faixa_tamanho)` — por isso a tela de preços
-apaga tudo e reinsere em vez de fazer upsert.
+**Tem** constraint única em `(grupo, produto, faixa_tamanho)`
+(`tabela_precos_grupo_produto_faixa_key`). Ela foi aplicada manualmente pelo dono e está
+versionada em `supabase/migrations/005_tabela_precos_unique.sql` — a migration
+`002_tabela_precos.sql` tinha criado a tabela sem nenhuma unique.
+
+**Ela é obrigatória para a tela salvar.** `/tabela-precos` grava com
+`upsert(linhas, { onConflict: 'grupo,produto,faixa_tamanho' })`
+(`src/app/tabela-precos/page.tsx`) — não apaga tudo e reinsere. Sem a constraint, o PostgREST
+rejeita o `ON CONFLICT` com o erro `42P10` e **nenhum preço é gravado**; a tela trata esse
+caso como `conflito` em `classificarErro` e diz na cara que o banco está sem a constraint.
+Não remova a constraint sem reescrever a gravação da tela junto.
 
 ### `quadros`, `listas`, `cards` — Kanban livre
 
@@ -309,8 +318,8 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
   insert/update. Ao adicionar campo, mexa nos dois lados.
 - Os arquivos de migration têm **prefixos duplicados**: existem dois `002_` e dois `004_`.
   `004_pedido_imagem.sql` e `004_vetorizacao.sql` criam a mesma coluna `vetorizacao`
-  (ambos com `if not exists`, então é idempotente, mas confuso). Numere a próxima a partir
-  de `008_`.
+  (ambos com `if not exists`, então é idempotente, mas confuso). A Fase B já gastou a
+  `009_`. Numere a próxima a partir de `010_`.
 - Colunas órfãs, criadas por migration e **não usadas em nenhum lugar do código**:
   `pedidos.imagem` e `clientes.responsavel_empresa`. Não assuma que estão populadas.
 
@@ -348,12 +357,23 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
    `normalizarProgresso` (`store.ts`) que converte ambos para o formato atual **na leitura**,
    então o resto do código nunca vê o formato antigo. Setor sem autor registrado
    simplesmente não mostra o rodapé de "quem/quando" na tela.
+
+   **`StatusSetor` tem um quarto valor: `nao_se_aplica`** (Fase C0, 21/08/2026). Cobre o
+   pedido que nunca passa por algum setor — uma camiseta lisa não passa por
+   `estamparia_silk` nem `prensa_dtf`, por exemplo. Só se chega lá pelo modal "Pronto para
+   envio?" (`src/components/producao/ModalProntoParaEnvio.tsx`), disparado ao concluir
+   `acabamento` quando sobra setor pendente/em andamento — nunca pelo ciclo normal de
+   clique, que continua `pendente → em_andamento → concluido → pendente`. Clicar num setor
+   `nao_se_aplica` desfaz e volta pra `pendente`. Autoria é obrigatória, igual aos outros
+   setores. Entra e sai do banco sem migration — é o mesmo JSONB sem schema que já
+   permitiu a autoria por setor.
 8. **`/producao` e `/quadros` são módulos diferentes, e nenhum substitui o outro.**
    `/producao` é a fonte da verdade do progresso real dos pedidos pelos 8 setores; o Kanban
    é um quadro de tarefas livres. Exportar um pedido para cartão **não** muda nada no pedido.
 9. **Cartão a partir de pedido é sugestão, nunca automação.** A ação só aparece com os 8
-   setores concluídos, e nada é criado sem alguém escolher quadro, lista e confirmar — o
-   texto vem pré-preenchido só para poupar digitação.
+   setores **concluídos ou não aplicáveis** (`pedidoConcluido`, `kanban-ui.ts`), e nada é
+   criado sem alguém escolher quadro, lista e confirmar — o texto vem pré-preenchido só
+   para poupar digitação.
 10. **No Kanban, a tela nunca mostra o que o banco não tem.** Arrastar é otimista, mas se a
     gravação falhar a posição **volta** e um banner diz explicitamente que não salvou
     (`QuadroBoard.tsx`, função `gravar`). Este projeto já teve exatamente esse bug na tela

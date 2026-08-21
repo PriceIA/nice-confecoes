@@ -54,7 +54,7 @@ export const SETOR_LABELS: Record<string, string> = {
   estamparia_silk:    'Estamparia Silk',
   prensa_dtf:         'Prensa DTF',
   prensa_sublimacao:  'Prensa Sublimação',
-  acabamento:         'Acabamento',
+  acabamento:         'Acabamento/Embalagem',
 }
 
 export function totalPecas(pedido: { pecas: { tamanhos: { quantidade: number }[] }[] }) {

@@ -2,12 +2,13 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { ArrowLeft, Printer, ChevronRight, CheckCircle2, Circle, Loader2, Pencil, Save, X, PlusCircle, Trash2 } from 'lucide-react'
+import { ArrowLeft, Printer, ChevronRight, CheckCircle2, Circle, Loader2, MinusCircle, Pencil, Save, X, PlusCircle, Trash2 } from 'lucide-react'
 import { getPedidoById, atualizarPedido } from '@/lib/store'
 import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade, autorSetorTexto } from '@/lib/helpers'
 import { Pedido, Peca, StatusPedido, StatusSetor, ProgressoSetor, EntradaProgresso, Personalizacao, TamanhoQuantidade } from '@/types'
 import FotoUpload from '@/components/FotoUpload'
 import CriarCartaoDoPedido from '@/components/kanban/CriarCartaoDoPedido'
+import ModalProntoParaEnvio from '@/components/producao/ModalProntoParaEnvio'
 import { pedidoConcluido } from '@/lib/kanban-ui'
 import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
@@ -15,19 +16,29 @@ import Link from 'next/link'
 
 const STATUS_LIST: StatusPedido[] = ['orcamento', 'aprovado', 'aguardando_pagamento', 'em_producao', 'finalizado', 'entregue', 'cancelado']
 
+// '—' pra não aplicável: a ficha impressa não pode dizer "pendente" de um
+// setor que o pedido nunca vai passar (docs/fase-c0.md, seção 5, item 5).
 const STATUS_SETOR_LABEL: Record<StatusSetor, string> = {
   pendente: 'Pendente',
   em_andamento: 'Em Andamento',
   concluido: 'Concluído',
+  nao_se_aplica: '—',
 }
 
 const TAMANHOS_ADULTO = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'UNICO'] as const
 const TAMANHOS_INFANTIL = ['01', '02', '04', '06', '08', '10', '12', '14'] as const
 
+/**
+ * Combina os 3 setores de personalização (silk/DTF/sublimação) numa linha só
+ * da ficha impressa. "Não se aplica" sai da conta: só quando os TRÊS não se
+ * aplicam a linha some como "—"; se pelo menos um foi concluído, a
+ * personalização conta como feita — a peça pode ter passado só por um deles.
+ */
 function combinarStatus(estados: StatusSetor[]): StatusSetor {
-  if (estados.length === 0) return 'pendente'
-  if (estados.every(s => s === 'concluido')) return 'concluido'
-  if (estados.some(s => s === 'em_andamento' || s === 'concluido')) return 'em_andamento'
+  const relevantes = estados.filter(s => s !== 'nao_se_aplica')
+  if (relevantes.length === 0) return 'nao_se_aplica'
+  if (relevantes.every(s => s === 'concluido')) return 'concluido'
+  if (relevantes.some(s => s === 'em_andamento' || s === 'concluido')) return 'em_andamento'
   return 'pendente'
 }
 
@@ -103,6 +114,7 @@ export default function DetalhePedidoPage() {
     responsavel: '', endereco: '', documento: '',
   })
   const [salvando, setSalvando] = useState(false)
+  const [modalAberto, setModalAberto] = useState(false)
 
   const carregar = async () => {
     const p = await getPedidoById(id as string)
@@ -207,7 +219,15 @@ export default function DetalhePedidoPage() {
     }
     const progresso = { ...pedido!.progresso, [setor]: entrada }
     await atualizarPedido(pedido!.id, { progresso })
-    carregar()
+    await carregar()
+
+    // Modal "Pronto para envio?" — mesma regra de /producao: a gravação
+    // acima já aconteceu, o modal só pergunta o que fazer com o resto.
+    if (setor === 'acabamento' && proximo === 'concluido') {
+      const pendentes = (Object.keys(progresso) as (keyof ProgressoSetor)[])
+        .filter(s => s !== 'acabamento' && (progresso[s].status === 'pendente' || progresso[s].status === 'em_andamento'))
+      if (pendentes.length > 0) setModalAberto(true)
+    }
   }
 
   async function marcarParcelaPaga(parcelaId: string, pago: boolean) {
@@ -223,8 +243,15 @@ export default function DetalhePedidoPage() {
   const setorIcone = (s: StatusSetor) => {
     if (s === 'concluido') return <CheckCircle2 className="w-4 h-4 text-nice-500" />
     if (s === 'em_andamento') return <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
+    if (s === 'nao_se_aplica') return <MinusCircle className="w-4 h-4 text-fraco" />
     return <Circle className="w-4 h-4 text-fraco" />
   }
+
+  // "Segunda porta": quem pulou o modal (ou o Acabamento já estava concluído
+  // antes desta fase) ainda precisa de um jeito de abri-lo depois.
+  const podeLiberarEnvio = pedido.progresso.acabamento.status === 'concluido' &&
+    (Object.keys(pedido.progresso) as (keyof ProgressoSetor)[])
+      .some(s => s !== 'acabamento' && (pedido.progresso[s].status === 'pendente' || pedido.progresso[s].status === 'em_andamento'))
 
   const totalParcelas = pedido.parcelas.reduce((a, p) => a + (p.valor || 0), 0)
   const totalPago = pedido.parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
@@ -597,6 +624,7 @@ export default function DetalhePedidoPage() {
                       'w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm disabled:cursor-default',
                       status === 'concluido' ? 'bg-marca-suave border-marca-borda' :
                       status === 'em_andamento' ? 'bg-orange-50 border-orange-200' :
+                      status === 'nao_se_aplica' ? 'bg-superficie-3 border-borda' :
                       'bg-superficie-2 border-borda hover:border-borda'
                     )}>
                     <div className="flex items-center gap-3">
@@ -610,13 +638,19 @@ export default function DetalhePedidoPage() {
                     </div>
                     <span className={clsx('text-xs font-semibold capitalize',
                       status === 'concluido' ? 'text-marca-texto' : status === 'em_andamento' ? 'text-orange-500' : 'text-fraco')}>
-                      {status === 'pendente' ? 'pendente' : status === 'em_andamento' ? 'em andamento' : 'concluído'}
+                      {status === 'pendente' ? 'pendente' : status === 'em_andamento' ? 'em andamento' : status === 'nao_se_aplica' ? 'não se aplica' : 'concluído'}
                     </span>
                   </button>
                 )
               })}
             </div>
             <p className="text-xs text-fraco">Clique em um setor para avançar o status</p>
+            {podeLiberarEnvio && permissoes.editarPedido && (
+              <button type="button" onClick={() => setModalAberto(true)}
+                className="text-marca-texto text-xs font-medium hover:underline">
+                Este pedido está pronto para envio?
+              </button>
+            )}
           </div>
         </div>
 
@@ -910,6 +944,15 @@ export default function DetalhePedidoPage() {
       </div>
       )}
     </div>
+
+    {modalAberto && (
+      <ModalProntoParaEnvio
+        pedido={pedido}
+        onFechar={() => setModalAberto(false)}
+        onSalvo={carregar}
+        nomeMembro={membro?.nome}
+      />
+    )}
     </>
   )
 }

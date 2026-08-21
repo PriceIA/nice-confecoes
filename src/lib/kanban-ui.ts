@@ -132,10 +132,14 @@ export function badgePrazo(prazo: string | null, concluido = false): BadgePrazo 
 // Pedido → cartão
 // ---------------------------------------------------------------------------
 
-/** Um pedido está pronto para virar cartão quando os 8 setores estão concluídos. */
+/**
+ * Um pedido está pronto para virar cartão quando os 8 setores estão
+ * concluídos OU marcados como não aplicáveis a ele (Fase C0) — é o mesmo
+ * critério que libera /entregas, ver CLAUDE.md regra 9.
+ */
 export function pedidoConcluido(pedido: Pedido): boolean {
   const setores = Object.values(pedido.progresso ?? {})
-  return setores.length > 0 && setores.every(s => s.status === 'concluido')
+  return setores.length > 0 && setores.every(s => s.status === 'concluido' || s.status === 'nao_se_aplica')
 }
 
 export function tituloSugerido(pedido: Pedido): string {

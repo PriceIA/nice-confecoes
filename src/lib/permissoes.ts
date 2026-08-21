@@ -41,7 +41,7 @@ export const PERFIL_LABEL: Record<Perfil, string> = {
   costureira: 'Costureira',
   estamparia_serigrafia: 'Estamparia Serigrafia',
   estamparia_sublimacao: 'Estamparia Sublimação',
-  acabamento: 'Acabamento',
+  acabamento: 'Acabamento/Embalagem',
 }
 
 /** Rótulo curto, para caber em etiqueta de cartão do Kanban. */

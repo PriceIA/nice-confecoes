@@ -24,13 +24,20 @@ const SETORES_PROGRESSO = [
  * "migrar" isso sozinho; é aqui, na leitura, que os dois formatos convergem.
  * Pedido com o formato novo passa por isso e sai igual.
  */
+const STATUS_SETOR_VALIDOS: StatusSetor[] = ['pendente', 'em_andamento', 'concluido', 'nao_se_aplica']
+
+/** Status desconhecido (JSONB sem schema, pedido antigo, valor corrompido) vira `pendente` — nunca `undefined`. */
+function normalizarStatusSetor(v: unknown): StatusSetor {
+  return STATUS_SETOR_VALIDOS.includes(v as StatusSetor) ? (v as StatusSetor) : 'pendente'
+}
+
 function normalizarProgresso(raw: any): ProgressoSetor {
   const out = {} as ProgressoSetor
   for (const setor of SETORES_PROGRESSO) {
     const v = raw?.[setor]
     out[setor] = typeof v === 'string'
-      ? { status: v as StatusSetor }
-      : { status: (v?.status ?? 'pendente') as StatusSetor, atualizadoPor: v?.atualizadoPor, atualizadoEm: v?.atualizadoEm }
+      ? { status: normalizarStatusSetor(v) }
+      : { status: normalizarStatusSetor(v?.status), atualizadoPor: v?.atualizadoPor, atualizadoEm: v?.atualizadoEm }
   }
   return out
 }

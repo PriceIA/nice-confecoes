@@ -4,7 +4,7 @@ export type StatusPedido = 'orcamento' | 'aprovado' | 'aguardando_pagamento' | '
 export type TipoPedido = 'normal' | 'urgente' | 'grande_volume'
 export type Complexidade = 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
 export type Personalizacao = 'bordado' | 'silk' | 'dtf' | 'sublimacao'
-export type StatusSetor = 'pendente' | 'em_andamento' | 'concluido'
+export type StatusSetor = 'pendente' | 'em_andamento' | 'concluido' | 'nao_se_aplica'
 
 export type Tamanho = 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XGG' | 'UNICO' | '01' | '02' | '04' | '06' | '08' | '10' | '12' | '14' | 'SOB_MEDIDA'
 

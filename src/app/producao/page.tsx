@@ -5,7 +5,8 @@ import { getPedidos, atualizarPedido } from '@/lib/store'
 import { SETOR_LABELS, STATUS_CONFIG, autorSetorTexto } from '@/lib/helpers'
 import { useMembro } from '@/components/AuthProvider'
 import { EntradaProgresso, Pedido, ProgressoSetor, StatusSetor } from '@/types'
-import { CheckCircle2, Circle, Loader2, ArrowRight } from 'lucide-react'
+import { CheckCircle2, Circle, Loader2, MinusCircle, ArrowRight } from 'lucide-react'
+import ModalProntoParaEnvio from '@/components/producao/ModalProntoParaEnvio'
 import clsx from 'clsx'
 
 const SETORES = Object.keys(SETOR_LABELS) as (keyof ProgressoSetor)[]
@@ -13,6 +14,7 @@ const SETORES = Object.keys(SETOR_LABELS) as (keyof ProgressoSetor)[]
 export default function ProducaoPage() {
   const { membro } = useMembro()
   const [pedidos, setPedidos] = useState<Pedido[]>([])
+  const [modalPedidoId, setModalPedidoId] = useState<string | null>(null)
 
   const carregar = async () => {
     const data = (await getPedidos()).filter(p => ['aprovado', 'em_producao'].includes(p.status))
@@ -32,15 +34,28 @@ export default function ProducaoPage() {
       atualizadoPor: membro?.nome,
       atualizadoEm: new Date().toISOString(),
     }
-    await atualizarPedido(pedidoId, { progresso: { ...p.progresso, [setor]: entrada } })
-    carregar()
+    const progresso = { ...p.progresso, [setor]: entrada }
+    await atualizarPedido(pedidoId, { progresso })
+    await carregar()
+
+    // Modal "Pronto para envio?" — só ao concluir Acabamento/Embalagem, e só
+    // se sobrar setor pendente/em_andamento. A gravação acima já aconteceu;
+    // isso nunca segura o progresso (docs/fase-c0.md, seção 4).
+    if (setor === 'acabamento' && proximo === 'concluido') {
+      const pendentes = (Object.keys(progresso) as (keyof ProgressoSetor)[])
+        .filter(s => s !== 'acabamento' && (progresso[s].status === 'pendente' || progresso[s].status === 'em_andamento'))
+      if (pendentes.length > 0) setModalPedidoId(pedidoId)
+    }
   }
 
   const statusIcon = (s: StatusSetor) => {
     if (s === 'concluido') return <CheckCircle2 className="w-4 h-4 text-nice-500" />
     if (s === 'em_andamento') return <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
+    if (s === 'nao_se_aplica') return <MinusCircle className="w-4 h-4 text-fraco" />
     return <Circle className="w-4 h-4 text-fraco" />
   }
+
+  const modalPedido = pedidos.find(p => p.id === modalPedidoId)
 
   return (
     <div className="space-y-6">
@@ -57,8 +72,11 @@ export default function ProducaoPage() {
         <div className="space-y-4">
           {pedidos.map(pedido => {
             const sc = STATUS_CONFIG[pedido.status]
-            const concluidos = SETORES.filter(s => pedido.progresso[s].status === 'concluido').length
-            const progPct = Math.round((concluidos / SETORES.length) * 100)
+            // Setor "não se aplica" sai do numerador E do denominador — um
+            // pedido sem os 8 setores aplicáveis não pode empacar em 75%.
+            const aplicaveis = SETORES.filter(s => pedido.progresso[s].status !== 'nao_se_aplica')
+            const concluidos = aplicaveis.filter(s => pedido.progresso[s].status === 'concluido').length
+            const progPct = aplicaveis.length === 0 ? 100 : Math.round((concluidos / aplicaveis.length) * 100)
             return (
               <div key={pedido.id} className="card space-y-4">
                 <div className="flex items-center justify-between">
@@ -80,7 +98,7 @@ export default function ProducaoPage() {
                 {/* Barra de progresso */}
                 <div>
                   <div className="flex justify-between text-xs text-fraco mb-1.5">
-                    <span>{concluidos} de {SETORES.length} setores concluídos</span>
+                    <span>{concluidos} de {aplicaveis.length} setores concluídos</span>
                     <span className="font-medium text-marca-texto">{progPct}%</span>
                   </div>
                   <div className="w-full bg-superficie-3 rounded-full h-2">
@@ -100,12 +118,14 @@ export default function ProducaoPage() {
                           'flex flex-col gap-1 px-3 py-2 rounded-xl border text-xs font-medium transition-all text-left',
                           status === 'concluido' ? 'bg-marca-suave border-marca-borda text-marca-texto' :
                           status === 'em_andamento' ? 'bg-orange-50 border-orange-200 text-orange-600' :
+                          status === 'nao_se_aplica' ? 'bg-superficie-3 border-borda text-fraco' :
                           'bg-superficie-2 border-borda text-fraco hover:border-borda'
                         )}>
                         <span className="flex items-center gap-2">
                           {statusIcon(status)}
                           <span className="truncate">{SETOR_LABELS[setor]}</span>
                         </span>
+                        {status === 'nao_se_aplica' && <span className="text-[10px] font-normal opacity-70">não se aplica</span>}
                         {autor && <span className="text-[10px] font-normal opacity-70 truncate">{autor}</span>}
                       </button>
                     )
@@ -115,6 +135,15 @@ export default function ProducaoPage() {
             )
           })}
         </div>
+      )}
+
+      {modalPedido && (
+        <ModalProntoParaEnvio
+          pedido={modalPedido}
+          onFechar={() => setModalPedidoId(null)}
+          onSalvo={carregar}
+          nomeMembro={membro?.nome}
+        />
       )}
     </div>
   )
