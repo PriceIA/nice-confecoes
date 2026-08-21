@@ -11,6 +11,12 @@ import clsx from 'clsx'
 
 const SETORES = Object.keys(SETOR_LABELS) as (keyof ProgressoSetor)[]
 
+/** Setores (fora acabamento) ainda pendentes/em andamento — mesmo cálculo usado pra decidir se o modal "Pronto para envio?" tem o que perguntar. */
+function setoresPendentesEnvio(progresso: ProgressoSetor): (keyof ProgressoSetor)[] {
+  return (Object.keys(progresso) as (keyof ProgressoSetor)[])
+    .filter(s => s !== 'acabamento' && (progresso[s].status === 'pendente' || progresso[s].status === 'em_andamento'))
+}
+
 export default function ProducaoPage() {
   const { membro } = useMembro()
   const [pedidos, setPedidos] = useState<Pedido[]>([])
@@ -42,9 +48,7 @@ export default function ProducaoPage() {
     // se sobrar setor pendente/em_andamento. A gravação acima já aconteceu;
     // isso nunca segura o progresso (docs/fase-c0.md, seção 4).
     if (setor === 'acabamento' && proximo === 'concluido') {
-      const pendentes = (Object.keys(progresso) as (keyof ProgressoSetor)[])
-        .filter(s => s !== 'acabamento' && (progresso[s].status === 'pendente' || progresso[s].status === 'em_andamento'))
-      if (pendentes.length > 0) setModalPedidoId(pedidoId)
+      if (setoresPendentesEnvio(progresso).length > 0) setModalPedidoId(pedidoId)
     }
   }
 
@@ -77,6 +81,11 @@ export default function ProducaoPage() {
             const aplicaveis = SETORES.filter(s => pedido.progresso[s].status !== 'nao_se_aplica')
             const concluidos = aplicaveis.filter(s => pedido.progresso[s].status === 'concluido').length
             const progPct = aplicaveis.length === 0 ? 100 : Math.round((concluidos / aplicaveis.length) * 100)
+            // "Segunda porta": quem pulou o modal ao concluir o acabamento
+            // precisa de um jeito de reabri-lo — senão sobra ciclar o setor
+            // três vezes só pra ver a pergunta de novo.
+            const podeLiberarEnvio = pedido.progresso.acabamento.status === 'concluido' &&
+              setoresPendentesEnvio(pedido.progresso).length > 0
             return (
               <div key={pedido.id} className="card space-y-4">
                 <div className="flex items-center justify-between">
@@ -131,6 +140,13 @@ export default function ProducaoPage() {
                     )
                   })}
                 </div>
+
+                {podeLiberarEnvio && (
+                  <button type="button" onClick={() => setModalPedidoId(pedido.id)}
+                    className="text-marca-texto text-xs font-medium hover:underline">
+                    Pronto para envio?
+                  </button>
+                )}
               </div>
             )
           })}
