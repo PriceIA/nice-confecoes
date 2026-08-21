@@ -14,6 +14,9 @@ Sessão de 21/08/2026, a partir de `docs/fase-c0.md` (testes do Pedro em produç
 — confirmado no passo 2 (seção 7 do documento): `atualizar_progresso_pedido`
 (`supabase/migrations/009_rls_fase_b.sql`) grava `progresso` sem validar os valores de
 status, então o quarto estado entra pelo mesmo caminho JSONB sem schema de sempre.
+Commitado, conferido pelo Felipe e enviado — deploy confirmado **Ready** na Vercel em
+21/08/2026 (`nice-confecoes.vercel.app`). Teste em produção com pedido real (seção 8 da
+spec) fica para o Pedro, no próximo uso.
 
 - **`StatusSetor` ganha `nao_se_aplica`** (`src/types/index.ts`). Cobre pedido que nunca
   passa por algum setor — ex.: camiseta lisa não passa por `estamparia_silk`/`prensa_dtf`.
@@ -24,8 +27,15 @@ status, então o quarto estado entra pelo mesmo caminho JSONB sem schema de semp
   e nunca é desfeita por ele — só "Pular"/fechar/falha na segunda gravação. Pré-marca
   `estamparia_silk`/`prensa_dtf`/`prensa_sublimacao`; deixa `compra`/`corte`/`costura`
   desmarcados com aviso. Botão principal muda de texto ("Liberar para envio" vs "Salvar")
-  conforme sobra setor pendente. "Segunda porta": link "Este pedido está pronto para
-  envio?" no card de progresso de `/pedidos/[id]`, pra quem pulou o modal.
+  conforme sobra setor pendente.
+- **"Segunda porta" do modal, nas duas telas onde se clica em setor.** Link/botão "Pronto
+  para envio?" pra reabrir o modal depois de "Pular", sem precisar ciclar o acabamento três
+  vezes: em `/pedidos/[id]` (card "Progresso por Setor", atrás de `permissoes.editarPedido`)
+  e em `/producao` (card do pedido, sem gate de permissão próprio — quem já clica nos
+  setores daquela tela clica nesse botão também). A primeira versão só cobria
+  `/pedidos/[id]`, que é justamente a tela que o chão de fábrica do acabamento não usa —
+  corrigido antes do push a partir do apontamento do Felipe. `setoresPendentesEnvio()`
+  extraída em `/producao/page.tsx` pra não duplicar o cálculo entre `ciclarSetor` e o botão.
 - **`pedidoConcluido`** (`src/lib/kanban-ui.ts`) passa a aceitar `concluido` OU
   `nao_se_aplica` nos 8 setores — é o ponto único que libera `/entregas` e o botão "Criar
   cartão no Kanban" em `/pedidos/[id]`.
@@ -43,6 +53,19 @@ status, então o quarto estado entra pelo mesmo caminho JSONB sem schema de semp
   Entrega mais próxima/distante (por `dataEntrega`). Ordena no cliente, depois de busca e
   filtro; pedido sem `dataEntrega` sempre vai pro fim. Escolha guardada em `localStorage`
   (`nice-ordem-pedidos`), padrão "Mais recentes primeiro".
+
+### Fase C1 (docs) — spec revisada e migrations 010 regeradas, sem execução
+
+Limpeza fora do escopo da C0, feita na mesma sessão de 21/08/2026 a pedido do Felipe:
+`docs/fase-c.md` e as três migrations de observações de produção estavam **untracked** na
+pasta, numa versão anterior à revisão de 21/08 que acrescentou a urgência direcionada
+(coluna `tipo`, `destinatario_perfil`, tabela `observacoes_ciencia`, funções
+`marcar_ciente`/`marcar_resolvida`) — a versão antiga não tinha nada disso e ainda tinha
+uma policy `observacoes_update`, que contradiz a regra de registro imutável do documento.
+Regeradas as três (`010_observacoes_producao_auditoria.sql`, `010_observacoes_producao.sql`,
+`010_observacoes_producao_conferencia.sql`) copiando o SQL de `docs/fase-c.md` literalmente
+e versionadas, pra não se perder entre os dois PCs. **Nada foi executado no Supabase** —
+Fase C1 ainda não começou.
 
 ### Ícone placeholder trocado pela marca N (login e sidebar)
 
