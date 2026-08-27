@@ -18,6 +18,16 @@
 // três precisam concordar, ou a divergência volta.
 export const FAIXAS = ['0-02', '04-06', '08-10', '12-14', 'P/M/G', 'GG'] as const
 
+/**
+ * Nome dado à lista de preços que já existia no banco quando as múltiplas
+ * tabelas entraram (migration 012).
+ *
+ * É a tabela do PDF "TABELA 2025" — a que vale para WF, Olga (Vermelho) e
+ * WR / N.G. (Jardim Encantado). O Pedro pode renomeá-la pela tela; este valor
+ * é só o ponto de partida e o que a migration gravou.
+ */
+export const TABELA_PADRAO = 'Escolar 1'
+
 export type ProdutoPreco = { nome: string; precos: (number | null)[] }
 export type GrupoPreco = { grupo: string; produtos: ProdutoPreco[] }
 

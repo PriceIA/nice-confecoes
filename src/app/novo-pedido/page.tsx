@@ -1,15 +1,19 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { PlusCircle, Trash2, Search, UserPlus } from 'lucide-react'
+import { PlusCircle, Trash2, Search, UserPlus, Table2 } from 'lucide-react'
 import { criarPedido, calcularDataEntrega, getClientes } from '@/lib/store'
 import {
   CATALOGO, PERSONALIZACOES,
   calcularComplexidade, COMPLEXIDADE_CONFIG, formatarTelefone
 } from '@/lib/helpers'
 import { Cliente, Parcela, Peca, TamanhoQuantidade, Personalizacao, TipoPedido } from '@/types'
-import { supabase } from '@/lib/supabase'
+import {
+  Estrutura, MapaPrecos, carregarPrecos, precosDaTabela, registrarProduto,
+} from '@/lib/tabelasPreco'
+import { FAIXAS, TABELA_PADRAO } from '@/lib/precosEscolar'
 import FotoUpload from '@/components/FotoUpload'
+import Modal from '@/components/kanban/Modal'
 import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
 
@@ -29,6 +33,20 @@ function getFaixaTamanho(tamanho: string): string {
 
 const TAMANHOS_ADULTO = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'UNICO'] as const
 const TAMANHOS_INFANTIL = ['01', '02', '04', '06', '08', '10', '12', '14'] as const
+
+/**
+ * Valores-sentinela dos <select>. Não são tamanho nem peça de verdade: existem
+ * só para o "escolher" e o "digitar" caberem no mesmo controle.
+ */
+const OUTRO_TAMANHO = '__OUTRO_TAMANHO__'
+const OUTRA_PECA = '__OUTRA_PECA__'
+
+const TAMANHOS_CONHECIDOS: string[] = [...TAMANHOS_ADULTO, ...TAMANHOS_INFANTIL, 'SOB_MEDIDA']
+
+/** Tamanho digitado à mão (não está na régua e não é Sob Medida). */
+function ehTamanhoLivre(t: string): boolean {
+  return t !== '' && !TAMANHOS_CONHECIDOS.includes(t)
+}
 
 function novaPeca(): Peca {
   return {
@@ -79,21 +97,41 @@ export default function NovoPedidoPage() {
     () => Object.fromEntries(Object.entries(CATALOGO).map(([k, v]) => [k, [...v]]))
   )
   const [personalizacoesEfetivas, setPersonalizacoesEfetivas] = useState<PersonItem[]>([...PERSONALIZACOES])
-  const [tabelaPrecos, setTabelaPrecos] = useState<Record<string, Record<string, number>>>({})
+  // Preços de TODAS as tabelas ficam em memória; a tabela escolhida no pedido
+  // é só um recorte (`precosDaTabela`). Assim trocar de tabela no seletor não
+  // exige nova ida ao banco, e registrar uma peça atualiza tudo de uma vez.
+  const [estruturaPrecos, setEstruturaPrecos] = useState<Estrutura>({})
+  const [precosTodos, setPrecosTodos] = useState<MapaPrecos>({})
+  const [tabelaSelecionada, setTabelaSelecionada] = useState<string>(TABELA_PADRAO)
+
+  // Peça digitada à mão: o modal pergunta se é só para este pedido ou se entra
+  // numa tabela de preço.
+  const [pecaLivre, setPecaLivre] = useState<{ pecaId: string } | null>(null)
+  const [nomePecaLivre, setNomePecaLivre] = useState('')
+  const [registrarPeca, setRegistrarPeca] = useState(false)
+  const [destinoTabela, setDestinoTabela] = useState('')
+  const [destinoGrupo, setDestinoGrupo] = useState('')
+  const [destinoGrupoNovo, setDestinoGrupoNovo] = useState('')
+  const [precoInicial, setPrecoInicial] = useState('')
+  const [erroPecaLivre, setErroPecaLivre] = useState<string | null>(null)
+  const [salvandoPeca, setSalvandoPeca] = useState(false)
   const [parcelasEditadas, setParcelasEditadas] = useState(false)
   const [vetorizacao, setVetorizacao] = useState({ necessaria: false, valor: 50 })
 
   useEffect(() => {
     (async () => {
       setClientes(await getClientes())
-      const { data } = await supabase.from('tabela_precos').select('produto, faixa_tamanho, valor')
-      if (data) {
-        const tabela: Record<string, Record<string, number>> = {}
-        for (const row of data) {
-          if (!tabela[row.produto]) tabela[row.produto] = {}
-          tabela[row.produto][row.faixa_tamanho] = row.valor
-        }
-        setTabelaPrecos(tabela)
+      try {
+        const r = await carregarPrecos()
+        setEstruturaPrecos(r.estrutura)
+        setPrecosTodos(r.precos)
+        const nomes = Object.keys(r.estrutura)
+        setTabelaSelecionada(nomes.includes(TABELA_PADRAO) ? TABELA_PADRAO : (nomes[0] ?? TABELA_PADRAO))
+      } catch {
+        // Sem preço carregado o pedido continua possível: o valor unitário de
+        // cada peça é editável e o fallback por complexidade assume.
+        setEstruturaPrecos({})
+        setPrecosTodos({})
       }
     })()
     const savedCat = localStorage.getItem('nice_catalogo')
@@ -101,6 +139,15 @@ export default function NovoPedidoPage() {
     const savedPerson = localStorage.getItem('nice_personalizacoes')
     if (savedPerson) { try { setPersonalizacoesEfetivas(JSON.parse(savedPerson)) } catch {} }
   }, [])
+
+  /** Preços da tabela escolhida, no formato produto -> faixa -> valor. */
+  const tabelaPrecos = useMemo(
+    () => precosDaTabela(precosTodos, tabelaSelecionada),
+    [precosTodos, tabelaSelecionada],
+  )
+
+  /** Nomes das tabelas cadastradas, para o seletor do pedido. */
+  const tabelasDisponiveis = useMemo(() => Object.keys(estruturaPrecos).sort(), [estruturaPrecos])
 
   useEffect(() => {
     if (Object.keys(tabelaPrecos).length === 0) return
@@ -110,6 +157,26 @@ export default function NovoPedidoPage() {
       return { ...p, valorUnitario: tabelaPrecos[p.tipo]?.[faixa] ?? PRECO_FALLBACK[p.complexidade] ?? 30 }
     }))
   }, [tabelaPrecos])
+
+  /**
+   * Trocar a tabela do pedido reprecifica as peças — inclusive as que já
+   * tinham valor.
+   *
+   * O effect acima só preenche peça SEM valor, de propósito (não sobrescreve
+   * preço digitado à mão). Mas escolher outra tabela é dizer "estes valores
+   * saíram da lista errada": deixar os antigos ali seria pior do que
+   * recalcular. Quem digitou um valor especial redigita — e vê acontecer.
+   */
+  useEffect(() => {
+    setPecas(prev => prev.map(p => {
+      const faixa = p.tamanhos.length > 0 ? getFaixaTamanho(p.tamanhos[0].tamanho) : 'P/M/G'
+      const daTabela = tabelaPrecos[p.tipo]?.[faixa]
+      return daTabela === undefined ? p : { ...p, valorUnitario: daTabela }
+    }))
+    // Só quando a ESCOLHA muda; `tabelaPrecos` recalculado por outro motivo
+    // (ex: peça registrada) não deve reescrever preço digitado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabelaSelecionada])
 
   useEffect(() => {
     if (parcelasEditadas) return
@@ -168,6 +235,76 @@ export default function NovoPedidoPage() {
       }
       return updated
     }))
+  }
+
+  // --- Peça digitada à mão ---
+
+  /**
+   * Abre o modal quando o usuário escolhe "Outra peça" no seletor.
+   *
+   * O destino padrão é a tabela e o primeiro grupo já em uso no pedido: no
+   * caso comum (peça escolar que faltava no catálogo) o Pedro só digita o nome
+   * e confirma.
+   */
+  function abrirPecaLivre(pecaId: string) {
+    const grupos = estruturaPrecos[tabelaSelecionada] ?? []
+    setPecaLivre({ pecaId })
+    setNomePecaLivre('')
+    setRegistrarPeca(false)
+    setDestinoTabela(tabelaSelecionada)
+    setDestinoGrupo(grupos[0]?.grupo ?? '')
+    setDestinoGrupoNovo('')
+    setPrecoInicial('')
+    setErroPecaLivre(null)
+  }
+
+  async function confirmarPecaLivre() {
+    const nome = nomePecaLivre.trim()
+    if (!nome) { setErroPecaLivre('Digite o nome da peça.'); return }
+    const pecaId = pecaLivre!.pecaId
+
+    if (!registrarPeca) {
+      // Só neste pedido: `peca.tipo` é texto livre e sempre foi — nada a
+      // gravar em lugar nenhum, a peça existe dentro do JSONB do pedido.
+      updatePeca(pecaId, { tipo: nome })
+      setPecaLivre(null)
+      return
+    }
+
+    const grupo = (destinoGrupoNovo.trim() || destinoGrupo).trim()
+    if (!destinoTabela) { setErroPecaLivre('Escolha em qual tabela a peça entra.'); return }
+    if (!grupo) { setErroPecaLivre('Escolha o grupo, ou digite o nome de um grupo novo.'); return }
+
+    // O preço informado vale para a faixa do PRIMEIRO tamanho da peça — é o
+    // que o atendimento tem em mãos naquele momento. As outras faixas entram
+    // como linha sem valor: a peça passa a existir na tabela e o Pedro completa
+    // os preços depois em /tabela-precos.
+    const pecaAtual = pecas.find(p => p.id === pecaId)
+    const faixa = pecaAtual && pecaAtual.tamanhos.length > 0
+      ? getFaixaTamanho(pecaAtual.tamanhos[0].tamanho)
+      : 'P/M/G'
+    const preco = parseFloat(precoInicial)
+    const valores: Record<string, number | null> = {}
+    for (const f of FAIXAS) valores[f] = null
+    if (!isNaN(preco)) valores[faixa] = Math.round(preco * 100) / 100
+
+    setSalvandoPeca(true)
+    setErroPecaLivre(null)
+    try {
+      await registrarProduto(destinoTabela, grupo, nome, valores)
+      const r = await carregarPrecos()
+      setEstruturaPrecos(r.estrutura)
+      setPrecosTodos(r.precos)
+      updatePeca(pecaId, {
+        tipo: nome,
+        ...(isNaN(preco) ? {} : { valorUnitario: Math.round(preco * 100) / 100 }),
+      })
+      setPecaLivre(null)
+    } catch {
+      setErroPecaLivre('Não foi possível gravar a peça na tabela de preços. Você ainda pode usá-la só neste pedido.')
+    } finally {
+      setSalvandoPeca(false)
+    }
   }
 
   function addTamanho(pecaId: string) {
@@ -241,6 +378,7 @@ export default function NovoPedidoPage() {
         valorTotal: totalGeral,
         valorPago: totalPago,
         vetorizacao,
+        tabelaPreco: tabelaSelecionada,
       })
       router.push('/pedidos')
     } catch (error) {
@@ -381,6 +519,30 @@ export default function NovoPedidoPage() {
 
           {/* Peças */}
           <div className="space-y-4">
+            {/* Qual lista de preços vale para ESTE pedido.
+
+                A Nice tem várias tabelas escolares com as mesmas peças e
+                valores diferentes conforme o grupo de escolas, então o cálculo
+                automático precisa saber de qual lista ler. A escolha fica
+                gravada no pedido (`tabela_preco`), senão reabrir o pedido
+                depois não teria como saber de onde os valores saíram. */}
+            {tabelasDisponiveis.length > 0 && (
+              <div className="card flex flex-wrap items-end gap-3">
+                <div className="min-w-56">
+                  <label className="label flex items-center gap-1.5">
+                    <Table2 className="w-3.5 h-3.5" /> Tabela de preço deste pedido
+                  </label>
+                  <select className="input" value={tabelaSelecionada}
+                    onChange={e => setTabelaSelecionada(e.target.value)}>
+                    {tabelasDisponiveis.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <p className="text-xs text-fraco flex-1 min-w-48 pb-2">
+                  Trocar a tabela recalcula o valor unitário das peças que existem nela.
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-titulo text-base">Peças</h2>
               <button type="button" onClick={() => setPecas(p => [...p, novaPeca()])} className="btn-secondary text-sm">
@@ -421,9 +583,37 @@ export default function NovoPedidoPage() {
                     </div>
                     <div>
                       <label className="label">Tipo de Peça</label>
+                      {/* Três origens no mesmo seletor:
+                          1. o catálogo local (/configuracoes, por categoria);
+                          2. as peças com preço na tabela escolhida, agrupadas
+                             pelo grupo delas — é lá que peça cadastrada nova
+                             aparece;
+                          3. "Outra peça", que abre o campo de digitação.
+                          A peça atual entra explicitamente na lista: se veio de
+                          digitação livre, ela não está em nenhuma das origens e
+                          o <select> a descartaria em silêncio. */}
                       <select className="input" value={peca.tipo}
-                        onChange={e => updatePeca(peca.id, { tipo: e.target.value })}>
-                        {(catalogoEfetivo[peca.categoria] || []).map(t => <option key={t}>{t}</option>)}
+                        onChange={e => {
+                          if (e.target.value === OUTRA_PECA) abrirPecaLivre(peca.id)
+                          else updatePeca(peca.id, { tipo: e.target.value })
+                        }}>
+                        {peca.tipo && !(catalogoEfetivo[peca.categoria] || []).includes(peca.tipo)
+                          && !(estruturaPrecos[tabelaSelecionada] ?? []).some(g => g.produtos.includes(peca.tipo)) && (
+                          <option value={peca.tipo}>{peca.tipo} (só neste pedido)</option>
+                        )}
+                        <optgroup label={`Catálogo — ${peca.categoria}`}>
+                          {(catalogoEfetivo[peca.categoria] || []).map(t => <option key={t} value={t}>{t}</option>)}
+                        </optgroup>
+                        {(estruturaPrecos[tabelaSelecionada] ?? []).map(g => {
+                          const novos = g.produtos.filter(t => !(catalogoEfetivo[peca.categoria] || []).includes(t))
+                          if (novos.length === 0) return null
+                          return (
+                            <optgroup key={g.grupo} label={`${tabelaSelecionada} — ${g.grupo}`}>
+                              {novos.map(t => <option key={t} value={t}>{t}</option>)}
+                            </optgroup>
+                          )
+                        })}
+                        <option value={OUTRA_PECA}>+ Outra peça (digitar)…</option>
                       </select>
                     </div>
                     <div>
@@ -476,8 +666,14 @@ export default function NovoPedidoPage() {
                       {peca.tamanhos.map((t, ti) => (
                         <div key={ti} className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <select className="input w-36" value={t.tamanho}
-                              onChange={e => updateTamanho(peca.id, ti, { tamanho: e.target.value as any, medidaEspecial: '' })}>
+                            <select className="input w-36"
+                              value={ehTamanhoLivre(t.tamanho) ? OUTRO_TAMANHO : t.tamanho}
+                              onChange={e => updateTamanho(peca.id, ti, {
+                                // Escolher "Outro" limpa o campo para o usuário
+                                // digitar; o input livre aparece logo abaixo.
+                                tamanho: e.target.value === OUTRO_TAMANHO ? '' : e.target.value,
+                                medidaEspecial: '',
+                              })}>
                               <optgroup label="Adulto">
                                 {TAMANHOS_ADULTO.map(s => <option key={s} value={s}>{s}</option>)}
                               </optgroup>
@@ -485,6 +681,7 @@ export default function NovoPedidoPage() {
                                 {TAMANHOS_INFANTIL.map(s => <option key={s} value={s}>{s}</option>)}
                               </optgroup>
                               <option value="SOB_MEDIDA">Sob Medida</option>
+                              <option value={OUTRO_TAMANHO}>Outro (digitar)…</option>
                             </select>
                             <input type="number" min={1} className="input w-24" value={t.quantidade}
                               onChange={e => updateTamanho(peca.id, ti, { quantidade: parseInt(e.target.value) || 1 })} />
@@ -500,6 +697,14 @@ export default function NovoPedidoPage() {
                             <input className="input text-sm" placeholder="Descreva as medidas específicas..."
                               value={t.medidaEspecial ?? ''}
                               onChange={e => updateTamanho(peca.id, ti, { medidaEspecial: e.target.value })} />
+                          )}
+                          {/* Tamanho fora da régua: baby look, EXG, numeração da
+                              escola. Vale só neste pedido — sai impresso na
+                              grade exatamente como foi digitado. */}
+                          {(t.tamanho === '' || ehTamanhoLivre(t.tamanho)) && (
+                            <input className="input text-sm" placeholder="Digite o tamanho (ex: BL P, EXG)"
+                              value={t.tamanho}
+                              onChange={e => updateTamanho(peca.id, ti, { tamanho: e.target.value })} />
                           )}
                         </div>
                       ))}
@@ -517,7 +722,7 @@ export default function NovoPedidoPage() {
                   </div>
 
                   <div>
-                    <label className="label">Fotos da peça</label>
+                    <label className="label">Arte da peça (imagem ou PDF)</label>
                     <FotoUpload
                       pecaId={peca.id}
                       fotos={peca.fotos}
@@ -695,6 +900,95 @@ export default function NovoPedidoPage() {
           </div>
         </div>
       </div>
+
+      {/* Peça que não existe no catálogo.
+
+          A pergunta central é a do Pedro: "é só deste pedido ou fica no
+          sistema?". Só deste pedido não grava nada — `peca.tipo` sempre foi
+          texto livre dentro do JSONB. Ficar no sistema significa entrar numa
+          TABELA DE PREÇO (que tabela, que grupo), porque é lá que uma peça
+          existe de verdade para o cálculo automático. */}
+      <Modal
+        aberto={pecaLivre !== null}
+        titulo="Peça que não está no catálogo"
+        onFechar={() => setPecaLivre(null)}
+        rodape={
+          <>
+            <button onClick={() => setPecaLivre(null)} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button onClick={confirmarPecaLivre} disabled={salvandoPeca} className="btn-primary flex-1 justify-center">
+              {salvandoPeca ? 'Gravando...' : 'Confirmar'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="label">Nome da peça</label>
+            <input className="input" autoFocus placeholder="Ex: Camiseta Dry Fit"
+              value={nomePecaLivre} onChange={e => setNomePecaLivre(e.target.value)} />
+          </div>
+
+          <div className="space-y-2">
+            <label className="flex items-start gap-2 text-sm text-conteudo cursor-pointer">
+              <input type="radio" className="mt-1" checked={!registrarPeca}
+                onChange={() => setRegistrarPeca(false)} />
+              <span>
+                <strong>Usar só neste pedido</strong>
+                <span className="block text-xs text-fraco">A peça não fica cadastrada. O valor unitário é o que você digitar na peça.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-conteudo cursor-pointer">
+              <input type="radio" className="mt-1" checked={registrarPeca}
+                onChange={() => setRegistrarPeca(true)} />
+              <span>
+                <strong>Registrar no sistema</strong>
+                <span className="block text-xs text-fraco">A peça entra numa tabela de preço e passa a aparecer para todo mundo, em qualquer PC.</span>
+              </span>
+            </label>
+          </div>
+
+          {registrarPeca && (
+            <div className="space-y-3 border-t border-borda pt-3">
+              <div>
+                <label className="label">Em qual tabela</label>
+                <select className="input" value={destinoTabela}
+                  onChange={e => {
+                    setDestinoTabela(e.target.value)
+                    setDestinoGrupo((estruturaPrecos[e.target.value] ?? [])[0]?.grupo ?? '')
+                  }}>
+                  {tabelasDisponiveis.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Em qual grupo</label>
+                <select className="input" value={destinoGrupo}
+                  onChange={e => { setDestinoGrupo(e.target.value); setDestinoGrupoNovo('') }}
+                  disabled={destinoGrupoNovo.trim() !== ''}>
+                  {(estruturaPrecos[destinoTabela] ?? []).map(g => (
+                    <option key={g.grupo} value={g.grupo}>{g.grupo}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">…ou um grupo novo</label>
+                <input className="input" placeholder="Deixe em branco para usar o grupo acima"
+                  value={destinoGrupoNovo} onChange={e => setDestinoGrupoNovo(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Preço (opcional)</label>
+                <input className="input" type="number" min={0} step={0.01} placeholder="Pode ficar em branco"
+                  value={precoInicial} onChange={e => setPrecoInicial(e.target.value)} />
+                <p className="text-xs text-fraco mt-1">
+                  Vale para a faixa de tamanho da peça neste pedido. As outras faixas ficam em branco
+                  e podem ser preenchidas depois em Tabelas de Preço.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {erroPecaLivre && <p className="text-sm text-red-600">{erroPecaLivre}</p>}
+        </div>
+      </Modal>
     </div>
   )
 }

@@ -100,19 +100,19 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | Rota | Arquivo | O que faz |
 |---|---|---|
 | `/` | `src/app/page.tsx` | Server component; redireciona para `/dashboard` |
-| `/dashboard` | `src/app/dashboard/page.tsx` | 5 cards de KPI (`pedidosStats`), pedidos ativos, lista de urgentes |
+| `/dashboard` | `src/app/dashboard/page.tsx` | 5 cards de KPI (`pedidosStats`), pedidos ativos, lista de urgentes, e a fila de liberações de "pagar na retirada" esperando o gestor |
 | `/pedidos` | `src/app/pedidos/page.tsx` | Lista, busca (cliente/empresa/número), filtro por status, excluir |
 | `/pedidos/[id]` | `src/app/pedidos/[id]/page.tsx` | Detalhe e edição ampla, progresso por setor, parcelas, layout de impressão A4 (bloco `print:block` em `:681`) |
-| `/novo-pedido` | `src/app/novo-pedido/page.tsx` | Cadastro: cliente com autocomplete, peças, tamanhos, personalizações, parcelas, fotos, vetorização |
+| `/novo-pedido` | `src/app/novo-pedido/page.tsx` | Cadastro: cliente com autocomplete, seletor da tabela de preço do pedido, peças (com "outra peça" digitável e cadastrável), tamanhos (com tamanho livre), personalizações, parcelas, arte em imagem/PDF, vetorização |
 | `/clientes` | `src/app/clientes/page.tsx` | Lista, busca, edição inline, histórico de pedidos do cliente |
-| `/tabela-precos` | `src/app/tabela-precos/page.tsx` | Grade de preços da categoria Escolar por grupo × faixa de tamanho. Empresarial/Esportivo/Acessórios ainda sem preço cadastrado |
+| `/tabela-precos` | `src/app/tabela-precos/page.tsx` | **Várias** listas de preço (`Escolar 1`, `Escolar 2`, …), cada uma com grupos e peças criáveis/removíveis pela própria tela. Grade lida do banco, não do código |
 | `/producao` | `src/app/producao/page.tsx` | Acompanhamento dos 8 setores; clique cicla pendente → em_andamento → concluido |
 | `/entregas` | `src/app/entregas/page.tsx` | Fila de pedidos com os 8 setores concluídos ou não aplicáveis, ainda não entregues; botão "Marcar como entregue". Só gestor/recepcionista |
 | `/quadros` | `src/app/quadros/page.tsx` | Kanban livre: grid de quadros, com criar/renomear/arquivar/excluir |
 | `/quadros/[id]` | `src/app/quadros/[id]/page.tsx` + `components/kanban/QuadroBoard.tsx` | O quadro: listas lado a lado, cartões, drag-and-drop |
 | `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros |
 | `/relatorios` | `src/app/relatorios/page.tsx` | Fechamento mensal: receita, unidades, distribuição por complexidade |
-| `/configuracoes` | `src/app/configuracoes/page.tsx` | Catálogo de peças e personalizações — **grava só em `localStorage`**, não vai para o banco nem é compartilhado entre dispositivos |
+| `/configuracoes` | `src/app/configuracoes/page.tsx` | Catálogo de peças e personalizações — **grava só em `localStorage`**, não vai para o banco nem é compartilhado entre dispositivos. Peça registrada pelo `/novo-pedido` NÃO passa por aqui: vai para `tabela_precos` |
 | `/login` | `src/app/login/page.tsx` + `LoginForm.tsx` | Única rota pública. Usuário curto + senha; o e-mail é montado como `usuario@niceconfec.app` |
 | `/perfil` | `src/app/perfil/page.tsx` | Mostra nome e perfil do usuário logado e permite trocar a própria senha. Aberta a todos os perfis |
 | `/api/keep-alive` | `src/app/api/keep-alive/route.ts` | Route handler; cron diário 06:00 UTC (`vercel.json`) para evitar a pausa por inatividade do Supabase free. **Fora do matcher do middleware** — o cron não tem sessão |
@@ -138,17 +138,27 @@ Código compartilhado:
   `descreverFalhaKanban`, `pedidoConcluido`, `porPosicao`. Apesar do nome, `pedidoConcluido`
   e `badgePrazo` também são usados fora do Kanban — em `/pedidos/[id]` (botão "Criar cartão")
   e em `/entregas` (fila e badge de prazo) — porque é o mesmo cálculo, não uma cópia
-- `src/lib/precosEscolar.ts` — fonte única dos preços padrão da categoria Escolar, com os
+- `src/lib/tabelasPreco.ts` — leitura e escrita das listas de preço (estrutura + valores),
+  usada por `/tabela-precos` e `/novo-pedido`. Client autenticado, como o resto pós-Fase B
+- `src/lib/excecaoPagamento.ts` — **ponto único** da decisão "este pedido pode ir para
+  produção?". Ver regra 1
+- `src/lib/arquivos.ts` — anexos de arte: tipos aceitos (imagem + PDF), teto de tamanho,
+  detecção de PDF pela URL, nome legível, sanitização da chave do Storage
+- `src/lib/precosEscolar.ts` — semente dos preços da categoria Escolar, com os
   mesmos nomes de `grupo`/`produto` gravados no banco pela migration 006 (que por sua vez usa
   os nomes do `CATALOGO`). Consumido só por `/tabela-precos`; ver "Preço: uma fonte só" abaixo
 - `src/lib/erros.ts` — `classificarErro`: traduz erro do Supabase em `TipoFalha`
   (`offline`/`rede`/`conflito`/`permissao`/`validacao`). Cada tela escreve o próprio texto,
   porque a consequência muda — usada por `/tabela-precos` e pelo Kanban
 - `src/components/kanban/` — `QuadroBoard`, `ColunaLista`, `CartaoKanban`, `PainelCartao`,
-  `Modal`, `BannerErro`, `CriarCartaoDoPedido`
+  `Modal`, `BannerErro`, `CriarCartaoDoPedido`. O `Modal` deixou de ser exclusivo do Kanban:
+  `/tabela-precos` e `/pedidos/[id]` também o usam
 - `src/lib/helpers.ts` — `CATALOGO`, `PERSONALIZACOES`, `TAMANHOS`, `calcularComplexidade`, `STATUS_CONFIG`, `SETOR_LABELS`, `totalPecas`
 - `src/types/index.ts` — todos os tipos do domínio
-- `src/components/FotoUpload.tsx` — upload de fotos por peça, com lightbox
+- `src/components/FotoUpload.tsx` — upload de arte por peça: imagem (com lightbox) ou PDF
+  (abre em outra aba). O campo continua se chamando `fotos` por compatibilidade com o JSONB
+- `src/components/MiniaturaArquivo.tsx` — a miniatura de um anexo: imagem vira thumb, PDF
+  vira cartão com ícone e nome
 
 ## Preço da categoria Escolar — uma fonte só
 
@@ -204,7 +214,13 @@ id uuid pk · numero text · cliente_id uuid fk→clientes · consultor text
 tipo text · status text · data_entrada timestamptz · data_entrega date
 valor_total numeric · valor_pago numeric · observacoes text · updated_at timestamptz
 pecas jsonb · parcelas jsonb · progresso jsonb · vetorizacao jsonb · imagem text
+tabela_preco text · excecao_pagamento jsonb
 ```
+
+`tabela_preco` (migration 012) e `excecao_pagamento` (migration 013) são da Fase C2. As duas
+são **nullable sem default**, de propósito: pedido gravado antes delas não escolheu tabela
+nenhuma nem pediu exceção nenhuma, e preencher um valor retroativo afirmaria uma coisa que
+não aconteceu. As telas tratam `null` como "não registrado".
 
 > **As peças do pedido são JSONB dentro da tabela `pedidos`, não uma tabela relacional
 > separada.** O mesmo vale para `parcelas`, `progresso` e `vetorizacao`.
@@ -236,20 +252,37 @@ valor_combinado numeric · valor_pago numeric · status · observacoes
 ### `tabela_precos`
 
 ```
-id uuid pk · grupo text · produto text · faixa_tamanho text · valor numeric · updated_at
+id uuid pk · tabela text · grupo text · produto text · faixa_tamanho text
+valor numeric · updated_at
 ```
 
-**Tem** constraint única em `(grupo, produto, faixa_tamanho)`
-(`tabela_precos_grupo_produto_faixa_key`). Ela foi aplicada manualmente pelo dono e está
-versionada em `supabase/migrations/005_tabela_precos_unique.sql` — a migration
-`002_tabela_precos.sql` tinha criado a tabela sem nenhuma unique.
+**São VÁRIAS listas de preço, não uma.** A coluna `tabela` (migration 012) é o nome da lista
+— `'Escolar 1'`, `'Escolar 2'`, o que o Pedro criar pela tela. As tabelas escolares têm as
+MESMAS peças e mudam só no valor, conforme o grupo de escolas: o PDF "TABELA 2025" traz
+"WF, Olga (Vermelho), WR / N.G. (Jardim Encantado)" no cabeçalho justamente porque vale para
+essas e não para as outras. O que existia no banco antes da 012 virou `'Escolar 1'`.
+
+**Tem** constraint única em `(tabela, grupo, produto, faixa_tamanho)`
+(`tabela_precos_tabela_grupo_produto_faixa_key`, migration 012). Ela substituiu a de três
+colunas da 005 — que impediria a mesma peça de ter preço em duas listas.
 
 **Ela é obrigatória para a tela salvar.** `/tabela-precos` grava com
-`upsert(linhas, { onConflict: 'grupo,produto,faixa_tamanho' })`
-(`src/app/tabela-precos/page.tsx`) — não apaga tudo e reinsere. Sem a constraint, o PostgREST
-rejeita o `ON CONFLICT` com o erro `42P10` e **nenhum preço é gravado**; a tela trata esse
-caso como `conflito` em `classificarErro` e diz na cara que o banco está sem a constraint.
-Não remova a constraint sem reescrever a gravação da tela junto.
+`upsert(linhas, { onConflict: 'tabela,grupo,produto,faixa_tamanho' })` (`ON_CONFLICT` em
+`src/lib/tabelasPreco.ts`) — não apaga tudo e reinsere. Sem a constraint, o PostgREST rejeita
+o `ON CONFLICT` com o erro `42P10` e **nenhum preço é gravado**; a tela trata esse caso como
+`conflito` em `classificarErro` e diz na cara que o banco está sem a constraint. Não remova a
+constraint sem reescrever a gravação junto.
+
+**A ESTRUTURA vem do banco, não do código.** Até a Fase C2, `/tabela-precos` desenhava a
+grade a partir da constante `GRUPOS_PRECO_ESCOLAR` e o Supabase só fornecia os valores —
+grupo e produto eram código, então não havia como cadastrar peça nova sem deploy. Agora que
+tabelas, grupos e produtos existem porque existem LINHAS, a constante virou só semente para
+o caso de o banco não responder. Toda a leitura/escrita passa por `src/lib/tabelasPreco.ts`.
+
+`carregarPrecos` tem um retorno para banco **sem** a coluna `tabela` (erro `42703`): refaz a
+consulta no formato antigo e joga tudo em `'Escolar 1'`. É o que permite subir o código antes
+de rodar a 012 sem os preços sumirem do cálculo do pedido — quem roda o SQL é o dono, à mão,
+em outro momento.
 
 ### `quadros`, `listas`, `cards` — Kanban livre
 
@@ -325,19 +358,35 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
 
 ## Regras de negócio invioláveis
 
-1. **Pedido não avança para produção sem pagamento registrado.**
-   `src/app/pedidos/[id]/page.tsx:187-190` — mudar o status para `em_producao` com
-   `valorPago <= 0` é bloqueado. Hoje a validação existe **só no client**; não há constraint
-   no banco.
+1. **Pedido não avança para produção sem pagamento registrado — ou sem liberação aprovada.**
+   Toda a decisão vive em `src/lib/excecaoPagamento.ts` (`podeIrParaProducao`); as telas só
+   perguntam. São **duas portas, nunca mais que isso**: `valorPago > 0` OU
+   `excecaoPagamento.status === 'aprovada'`.
+
+   A exceção é o "pagar na retirada" que o Pedro abre para cliente fiel. Antes da Fase C2 ela
+   era feita por fora, lançando um pagamento que não existiu — a única forma de destravar a
+   tela. Agora tem lugar próprio, com motivo, autor e data.
+
+   **Solicitação PENDENTE não abre nada.** A recepcionista pede, o pedido continua barrado
+   até o gestor decidir. Gestor libera direto (nasce `aprovada`).
+
+   Só o **gestor** decide, e isso vale no BANCO: o trigger `pedidos_excecao_pagamento_guard`
+   (migration 013) recusa gravar `aprovada`/`recusada` de qualquer outro perfil. A regra em si
+   — a de não avançar sem pagamento — continua sendo validação de client.
 2. **Cliente é deduplicado por telefone.** `buscarOuCriarCliente` (`store.ts:281-305`)
    procura por telefone; se achar, atualiza o existente em vez de criar outro. Cliente sem
    telefone sempre gera registro novo.
 3. **Número do pedido é `AAAA-NNNN`**, sequencial derivado do `count` da tabela
    (`store.ts:73-79`). Duas criações simultâneas podem gerar o mesmo número — não há
    unique constraint.
-4. **Havendo parcelas, elas são a fonte da verdade.** `valor_total` e `valor_pago` passam a
-   ser derivados da soma das parcelas (`store.ts:164-171` e `mapPedido` em `:22-27`),
+4. **HAVENDO parcelas, elas são a fonte da verdade.** `valor_total` e `valor_pago` passam a
+   ser derivados da soma das parcelas (`atualizarPedido` e `mapPedido` em `store.ts`),
    ignorando o que vier nos campos avulsos.
+
+   O "havendo" é literal e vale nos dois sentidos: `parcelas = []` significa **não há
+   parcelas**, não "as parcelas somam zero". Até a Fase C2 a escrita não distinguia os dois
+   casos, e apagar a última parcela pela edição do pedido zerava `valor_total`/`valor_pago`
+   em silêncio. A leitura sempre esteve certa; foi a escrita que ganhou o `length > 0`.
 5. **Prazo padrão de entrega = 25 dias úteis** a partir de hoje
    (`calcularDataEntrega`, `store.ts:325`).
 6. **Complexidade P1–P5 é calculada, não escolhida.** Derivada do tipo da peça + número de
@@ -498,8 +547,11 @@ sessão) — depois da migration, o `select id limit 1` dele passa a devolver ze
 filtra, não erra), mas o endpoint só checa `error`, então continua respondendo 200 OK. Nada a
 mudar lá.
 
-**Fotos são públicas.** O bucket `pedido-fotos` devolve `getPublicUrl` (`store.ts:314`);
-quem tiver a URL vê a imagem, sem autenticação.
+**Anexos de arte são públicos.** O bucket `pedido-fotos` devolve `getPublicUrl`
+(`uploadFotoPeca`, `store.ts`); quem tiver a URL vê o arquivo, sem autenticação. Desde a Fase
+C2 isso vale também para PDF — mesma exposição de sempre, agora alcançando um formato a mais.
+Se algum dia a arte precisar ser privada, o caminho é URL assinada, e ele muda o campo
+`fotos` de todos os pedidos.
 
 **`/api/keep-alive` fica fora do middleware** de propósito (o cron da Vercel não tem sessão).
 A rota só faz um `select id limit 1`, mas é um endpoint sem autenticação — considere isso ao
@@ -507,3 +559,35 @@ mexer nela.
 
 Não existe `SUPABASE_SERVICE_ROLE_KEY` no repo: não houve vazamento de chave privilegiada,
 mas também não existe nenhum caminho de acesso privilegiado.
+
+### Fase C2 — a primeira trava de CAMPO no banco (feita, 26–27/08/2026)
+
+**Status: em produção.** As 3 migrations da Fase C2 foram executadas pelo Pedro no SQL
+Editor em 27/08/2026, auditoria antes de cada uma. `011_storage_pdf.sql` não foi necessária
+— o bucket `pedido-fotos` já aceita qualquer tipo de arquivo (`allowed_mime_types = NULL`).
+`012_tabela_precos_multi.sql` e `013_excecao_pagamento.sql` rodaram e foram conferidas com
+`SELECT` depois — ver `CHANGELOG.md` para o detalhe de cada uma, incluindo um bug real
+encontrado na 012 (comparação `name[] = text[]` no bloco que localiza a constraint antiga,
+corrigido no arquivo antes da segunda tentativa). Reteste do "Pagar na retirada" pelo Pedro
+(gestor) depois da 013 confirmou a liberação gravando como `aprovada`.
+
+`pedidos_excecao_pagamento_guard` (migration 013) é o primeiro controle do sistema que protege
+um CAMPO, e não uma linha inteira. Vale registrar o raciocínio, porque ele vai se repetir:
+
+RLS é por linha. Gestor e recepcionista já têm `UPDATE` liberado em `pedidos`, e não existe
+policy que diga "pode alterar tudo menos esta coluna" — foi exatamente esse limite que levou a
+009 a criar `atualizar_progresso_pedido` (security definer) para o chão de fábrica, no sentido
+inverso: liberar UMA coluna para quem não podia gravar nada.
+
+Aqui o problema é o oposto — barrar UMA coluna para quem pode gravar o resto — e a ferramenta
+é um trigger `before update` que compara `old`/`new` e consulta `meu_perfil()`. Sem ele, a
+regra "só o Pedro aprova pagar na retirada" seria só interface, como `verFinanceiro`: a
+Kalomira não veria o botão, mas um POST direto no PostgREST com a sessão dela gravaria
+`aprovada` do mesmo jeito.
+
+O trigger **deixa passar quando `meu_perfil()` é nulo**, o que acontece no SQL Editor (não há
+`auth.uid()`). É deliberado: a trava é para o aplicativo, não para o dono do banco.
+
+**O que continua sendo só interface:** `verFinanceiro` (valores ainda trafegam para o
+navegador do chão de fábrica, porque `getPedidoById` faz `select('*')` — a Fase B2 hipotética)
+e a própria regra de não avançar sem pagamento, que segue validada no client.

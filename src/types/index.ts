@@ -6,7 +6,22 @@ export type Complexidade = 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
 export type Personalizacao = 'bordado' | 'silk' | 'dtf' | 'sublimacao'
 export type StatusSetor = 'pendente' | 'em_andamento' | 'concluido' | 'nao_se_aplica'
 
-export type Tamanho = 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XGG' | 'UNICO' | '01' | '02' | '04' | '06' | '08' | '10' | '12' | '14' | 'SOB_MEDIDA'
+/**
+ * Tamanho de uma linha da grade.
+ *
+ * Era um union fechado ('PP' | 'P' | ... | 'SOB_MEDIDA'). Virou `string`
+ * porque a Nice recebe pedido com tamanho fora da régua o tempo todo — baby
+ * look, EXG, numeração de escola — e a lista fechada obrigava a jogar tudo em
+ * 'SOB_MEDIDA', que some da grade impressa como "Sob Medida" e não diz qual
+ * era o tamanho.
+ *
+ * A lista sugerida continua existindo em TAMANHOS (src/lib/helpers.ts) e é o
+ * que a tela oferece primeiro; o campo livre é a saída, não o caminho normal.
+ * `getFaixaTamanho` cai em 'P/M/G' para tamanho que não reconhece, então um
+ * valor digitado nunca quebra o cálculo automático — só não acerta a faixa
+ * sozinho, e o valor unitário fica editável como sempre.
+ */
+export type Tamanho = string
 
 export interface TamanhoQuantidade {
   tamanho: Tamanho
@@ -56,6 +71,38 @@ export interface ProgressoSetor {
   acabamento: EntradaProgresso
 }
 
+/**
+ * Liberação para o cliente pagar só na retirada.
+ *
+ * A regra 1 do sistema é que pedido não avança para produção sem pagamento
+ * registrado. Cliente fiel é a exceção que o Pedro abre de vez em quando — e
+ * até agora ela era feita por fora, lançando um pagamento que não existiu.
+ * Isto dá um lugar para a exceção existir de forma explícita e rastreável.
+ *
+ * Quem pode o quê:
+ *  - gestor: libera direto (nasce 'aprovada');
+ *  - recepcionista: solicita (nasce 'pendente') e espera o gestor decidir;
+ *  - enquanto está 'pendente' ou 'recusada', o pedido continua barrado.
+ *
+ * Guardado como JSONB numa coluna própria de `pedidos` (migration 013), no
+ * mesmo espírito de `parcelas` e `progresso`.
+ */
+export type StatusExcecao = 'pendente' | 'aprovada' | 'recusada'
+
+export interface ExcecaoPagamento {
+  status: StatusExcecao
+  /** Por que a exceção foi pedida. Obrigatório: é o que o gestor lê para decidir. */
+  motivo: string
+  solicitadoPor: string
+  /** ISO 8601. */
+  solicitadoEm: string
+  /** Preenchidos na decisão. Gestor que libera direto já nasce com os dois. */
+  decididoPor?: string
+  decididoEm?: string
+  /** Observação do gestor ao recusar — some da tela se vazia. */
+  decisaoObservacao?: string
+}
+
 export interface Parcela {
   id: string
   descricao: string
@@ -89,6 +136,19 @@ export interface Pedido {
   valorTotal: number
   valorPago: number
   vetorizacao?: { necessaria: boolean; valor: number }
+  /**
+   * Qual lista de preços foi usada para calcular este pedido.
+   *
+   * `undefined` em pedido gravado antes das múltiplas tabelas: ninguém
+   * escolheu, e preencher 'Escolar 1' retroativamente afirmaria uma coisa que
+   * não aconteceu. A tela mostra "não registrado" nesse caso.
+   */
+  tabelaPreco?: string
+  /**
+   * Liberação de "pagar só na retirada". `undefined` = nunca foi pedida, que é
+   * o caso da esmagadora maioria dos pedidos.
+   */
+  excecaoPagamento?: ExcecaoPagamento
 }
 
 export interface Cliente {

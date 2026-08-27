@@ -5,10 +5,17 @@ import { format } from 'date-fns'
 import { ArrowLeft, Printer, ChevronRight, CheckCircle2, Circle, Loader2, MinusCircle, Pencil, Save, X, PlusCircle, Trash2 } from 'lucide-react'
 import { getPedidoById, atualizarPedido } from '@/lib/store'
 import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade, autorSetorTexto } from '@/lib/helpers'
-import { Pedido, Peca, StatusPedido, StatusSetor, ProgressoSetor, EntradaProgresso, Personalizacao, TamanhoQuantidade } from '@/types'
+import { Pedido, Peca, Parcela, ExcecaoPagamento, StatusPedido, StatusSetor, ProgressoSetor, EntradaProgresso, Personalizacao, TamanhoQuantidade, TipoPedido } from '@/types'
 import FotoUpload from '@/components/FotoUpload'
+import MiniaturaArquivo from '@/components/MiniaturaArquivo'
+import { primeiraImagem, contarPdfs } from '@/lib/arquivos'
+import {
+  decidir, excecaoPendente, liberacaoDireta,
+  motivoBloqueio, novaSolicitacao, podeIrParaProducao,
+} from '@/lib/excecaoPagamento'
 import CriarCartaoDoPedido from '@/components/kanban/CriarCartaoDoPedido'
 import ModalProntoParaEnvio from '@/components/producao/ModalProntoParaEnvio'
+import Modal from '@/components/kanban/Modal'
 import { pedidoConcluido } from '@/lib/kanban-ui'
 import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
@@ -27,6 +34,15 @@ const STATUS_SETOR_LABEL: Record<StatusSetor, string> = {
 
 const TAMANHOS_ADULTO = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'UNICO'] as const
 const TAMANHOS_INFANTIL = ['01', '02', '04', '06', '08', '10', '12', '14'] as const
+
+/** Sentinela do <select>: "quero digitar". Não é um tamanho. */
+const OUTRO_TAMANHO = '__OUTRO_TAMANHO__'
+const TAMANHOS_CONHECIDOS: string[] = [...TAMANHOS_ADULTO, ...TAMANHOS_INFANTIL, 'SOB_MEDIDA']
+
+/** Tamanho digitado à mão (fora da régua e diferente de Sob Medida). */
+function ehTamanhoLivre(t: string): boolean {
+  return t !== '' && !TAMANHOS_CONHECIDOS.includes(t)
+}
 
 /**
  * Combina os 3 setores de personalização (silk/DTF/sublimação) numa linha só
@@ -113,8 +129,30 @@ export default function DetalhePedidoPage() {
     nome: '', empresa: '', telefone: '', email: '',
     responsavel: '', endereco: '', documento: '',
   })
+  // Campos do PEDIDO em si (não do cliente, não das peças). Antes, o modo de
+  // edição só alcançava cliente + peças: mudar data de entrega, observação,
+  // tipo, consultor ou parcela exigia refazer o pedido. Agora tudo que o
+  // gestor/recepcionista pode mudar está aqui.
+  const [editDados, setEditDados] = useState({
+    dataEntrega: '',
+    dataEntrada: '',
+    tipo: 'normal' as TipoPedido,
+    consultor: '',
+    observacoes: '',
+    valorPago: 0,
+  })
+  const [editParcelas, setEditParcelas] = useState<Parcela[]>([])
+  const [editVetorizacao, setEditVetorizacao] = useState({ necessaria: false, valor: 0 })
   const [salvando, setSalvando] = useState(false)
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null)
   const [modalAberto, setModalAberto] = useState(false)
+
+  // Exceção "pagar na retirada": o modal serve para pedir (recepcionista),
+  // liberar direto (gestor) e recusar (gestor com observação).
+  const [modalExcecao, setModalExcecao] = useState<'solicitar' | 'liberar' | 'recusar' | null>(null)
+  const [motivoExcecao, setMotivoExcecao] = useState('')
+  const [erroExcecao, setErroExcecao] = useState<string | null>(null)
+  const [salvandoExcecao, setSalvandoExcecao] = useState(false)
 
   const carregar = async () => {
     const p = await getPedidoById(id as string)
@@ -131,6 +169,22 @@ export default function DetalhePedidoPage() {
   function iniciarEdicao() {
     setEditPecas(pedido!.pecas.map(p => ({ ...p, fotos: [...(p.fotos ?? [])] })))
     setEditCliente({ ...pedido!.cliente })
+    setEditDados({
+      // `data_entrega` é `date` no banco e `data_entrada` é `timestamptz`;
+      // <input type="date"> só aceita 'AAAA-MM-DD', daí o corte no 'T'.
+      dataEntrega: (pedido!.dataEntrega ?? '').split('T')[0],
+      dataEntrada: (pedido!.dataEntrada ?? '').split('T')[0],
+      tipo: pedido!.tipo,
+      consultor: pedido!.consultor ?? '',
+      observacoes: pedido!.observacoes ?? '',
+      valorPago: pedido!.valorPago ?? 0,
+    })
+    setEditParcelas(pedido!.parcelas.map(p => ({ ...p })))
+    setEditVetorizacao({
+      necessaria: pedido!.vetorizacao?.necessaria ?? false,
+      valor: pedido!.vetorizacao?.valor ?? 50,
+    })
+    setErroSalvar(null)
     setEditando(true)
   }
 
@@ -138,25 +192,76 @@ export default function DetalhePedidoPage() {
     setEditando(false)
   }
 
+  /** Soma das peças + vetorização. Só vale quando NÃO há parcelas (regra 4). */
+  function totalDasPecas(): number {
+    const pecas = editPecas.reduce((sum, p) => {
+      const qtd = p.tamanhos.reduce((a, t) => a + t.quantidade, 0)
+      return sum + (p.valorUnitario ?? 0) * qtd
+    }, 0)
+    return pecas + (editVetorizacao.necessaria ? editVetorizacao.valor : 0)
+  }
+
   async function salvarEdicao() {
+    if (!editDados.dataEntrega) {
+      setErroSalvar('Informe a data de entrega antes de salvar.')
+      return
+    }
     setSalvando(true)
+    setErroSalvar(null)
     try {
-      const valorTotal = editPecas.reduce((sum, p) => {
-        const qtd = p.tamanhos.reduce((a, t) => a + t.quantidade, 0)
-        return sum + (p.valorUnitario ?? 0) * qtd
-      }, 0) + (pedido!.vetorizacao?.necessaria ? pedido!.vetorizacao.valor : 0)
+      const temParcelas = editParcelas.length > 0
       await atualizarPedido(pedido!.id, {
         pecas: editPecas,
         cliente: editCliente,
-        ...(pedido!.parcelas.length === 0 ? { valorTotal } : {}),
+        dataEntrega: editDados.dataEntrega,
+        dataEntrada: editDados.dataEntrada || undefined,
+        tipo: editDados.tipo,
+        consultor: editDados.consultor,
+        observacoes: editDados.observacoes,
+        vetorizacao: editVetorizacao,
+        parcelas: editParcelas,
+        // Regra 4: havendo parcelas, elas mandam no total e no pago, e enviar
+        // esses dois campos junto só criaria conflito. Sem parcelas, o total
+        // vem das peças e o pago é digitado à mão.
+        ...(temParcelas ? {} : { valorTotal: totalDasPecas(), valorPago: editDados.valorPago }),
       })
       setEditando(false)
       carregar()
     } catch {
-      alert('Erro ao salvar. Tente novamente.')
+      setErroSalvar('Não foi possível salvar. Verifique a conexão e tente de novo — nada foi alterado.')
     } finally {
       setSalvando(false)
     }
+  }
+
+  // --- Parcelas dentro do modo de edição ---
+
+  function addEditParcela() {
+    setEditParcelas(prev => [...prev, {
+      id: crypto.randomUUID(),
+      descricao: `Parcela ${prev.length + 1}`,
+      valor: 0,
+      dataPrevista: editDados.dataEntrega || new Date().toISOString().split('T')[0],
+      pago: false,
+    }])
+  }
+
+  function updateEditParcela(pid: string, campo: Partial<Parcela>) {
+    setEditParcelas(prev => prev.map(p => {
+      if (p.id !== pid) return p
+      const atualizada = { ...p, ...campo }
+      // Marcar como paga carimba a data; desmarcar apaga, senão fica um
+      // pagamento fantasma com data de quando alguém errou o clique.
+      if (campo.pago === true && !atualizada.dataPagamento) {
+        atualizada.dataPagamento = new Date().toISOString().split('T')[0]
+      }
+      if (campo.pago === false) atualizada.dataPagamento = undefined
+      return atualizada
+    }))
+  }
+
+  function removeEditParcela(pid: string) {
+    setEditParcelas(prev => prev.filter(p => p.id !== pid))
   }
 
   function updateEditPeca(pid: string, campo: Partial<Peca>) {
@@ -200,8 +305,10 @@ export default function DetalhePedidoPage() {
   }
 
   async function mudarStatus(status: StatusPedido) {
-    if (status === 'em_producao' && pedido!.valorPago <= 0) {
-      alert('Pedido não pode ir para produção sem pagamento registrado.')
+    // Regra 1 do CLAUDE.md, agora com a exceção "pagar na retirada". A decisão
+    // inteira vive em @/lib/excecaoPagamento — aqui só se pergunta.
+    if (status === 'em_producao' && !podeIrParaProducao(pedido!)) {
+      alert(motivoBloqueio(pedido!))
       return
     }
     await atualizarPedido(pedido!.id, { status })
@@ -238,6 +345,53 @@ export default function DetalhePedidoPage() {
     )
     await atualizarPedido(pedido!.id, { parcelas })
     carregar()
+  }
+
+  // --- Exceção "pagar na retirada" ---
+
+  function abrirExcecao(tipo: 'solicitar' | 'liberar' | 'recusar') {
+    setMotivoExcecao('')
+    setErroExcecao(null)
+    setModalExcecao(tipo)
+  }
+
+  async function gravarExcecao(nova: ExcecaoPagamento) {
+    setSalvandoExcecao(true)
+    setErroExcecao(null)
+    try {
+      await atualizarPedido(pedido!.id, { excecaoPagamento: nova })
+      setModalExcecao(null)
+      await carregar()
+    } catch {
+      // O trigger do banco (migration 013) recusa aprovação de quem não é
+      // gestor. Se a tela deixou passar, a mensagem tem que dizer isso.
+      setErroExcecao('Não foi possível gravar. Se você não é o gestor, a aprovação é recusada pelo próprio banco — peça ao gestor.')
+    } finally {
+      setSalvandoExcecao(false)
+    }
+  }
+
+  function confirmarExcecao() {
+    const quem = membro?.nome ?? 'desconhecido'
+    const motivo = motivoExcecao.trim()
+
+    if (modalExcecao === 'recusar') {
+      // Recusar não exige motivo novo — a observação é opcional e o motivo
+      // original de quem pediu continua registrado.
+      gravarExcecao(decidir(pedido!.excecaoPagamento!, false, quem, motivo))
+      return
+    }
+
+    if (!motivo) {
+      setErroExcecao('Escreva o motivo — é o que fica registrado no pedido e o que o gestor lê para decidir.')
+      return
+    }
+    if (modalExcecao === 'liberar') gravarExcecao(liberacaoDireta(quem, motivo))
+    else gravarExcecao(novaSolicitacao(quem, motivo))
+  }
+
+  async function aprovarExcecao() {
+    await gravarExcecao(decidir(pedido!.excecaoPagamento!, true, membro?.nome ?? 'desconhecido'))
   }
 
   const setorIcone = (s: StatusSetor) => {
@@ -341,6 +495,128 @@ export default function DetalhePedidoPage() {
             </div>
           </div>
 
+          {/* Edit: Dados do pedido.
+
+              Estes campos não existiam no modo de edição — só cliente e peças
+              eram editáveis, então corrigir uma data de entrega ou uma
+              observação obrigava a refazer o pedido. Todos passam por
+              `atualizarPedido`, que já sabia gravá-los; faltava a tela. */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold text-fraco uppercase tracking-wide border-b pb-1">Dados do Pedido</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Data de entrada</label>
+                <input className="input" type="date" value={editDados.dataEntrada}
+                  onChange={e => setEditDados(v => ({ ...v, dataEntrada: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Data de entrega *</label>
+                <input className="input" type="date" value={editDados.dataEntrega}
+                  onChange={e => setEditDados(v => ({ ...v, dataEntrega: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Consultor</label>
+                <input className="input" value={editDados.consultor}
+                  onChange={e => setEditDados(v => ({ ...v, consultor: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Tipo do pedido</label>
+                <select className="input" value={editDados.tipo}
+                  onChange={e => setEditDados(v => ({ ...v, tipo: e.target.value as TipoPedido }))}>
+                  <option value="normal">Normal</option>
+                  <option value="urgente">Urgente</option>
+                  <option value="grande_volume">Grande Volume</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="label">Observações gerais</label>
+                <textarea className="input min-h-[72px]" value={editDados.observacoes}
+                  onChange={e => setEditDados(v => ({ ...v, observacoes: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+
+          {/* Edit: Financeiro. Guardado por `verFinanceiro` pelo mesmo motivo
+              do modo leitura — quem não pode ver dinheiro também não edita.
+              Hoje só gestor e recepcionista chegam aqui (são os únicos com
+              `editarPedido`), mas a checagem fica explícita para não depender
+              de as duas flags andarem sempre juntas. */}
+          {permissoes.verFinanceiro && (
+            <div className="space-y-3">
+              <h3 className="text-xs font-semibold text-fraco uppercase tracking-wide border-b pb-1">Pagamento</h3>
+
+              <label className="flex items-center gap-2 text-sm text-conteudo">
+                <input type="checkbox" checked={editVetorizacao.necessaria}
+                  onChange={e => setEditVetorizacao(v => ({ ...v, necessaria: e.target.checked }))} />
+                Cobrar vetorização
+              </label>
+              {editVetorizacao.necessaria && (
+                <div className="w-40">
+                  <label className="label">Valor da vetorização (R$)</label>
+                  <input className="input" type="number" min={0} step={0.01} value={editVetorizacao.valor}
+                    onChange={e => setEditVetorizacao(v => ({ ...v, valor: parseFloat(e.target.value) || 0 }))} />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs font-semibold text-fraco uppercase tracking-wide">Parcelas</span>
+                <button type="button" onClick={addEditParcela} className="btn-ghost text-xs">
+                  <PlusCircle className="w-4 h-4" /> Adicionar parcela
+                </button>
+              </div>
+
+              {editParcelas.length === 0 ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-fraco">
+                    Sem parcelas: o total vem da soma das peças (R$ {totalDasPecas().toFixed(2)}) e o valor pago é digitado abaixo.
+                  </p>
+                  <div className="w-40">
+                    <label className="label">Valor pago (R$)</label>
+                    <input className="input" type="number" min={0} step={0.01} value={editDados.valorPago}
+                      onChange={e => setEditDados(v => ({ ...v, valorPago: parseFloat(e.target.value) || 0 }))} />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {editParcelas.map((parc, idx) => (
+                    <div key={parc.id} className="grid grid-cols-12 gap-2 items-end border border-borda rounded-xl p-3">
+                      <div className="col-span-4">
+                        <label className="label">Descrição</label>
+                        <input className="input" value={parc.descricao}
+                          onChange={e => updateEditParcela(parc.id, { descricao: e.target.value })} />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="label">Valor (R$)</label>
+                        <input className="input" type="number" min={0} step={0.01} value={parc.valor}
+                          onChange={e => updateEditParcela(parc.id, { valor: parseFloat(e.target.value) || 0 })} />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="label">Vencimento</label>
+                        <input className="input" type="date" value={(parc.dataPrevista ?? '').split('T')[0]}
+                          onChange={e => updateEditParcela(parc.id, { dataPrevista: e.target.value })} />
+                      </div>
+                      <div className="col-span-2 flex items-center justify-between pb-2">
+                        <label className="flex items-center gap-1.5 text-xs text-suave">
+                          <input type="checkbox" checked={parc.pago}
+                            onChange={e => updateEditParcela(parc.id, { pago: e.target.checked })} />
+                          Paga
+                        </label>
+                        <button type="button" onClick={() => removeEditParcela(parc.id)}
+                          className="text-red-400 hover:text-red-600" title={`Remover ${parc.descricao || `parcela ${idx + 1}`}`}>
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-xs text-fraco">
+                    Havendo parcelas, elas são a fonte da verdade: total R$ {editParcelas.reduce((a, p) => a + (p.valor || 0), 0).toFixed(2)}
+                    {' · '}pago R$ {editParcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0).toFixed(2)}.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Edit: Peças */}
           <div className="space-y-4">
             <h3 className="text-xs font-semibold text-fraco uppercase tracking-wide border-b pb-1">Peças</h3>
@@ -377,8 +653,15 @@ export default function DetalhePedidoPage() {
                     </div>
                     <div>
                       <label className="label">Tipo de Peça</label>
+                      {/* Peça criada por digitação livre no /novo-pedido não
+                          está no CATALOGO. Sem esta opção explícita o <select>
+                          descartaria o valor em silêncio e a peça viraria a
+                          primeira da lista ao salvar. */}
                       <select className="input" value={peca.tipo}
                         onChange={e => updateEditPeca(peca.id, { tipo: e.target.value })}>
+                        {peca.tipo && !((CATALOGO as any)[peca.categoria] || []).includes(peca.tipo) && (
+                          <option value={peca.tipo}>{peca.tipo}</option>
+                        )}
                         {((CATALOGO as any)[peca.categoria] || []).map((t: string) => <option key={t}>{t}</option>)}
                       </select>
                     </div>
@@ -429,8 +712,12 @@ export default function DetalhePedidoPage() {
                       {peca.tamanhos.map((t, ti) => (
                         <div key={ti} className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <select className="input w-36" value={t.tamanho}
-                              onChange={e => updateEditTamanho(peca.id, ti, { tamanho: e.target.value as any, medidaEspecial: '' })}>
+                            <select className="input w-36"
+                              value={ehTamanhoLivre(t.tamanho) ? OUTRO_TAMANHO : t.tamanho}
+                              onChange={e => updateEditTamanho(peca.id, ti, {
+                                tamanho: e.target.value === OUTRO_TAMANHO ? '' : e.target.value,
+                                medidaEspecial: '',
+                              })}>
                               <optgroup label="Adulto">
                                 {TAMANHOS_ADULTO.map(s => <option key={s} value={s}>{s}</option>)}
                               </optgroup>
@@ -438,6 +725,7 @@ export default function DetalhePedidoPage() {
                                 {TAMANHOS_INFANTIL.map(s => <option key={s} value={s}>{s}</option>)}
                               </optgroup>
                               <option value="SOB_MEDIDA">Sob Medida</option>
+                              <option value={OUTRO_TAMANHO}>Outro (digitar)…</option>
                             </select>
                             <input type="number" min={1} className="input w-24" value={t.quantidade}
                               onChange={e => updateEditTamanho(peca.id, ti, { quantidade: parseInt(e.target.value) || 1 })} />
@@ -454,6 +742,11 @@ export default function DetalhePedidoPage() {
                               value={t.medidaEspecial ?? ''}
                               onChange={e => updateEditTamanho(peca.id, ti, { medidaEspecial: e.target.value })} />
                           )}
+                          {(t.tamanho === '' || ehTamanhoLivre(t.tamanho)) && (
+                            <input className="input text-sm" placeholder="Digite o tamanho (ex: BL P, EXG)"
+                              value={t.tamanho}
+                              onChange={e => updateEditTamanho(peca.id, ti, { tamanho: e.target.value })} />
+                          )}
                         </div>
                       ))}
                       <button type="button" onClick={() => addEditTamanho(peca.id)}
@@ -463,9 +756,9 @@ export default function DetalhePedidoPage() {
                     </div>
                   </div>
 
-                  {/* Fotos */}
+                  {/* Arte da peça: imagem ou PDF */}
                   <div>
-                    <label className="label">Fotos</label>
+                    <label className="label">Arte (imagem ou PDF)</label>
                     <FotoUpload
                       pecaId={peca.id}
                       fotos={peca.fotos ?? []}
@@ -476,6 +769,10 @@ export default function DetalhePedidoPage() {
               )
             })}
           </div>
+
+          {erroSalvar && (
+            <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded-xl px-3 py-2">{erroSalvar}</p>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button onClick={cancelarEdicao} className="btn-secondary flex-1 justify-center">
@@ -545,9 +842,8 @@ export default function DetalhePedidoPage() {
                   {p.fotos && p.fotos.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {p.fotos.map((url, fi) => (
-                        <img key={fi} src={url} alt={`Foto ${fi + 1} — Peça ${i + 1}`}
-                          className="w-20 h-20 object-cover rounded-xl border border-borda cursor-pointer"
-                          onClick={() => window.open(url, '_blank')} />
+                        <MiniaturaArquivo key={fi} url={url} indice={fi}
+                          onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} />
                       ))}
                     </div>
                   )}
@@ -555,6 +851,93 @@ export default function DetalhePedidoPage() {
               )
             })}
           </div>
+
+          {/* Pagar na retirada.
+
+              Só aparece para quem pode ver dinheiro — é uma condição comercial,
+              não informação de produção. O estado da liberação fica visível o
+              tempo todo (inclusive depois de aprovada), porque é o registro de
+              que a regra 1 foi contornada com autorização, e por quem. */}
+          {permissoes.verFinanceiro && (
+            <div className="card space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-semibold text-titulo">Pagar na retirada</h2>
+                {pedido.excecaoPagamento && (
+                  <span className={clsx('badge',
+                    pedido.excecaoPagamento.status === 'aprovada' ? 'bg-green-100 text-green-800'
+                      : pedido.excecaoPagamento.status === 'pendente' ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-red-100 text-red-700')}>
+                    {pedido.excecaoPagamento.status === 'aprovada' ? 'Liberado'
+                      : pedido.excecaoPagamento.status === 'pendente' ? 'Aguardando aprovação' : 'Recusado'}
+                  </span>
+                )}
+              </div>
+
+              {!pedido.excecaoPagamento && (
+                <p className="text-sm text-suave">
+                  Sem liberação. Este pedido só vai para produção com pagamento registrado.
+                </p>
+              )}
+
+              {pedido.excecaoPagamento && (
+                <div className="text-sm space-y-1">
+                  <p className="text-conteudo"><span className="text-fraco">Motivo: </span>{pedido.excecaoPagamento.motivo}</p>
+                  <p className="text-xs text-fraco">
+                    Solicitado por {pedido.excecaoPagamento.solicitadoPor} em{' '}
+                    {format(new Date(pedido.excecaoPagamento.solicitadoEm), 'dd/MM/yyyy HH:mm')}
+                  </p>
+                  {pedido.excecaoPagamento.decididoPor && pedido.excecaoPagamento.decididoEm && (
+                    <p className="text-xs text-fraco">
+                      {pedido.excecaoPagamento.status === 'aprovada' ? 'Aprovado' : 'Recusado'} por{' '}
+                      {pedido.excecaoPagamento.decididoPor} em{' '}
+                      {format(new Date(pedido.excecaoPagamento.decididoEm), 'dd/MM/yyyy HH:mm')}
+                    </p>
+                  )}
+                  {pedido.excecaoPagamento.decisaoObservacao && (
+                    <p className="text-xs text-suave italic">"{pedido.excecaoPagamento.decisaoObservacao}"</p>
+                  )}
+                </div>
+              )}
+
+              {/* Fila de decisão do gestor. A recepcionista vê o pedido dela
+                  aqui, mas sem botão — a decisão não é dela. */}
+              {excecaoPendente(pedido) && permissoes.aprovarExcecaoPagamento && (
+                <div className="flex gap-2 pt-1">
+                  <button onClick={aprovarExcecao} disabled={salvandoExcecao} className="btn-primary text-sm">
+                    Aprovar
+                  </button>
+                  <button onClick={() => abrirExcecao('recusar')} disabled={salvandoExcecao} className="btn-secondary text-sm">
+                    Recusar
+                  </button>
+                </div>
+              )}
+
+              {excecaoPendente(pedido) && !permissoes.aprovarExcecaoPagamento && (
+                <p className="text-xs text-yellow-700">
+                  Aguardando o gestor. O pedido não avança para produção até ele aprovar.
+                </p>
+              )}
+
+              {!pedido.excecaoPagamento && permissoes.aprovarExcecaoPagamento && (
+                <button onClick={() => abrirExcecao('liberar')} className="btn-secondary text-sm">
+                  Liberar pagamento na retirada
+                </button>
+              )}
+
+              {!pedido.excecaoPagamento && !permissoes.aprovarExcecaoPagamento && permissoes.solicitarExcecaoPagamento && (
+                <button onClick={() => abrirExcecao('solicitar')} className="btn-secondary text-sm">
+                  Solicitar liberação ao gestor
+                </button>
+              )}
+
+              {pedido.excecaoPagamento?.status === 'recusada' && permissoes.solicitarExcecaoPagamento && (
+                <button onClick={() => abrirExcecao(permissoes.aprovarExcecaoPagamento ? 'liberar' : 'solicitar')}
+                  className="btn-ghost text-sm">
+                  Pedir de novo
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Parcelas — some inteira para quem não pode ver dinheiro. Esconder
               só os valores deixaria vazar quantas parcelas existem e quais já
@@ -696,6 +1079,17 @@ export default function DetalhePedidoPage() {
                 <span className="text-fraco">Entrega</span>
                 <span className="font-medium">{format(new Date(pedido.dataEntrega), 'dd/MM/yyyy')}</span>
               </div>
+              {/* De qual lista de preços os valores saíram. Pedido anterior às
+                  múltiplas tabelas não registrou nenhuma — e a tela diz isso
+                  em vez de chutar 'Escolar 1'. */}
+              {permissoes.verFinanceiro && (
+                <div className="flex justify-between">
+                  <span className="text-fraco">Tabela de preço</span>
+                  <span className={clsx('font-medium', pedido.tabelaPreco ? 'text-conteudo' : 'text-fraco')}>
+                    {pedido.tabelaPreco || 'não registrada'}
+                  </span>
+                </div>
+              )}
               {permissoes.verFinanceiro && pedido.vetorizacao?.necessaria && (
                 <div className="flex justify-between">
                   <span className="text-fraco">Vetorização</span>
@@ -808,10 +1202,19 @@ export default function DetalhePedidoPage() {
               </div>
               <div className="flex gap-3 items-start">
                 <div className="w-32 h-32 border border-black flex items-center justify-center shrink-0 overflow-hidden">
-                  {p.fotos && p.fotos.length > 0 ? (
-                    <img src={p.fotos[0]} alt={`Foto da peça ${i + 1}`} className="w-full h-full object-cover" />
+                  {/* A ficha impressa mostra UMA miniatura, e ela só funciona se
+                      for imagem — `<img src="...pdf">` imprime um quadrado
+                      quebrado. Peça que só tem PDF anexado sai como aviso de
+                      texto: quem está na produção precisa saber que a arte
+                      existe e está no sistema. */}
+                  {primeiraImagem(p.fotos) ? (
+                    <img src={primeiraImagem(p.fotos)} alt={`Arte da peça ${i + 1}`} className="w-full h-full object-cover" />
+                  ) : contarPdfs(p.fotos) > 0 ? (
+                    <span className="text-[9px] text-center px-1 leading-tight">
+                      Arte em PDF<br />({contarPdfs(p.fotos)} arquivo{contarPdfs(p.fotos) > 1 ? 's' : ''})
+                    </span>
                   ) : (
-                    <span className="text-[9px] text-fraco text-center px-1">Sem foto</span>
+                    <span className="text-[9px] text-fraco text-center px-1">Sem arte</span>
                   )}
                 </div>
                 <table className="flex-1 text-[11px] border border-black">
@@ -944,6 +1347,43 @@ export default function DetalhePedidoPage() {
       </div>
       )}
     </div>
+
+    <Modal
+      aberto={modalExcecao !== null}
+      titulo={
+        modalExcecao === 'liberar' ? 'Liberar pagamento na retirada'
+          : modalExcecao === 'recusar' ? 'Recusar a liberação'
+          : 'Solicitar pagamento na retirada'
+      }
+      onFechar={() => setModalExcecao(null)}
+      rodape={
+        <>
+          <button onClick={() => setModalExcecao(null)} className="btn-secondary flex-1 justify-center">Cancelar</button>
+          <button onClick={confirmarExcecao} disabled={salvandoExcecao} className="btn-primary flex-1 justify-center">
+            {salvandoExcecao ? 'Gravando...' : 'Confirmar'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-suave">
+          {modalExcecao === 'liberar'
+            ? 'Este pedido poderá ir para produção sem pagamento registrado. Fica gravado no pedido quem liberou e por quê.'
+            : modalExcecao === 'recusar'
+            ? 'O pedido continua barrado até que haja pagamento registrado. A observação é opcional.'
+            : 'A solicitação vai para o gestor. Até ele aprovar, o pedido NÃO avança para produção.'}
+        </p>
+        <div>
+          <label className="label">
+            {modalExcecao === 'recusar' ? 'Observação (opcional)' : 'Motivo'}
+          </label>
+          <textarea className="input min-h-[80px]" autoFocus value={motivoExcecao}
+            placeholder={modalExcecao === 'recusar' ? 'Ex: cliente ainda tem saldo em aberto do pedido anterior' : 'Ex: cliente antigo, sempre paga na retirada'}
+            onChange={e => setMotivoExcecao(e.target.value)} />
+        </div>
+        {erroExcecao && <p className="text-sm text-red-600">{erroExcecao}</p>}
+      </div>
+    </Modal>
 
     {modalAberto && (
       <ModalProntoParaEnvio

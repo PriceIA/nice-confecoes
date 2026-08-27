@@ -2,6 +2,7 @@ import { Cliente, Parcela, Pedido, ProgressoSetor, StatusSetor, Terceirizada } f
 import { addBusinessDays, format } from 'date-fns'
 import { supabase } from './supabase'
 import { criarClienteBrowser } from './supabase/client'
+import { sanitizarNome } from './arquivos'
 
 // Fase B: pedidos/clientes/terceirizadas ganharam RLS baseada em auth.uid()
 // (ver CLAUDE.md, "Estado de segurança atual"). O client anônimo de
@@ -89,6 +90,8 @@ function mapPedido(row: any): Pedido {
     valorTotal,
     valorPago,
     vetorizacao: row.vetorizacao ?? undefined,
+    tabelaPreco: row.tabela_preco ?? undefined,
+    excecaoPagamento: row.excecao_pagamento ?? undefined,
   }
 }
 
@@ -182,6 +185,8 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
     parcelas,
     progresso,
     vetorizacao: dados.vetorizacao ?? null,
+    tabela_preco: dados.tabelaPreco ?? null,
+    excecao_pagamento: dados.excecaoPagamento ?? null,
   }
   console.log('[criarPedido] insert payload:', JSON.stringify(insertPayload, null, 2))
   const { data, error } = await supabase
@@ -222,13 +227,24 @@ export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promi
   if (dados.tipo !== undefined) update.tipo = dados.tipo
   if (dados.status !== undefined) update.status = dados.status
   if (dados.dataEntrega !== undefined) update.data_entrega = dados.dataEntrega
+  if (dados.dataEntrada !== undefined) update.data_entrada = dados.dataEntrada
   if (dados.observacoes !== undefined) update.observacoes = dados.observacoes
   if (dados.pecas !== undefined) update.pecas = dados.pecas
   if (dados.progresso !== undefined) update.progresso = dados.progresso
-  if (dados.parcelas !== undefined) {
-    update.parcelas = dados.parcelas
-    update.valor_total = dados.parcelas.reduce((a, p) => a + (p.valor || 0), 0)
-    update.valor_pago = dados.parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
+  if (dados.parcelas !== undefined) update.parcelas = dados.parcelas
+
+  // Regra 4 do CLAUDE.md: HAVENDO parcelas, elas são a fonte da verdade de
+  // total e pago. A leitura (`mapPedido`) já decide assim, e a escrita
+  // acompanha.
+  //
+  // O `.length > 0` é o detalhe que faltava: quando a edição do pedido apaga
+  // a última parcela, `dados.parcelas` chega como `[]` — array vazio é
+  // "não há parcelas", não "as parcelas somam zero". Sem essa checagem, tirar
+  // a última parcela zerava valor_total e valor_pago do pedido em silêncio.
+  const temParcelas = dados.parcelas !== undefined && dados.parcelas.length > 0
+  if (temParcelas) {
+    update.valor_total = dados.parcelas!.reduce((a, p) => a + (p.valor || 0), 0)
+    update.valor_pago = dados.parcelas!.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
   } else {
     if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal
     if (dados.valorPago !== undefined) update.valor_pago = dados.valorPago
@@ -238,6 +254,8 @@ export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promi
     update.cliente_id = cliente.id
   }
   if (dados.vetorizacao !== undefined) update.vetorizacao = dados.vetorizacao
+  if (dados.tabelaPreco !== undefined) update.tabela_preco = dados.tabelaPreco
+  if (dados.excecaoPagamento !== undefined) update.excecao_pagamento = dados.excecaoPagamento
 
   const { error } = await supabase.from('pedidos').update(update).eq('id', id)
   if (error) throw error
@@ -376,12 +394,28 @@ export async function buscarOuCriarCliente(dados: Omit<Cliente, 'id' | 'dataCada
   return criarCliente(dados)
 }
 
+/**
+ * Sobe um anexo de arte da peça: imagem de qualquer formato OU PDF.
+ *
+ * Duas coisas mudaram quando o PDF entrou:
+ *
+ * - o nome original vai junto na chave (`{uuid}-arte-frente.pdf`), porque
+ *   miniatura de PDF mostra nome, não imagem — sem isso a tela só teria um
+ *   uuid para exibir. `sanitizarNome` tira acento e caractere que o Storage
+ *   recusa;
+ * - `contentType` passa a ser enviado. Sem ele o Supabase chuta pela extensão,
+ *   e o PDF pode acabar servido como download em vez de abrir no navegador.
+ *
+ * O bucket precisa aceitar `application/pdf` em `allowed_mime_types` — se
+ * estiver restrito a imagem, o upload volta como erro do Storage.
+ */
 export async function uploadFotoPeca(pecaId: string, file: File): Promise<string> {
-  const ext = file.name.split('.').pop() ?? 'jpg'
-  const path = `${pecaId}/${crypto.randomUUID()}.${ext}`
+  const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase()
+  const nome = sanitizarNome(file.name.replace(/\.[^.]+$/, '')) || 'arquivo'
+  const path = `${pecaId}/${crypto.randomUUID()}-${nome}.${ext}`
   const { error } = await supabase.storage
     .from('pedido-fotos')
-    .upload(path, file, { upsert: false })
+    .upload(path, file, { upsert: false, contentType: file.type || undefined })
   if (error) throw error
   const { data } = supabase.storage.from('pedido-fotos').getPublicUrl(path)
   return data.publicUrl

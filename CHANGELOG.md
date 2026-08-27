@@ -8,6 +8,153 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase C2 — PDF na arte, edição ampla do pedido, tabelas de preço editáveis e pagar na retirada
+
+Sessão de 26/08/2026, a partir de quatro pedidos do Pedro. **Tem SQL:** migrations `011`
+(condicional), `012` e `013`, cada uma com o arquivo de auditoria correspondente. Rodar a
+auditoria primeiro, como sempre.
+
+#### 1. Arte do pedido aceita PDF e qualquer formato de imagem
+
+O designer manda a arte em PDF, e o seletor de arquivo era `accept="image/*"` — o PDF nem
+aparecia na janela do Windows.
+
+- **`src/lib/arquivos.ts`** (novo): tipos aceitos, teto de tamanho, e a leitura do tipo do
+  arquivo a partir da própria URL. O campo continua sendo `fotos: string[]` de propósito —
+  virar objeto obrigaria a migrar o JSONB de todos os pedidos antigos.
+- **`src/components/MiniaturaArquivo.tsx`** (novo): imagem vira miniatura, PDF vira cartão
+  com ícone e nome. Não é enfeite: `<img src="...pdf">` renderiza imagem quebrada.
+- **`uploadFotoPeca`** (`src/lib/store.ts`) passa a enviar `contentType` e a guardar o nome
+  original do arquivo na chave do Storage (`{uuid}-arte-frente.pdf`), sanitizado. Sem o
+  nome, a miniatura de PDF só teria um uuid pra exibir.
+- **Ficha A4**: usa a primeira IMAGEM da peça; peça só com PDF imprime "Arte em PDF (n
+  arquivos)" em vez de um quadrado quebrado.
+- **Arquivo acima de 45 MB** é barrado na tela, com mensagem em português, antes de virar
+  erro cru do Storage.
+- **`supabase/migrations/011_storage_pdf.sql`** — só é necessária se o bucket
+  `pedido-fotos` tiver `allowed_mime_types` preenchido sem `application/pdf`. A auditoria
+  diz se precisa.
+
+#### 2. Edição do pedido alcança o pedido inteiro
+
+O modo de edição de `/pedidos/[id]` só mexia em cliente e peças: corrigir data de entrega,
+observação ou parcela obrigava a refazer o pedido.
+
+- Seção **Dados do Pedido**: data de entrada, data de entrega, consultor, tipo, observações.
+- Seção **Pagamento** (sob `verFinanceiro`): vetorização, parcelas com adicionar/remover/
+  editar/marcar paga, e valor pago avulso quando não há parcelas.
+- `atualizarPedido` (`src/lib/store.ts`) passa a aceitar `dataEntrada`.
+- **Corrigido:** apagar a última parcela zerava `valor_total` e `valor_pago` em silêncio.
+  `dados.parcelas = []` significa "não há parcelas", não "as parcelas somam zero" — a regra
+  4 (parcelas são a fonte da verdade) agora exige `length > 0` também na escrita, como a
+  leitura em `mapPedido` já fazia.
+- Erro de gravação virou faixa vermelha na tela, no lugar do `alert()`.
+
+#### 3. Várias tabelas de preço, com grupo e peça editáveis
+
+A Nice trabalha com mais de uma tabela escolar: mesmas peças, valores diferentes conforme o
+grupo de escolas (o PDF "TABELA 2025" traz "WF, Olga (Vermelho), WR / N.G." no cabeçalho —
+é uma entre várias). E peça nova aparece no meio do atendimento.
+
+- **`supabase/migrations/012_tabela_precos_multi.sql`**: coluna `tabela_precos.tabela`
+  (backfill `'Escolar 1'`), constraint única passa de `(grupo, produto, faixa_tamanho)` para
+  `(tabela, grupo, produto, faixa_tamanho)`, índice por tabela, e `pedidos.tabela_preco`
+  (nullable — pedido antigo não escolheu tabela nenhuma, e inventar uma afirmaria algo que
+  não aconteceu).
+- **`src/lib/tabelasPreco.ts`** (novo): leitura/escrita das listas. Devolve também quais
+  chaves já existem no banco, pra tela distinguir "campo esvaziado" (não mexe) de "célula
+  que nunca existiu" (grava, mesmo em branco).
+- **`/tabela-precos` reescrita**: a grade agora vem do BANCO, não da constante
+  `GRUPOS_PRECO_ESCOLAR` — que virou só semente pro caso de o banco não responder. Seletor
+  de tabela, "Nova tabela" (copia as peças da tabela aberta com preços em branco),
+  "Renomear", "Novo grupo", "Nova peça" e remoção de peça/grupo. Adota o `Modal` de
+  `components/kanban/` — é a primeira tela fora do Kanban a usá-lo.
+- **`/novo-pedido`**: seletor "Tabela de preço deste pedido" (gravado em `tabela_preco`);
+  trocar a tabela recalcula o valor unitário das peças que existem nela. O seletor de peça
+  ganhou as peças com preço na tabela escolhida (agrupadas) e a opção "+ Outra peça
+  (digitar)", que abre o modal com a pergunta do Pedro: **só neste pedido** (não grava nada
+  — `peca.tipo` sempre foi texto livre) ou **registrar no sistema** (escolhe tabela e grupo,
+  e entra em `tabela_precos`).
+- **Tamanho livre**: `Tamanho` deixou de ser union fechado e virou `string`. A lista
+  sugerida continua sendo o caminho normal; "Outro (digitar)" cobre baby look, EXG e
+  numeração de escola, que antes viravam "Sob Medida" e sumiam da grade impressa.
+  `getFaixaTamanho` cai em `P/M/G` pra tamanho que não reconhece, então digitar nunca quebra
+  o cálculo.
+- **Corrigido:** no modo de edição, peça criada por digitação livre sumia do `<select>` e
+  virava a primeira do catálogo ao salvar.
+- **Compatível com o banco antes da 012**: se a coluna `tabela` ainda não existe, a leitura
+  refaz a consulta no formato antigo e joga tudo em `'Escolar 1'`. Subir o código antes de
+  rodar o SQL não faz os preços sumirem do cálculo.
+- **`/configuracoes` não mudou** — continua gravando o catálogo só em `localStorage`. Peça
+  registrada pelo `/novo-pedido` NÃO passa por lá: ela entra na tabela de preços, que é onde
+  uma peça existe de verdade pro cálculo. As duas listas convivem no seletor de peça.
+
+#### 4. "Pagar na retirada" com aprovação do gestor
+
+A regra 1 continua valendo — pedido não vai pra produção sem pagamento. O que muda é que a
+exceção pra cliente fiel agora tem um lugar próprio, em vez de alguém lançar um pagamento
+que não aconteceu pra destravar a tela.
+
+- **`supabase/migrations/013_excecao_pagamento.sql`**: coluna `pedidos.excecao_pagamento`
+  (jsonb, nullable) + **trigger** `pedidos_excecao_pagamento_guard`.
+- **`src/lib/excecaoPagamento.ts`** (novo): toda a decisão de "pode ir pra produção?" num
+  lugar só. Duas portas, nunca mais que isso — pagamento registrado OU liberação aprovada.
+  Solicitação pendente não abre nada.
+- **Fluxo:** gestor libera direto (nasce `aprovada`); recepcionista solicita (nasce
+  `pendente`) e o pedido segue barrado até o gestor decidir. Motivo é obrigatório e fica
+  gravado, junto de quem pediu, quem decidiu e quando.
+- **Notificação do gestor:** cartão no `/dashboard` listando os pedidos parados esperando
+  decisão dele. Sem push nem e-mail — a lista aparece onde ele já entra todo dia.
+- **`permissoes.ts`:** `recepcionista` deixou de ser o MESMO objeto que `gestor`. As duas
+  flags novas são `solicitarExcecaoPagamento` (ambos) e `aprovarExcecaoPagamento` (só
+  gestor). É a única divergência entre os dois perfis hoje.
+
+### Segurança
+
+- **A aprovação vale no banco, não só na tela.** RLS é por linha e não por coluna, e
+  gestor/recepcionista já têm UPDATE liberado em `pedidos` — não há policy que diga "pode
+  alterar tudo menos este campo". O trigger `validar_excecao_pagamento()` (security definer,
+  consulta `meu_perfil()`) recusa gravar `status` `aprovada`/`recusada` vindo de perfil que
+  não seja gestor. Mesmo raciocínio que levou a 009 a criar `atualizar_progresso_pedido`.
+  Diferente de `verFinanceiro`, que continua sendo só interface.
+- O trigger deixa passar quando `meu_perfil()` é nulo — o SQL Editor do Supabase não tem
+  `auth.uid()`. É deliberado: a trava é para o aplicativo, não para o dono do banco.
+- Nada muda no bucket `pedido-fotos`: continua público por URL, como as fotos já eram. A
+  011 só amplia os tipos de arquivo aceitos.
+
+#### Execução (27/08/2026)
+
+Handoff recriado na máquina principal (pasta conectada), build confirmado (`tsc --noEmit` e
+`npm run build` limpos), 4 testes manuais feitos pelo Felipe direto em `npm run dev` —
+conectado no banco de produção de propósito, com cuidado (peça em pedido não salvo, teste de
+parcela em pedido já entregue, `/tabela-precos` só de leitura) — e as 3 migrations rodadas
+pelo Pedro no SQL Editor, auditoria antes de cada uma:
+
+- **011 não foi necessária.** A auditoria mostrou `allowed_mime_types = NULL` no bucket
+  `pedido-fotos` — ele já aceita qualquer tipo de arquivo, PDF incluso. Bateu com o teste 1
+  (upload de PDF) ter funcionado de primeira, sem precisar de migration nenhuma.
+- **012 tinha um bug real**, encontrado só na execução: o bloco que procura a constraint
+  antiga por colunas comparava `array_agg(a.attname order by a.attname)` (tipo `name[]`,
+  do catálogo do Postgres) direto com `array['faixa_tamanho', 'grupo', 'produto']` (que o
+  Postgres lê como `text[]`) — erro `42883: operator does not exist: name[] = text[]`. Como
+  o script roda como uma transação implícita (sem `BEGIN`/`COMMIT` explícito, é assim que o
+  SQL Editor manda um bloco com várias instruções), o erro no meio desfez tudo — conferido
+  antes de seguir. Corrigido casteando pra `a.attname::text` nos dois `array_agg` do bloco
+  `do $$ ... $$`, e a versão corrigida é a que está em
+  `supabase/migrations/012_tabela_precos_multi.sql` neste repo. Depois da correção, rodou
+  limpo: `tabela_precos` com as 142 linhas existentes viradas `'Escolar 1'`, constraint nova
+  `tabela_precos_tabela_grupo_produto_faixa_key` com as 4 colunas, `pedidos.tabela_preco`
+  criada.
+- **013 rodou de primeira**, sem ajuste — coluna `excecao_pagamento` e trigger
+  `pedidos_excecao_pagamento_guard` confirmados. Reteste do "Pagar na retirada" pelo Pedro
+  (gestor) depois da migration: liberação gravou como `aprovada`, como esperado.
+- **Tabela de equipe conferida nesta sessão** (`select nome, perfil from equipe`): além de
+  Pedro Benedetti (gestor) e Kalomira (recepcionista), já estão cadastrados Kezia, Regina e
+  Vera (costureira), Alex (estamparia_serigrafia) e Davi Luiz (estamparia_sublimacao).
+  Acabamento, designer e corte continuam sem pessoa.
+
+Commit e push ainda pendentes de conferência do Pedro no código, antes de subir.
+
 ### Fase C0 — setor "não se aplica" e ordenação em /pedidos
 
 Sessão de 21/08/2026, a partir de `docs/fase-c0.md` (testes do Pedro em produção). Sem SQL

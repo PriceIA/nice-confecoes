@@ -5,14 +5,17 @@ import { format, isAfter, addDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
   Factory, AlertTriangle, Clock, ClipboardCheck,
-  PlusCircle, ArrowRight, TrendingUp, Users2
+  PlusCircle, ArrowRight, TrendingUp, Users2, HandCoins
 } from 'lucide-react'
 import { getPedidos, getClientes, pedidosStats } from '@/lib/store'
 import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, totalPecas } from '@/lib/helpers'
 import { Pedido } from '@/types'
+import { excecaoPendente } from '@/lib/excecaoPagamento'
+import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
 
 export default function DashboardPage() {
+  const { permissoes } = useMembro()
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [totalClientes, setTotalClientes] = useState(0)
   const [stats, setStats] = useState({ emProducao: 0, urgentes: 0, entregaEm7dias: 0, aguardandoProducao: 0 })
@@ -28,6 +31,13 @@ export default function DashboardPage() {
 
   const ativos = pedidos.filter(p => !['entregue', 'cancelado'].includes(p.status))
   const urgentes = pedidos.filter(p => p.tipo === 'urgente' && !['entregue', 'cancelado'].includes(p.status))
+
+  // A "notificação" do gestor. Não é push nem e-mail: é a lista aparecendo no
+  // lugar em que ele já entra todo dia. Enquanto o pedido estiver aqui, ele
+  // está PARADO — não avança para produção sem a decisão.
+  const aguardandoAprovacao = pedidos.filter(
+    p => excecaoPendente(p) && !['entregue', 'cancelado'].includes(p.status),
+  )
 
   const CARDS = [
     { label: 'Em Produção', value: stats.emProducao, icon: Factory, color: 'text-marca-texto', bg: 'bg-marca-suave', border: 'border-marca-borda' },
@@ -89,6 +99,34 @@ export default function DashboardPage() {
               </div>
             </Link>
           ))}
+        </div>
+      )}
+
+      {/* Liberações de "pagar na retirada" esperando decisão do gestor. */}
+      {permissoes.aprovarExcecaoPagamento && aguardandoAprovacao.length > 0 && (
+        <div className="card border-2 border-yellow-300 bg-yellow-50 space-y-3">
+          <h2 className="font-semibold text-yellow-800 flex items-center gap-2">
+            <HandCoins className="w-4 h-4 text-yellow-600" />
+            {aguardandoAprovacao.length === 1
+              ? '1 pedido aguardando sua aprovação para pagar na retirada'
+              : `${aguardandoAprovacao.length} pedidos aguardando sua aprovação para pagar na retirada`}
+          </h2>
+          <div className="space-y-2">
+            {aguardandoAprovacao.map(p => (
+              <Link key={p.id} href={`/pedidos/${p.id}`}
+                className="flex items-center justify-between gap-3 bg-superficie border border-yellow-200 rounded-xl px-4 py-3 hover:border-yellow-400 transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-conteudo">
+                    #{p.numero} — {p.cliente.empresa || p.cliente.nome}
+                  </p>
+                  <p className="text-xs text-suave truncate">
+                    {p.excecaoPagamento?.solicitadoPor}: {p.excecaoPagamento?.motivo}
+                  </p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-yellow-600 shrink-0" />
+              </Link>
+            ))}
+          </div>
         </div>
       )}
 

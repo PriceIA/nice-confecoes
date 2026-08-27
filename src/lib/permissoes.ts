@@ -90,8 +90,29 @@ type Permissoes = {
    * tela não oferece o que o banco recusaria.
    */
   editarKanban: boolean
+  /**
+   * Pedir que um pedido possa ir para produção sem pagamento registrado
+   * ("pagar na retirada", para cliente fiel).
+   *
+   * Pedir não libera nada: a solicitação nasce pendente e o pedido segue
+   * barrado até alguém com `aprovarExcecaoPagamento` decidir.
+   */
+  solicitarExcecaoPagamento: boolean
+  /**
+   * Decidir (aprovar ou recusar) essa liberação.
+   *
+   * É a ÚNICA permissão em que gestor e recepcionista divergem — por isso
+   * `RECEPCIONISTA` deixou de ser o mesmo objeto que `ACESSO_TOTAL`. O Pedro
+   * quis que a Kalomira pudesse pedir, mas que a decisão fosse dele.
+   *
+   * A checagem existe também no BANCO, num trigger sobre `pedidos`
+   * (migration 013): aqui a tela não oferece o botão, lá a gravação é
+   * recusada. Diferente de `verFinanceiro`, que é só interface.
+   */
+  aprovarExcecaoPagamento: boolean
 }
 
+/** Gestor: tudo, inclusive decidir sobre a exceção de pagamento. */
 const ACESSO_TOTAL: Permissoes = {
   rotas: 'todas',
   rotaInicial: '/dashboard',
@@ -101,6 +122,21 @@ const ACESSO_TOTAL: Permissoes = {
   editarProducao: true,
   editarKanban: true,
   verFinanceiro: true,
+  solicitarExcecaoPagamento: true,
+  aprovarExcecaoPagamento: true,
+}
+
+/**
+ * Recepcionista: o mesmo acesso do gestor, MENOS a decisão sobre pagar na
+ * retirada — ela pede, ele decide.
+ *
+ * Até aqui os dois perfis compartilhavam literalmente o mesmo objeto. O
+ * spread deixa explícito que a divergência é de UM campo: se amanhã surgir
+ * outra, ela aparece nesta lista em vez de se esconder numa cópia inteira.
+ */
+const RECEPCIONISTA: Permissoes = {
+  ...ACESSO_TOTAL,
+  aprovarExcecaoPagamento: false,
 }
 
 /**
@@ -122,12 +158,15 @@ const LEITURA_PRODUCAO: Permissoes = {
   editarProducao: true,
   editarKanban: false,
   verFinanceiro: false,
+  solicitarExcecaoPagamento: false,
+  aprovarExcecaoPagamento: false,
 }
 
 export const PERMISSOES: Record<Perfil, Permissoes> = {
-  // Gestor e recepcionista mantêm exatamente o comportamento anterior ao login.
+  // Gestor e recepcionista continuam com acesso total às telas; a única
+  // diferença entre os dois é quem decide a exceção de pagamento.
   gestor: ACESSO_TOTAL,
-  recepcionista: ACESSO_TOTAL,
+  recepcionista: RECEPCIONISTA,
 
   designer: LEITURA_PRODUCAO,
   corte: LEITURA_PRODUCAO,
