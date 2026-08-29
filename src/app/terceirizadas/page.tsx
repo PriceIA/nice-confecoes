@@ -1,9 +1,11 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
-import { PlusCircle, CheckCircle2, Clock, Truck } from 'lucide-react'
-import { getTerceirizadas, criarTerceirizada, atualizarTerceirizada, getPedidos } from '@/lib/store'
+import { PlusCircle, CheckCircle2, Clock, Truck, Pencil, Trash2, AlertTriangle } from 'lucide-react'
+import { getTerceirizadas, criarTerceirizada, atualizarTerceirizada, deletarTerceirizada, getPedidos } from '@/lib/store'
 import { Terceirizada, Pedido } from '@/types'
+import { useMembro } from '@/components/AuthProvider'
+import { classificarErro } from '@/lib/erros'
 import clsx from 'clsx'
 
 const TIPO_CONFIG = {
@@ -26,11 +28,34 @@ const VAZIO: Omit<Terceirizada, 'id'> = {
   status: 'enviado', observacoes: '',
 }
 
+/**
+ * Texto da falha. Segue o padrão do Kanban e de /tabela-precos: `classificarErro`
+ * só classifica, cada tela escreve a própria consequência — aqui a consequência
+ * é sempre "não foi salvo", e a tela recarrega do banco para não ficar mostrando
+ * o que o banco não tem (regra 10 do CLAUDE.md).
+ */
+function descreverFalha(err: unknown, acao: string): string {
+  const falha = classificarErro(err)
+  const cod = falha.code ? ` (${falha.code})` : ''
+  switch (falha.tipo) {
+    case 'offline':   return `Sem conexão com a internet, não deu para ${acao}. Nada foi salvo.`
+    case 'rede':      return `Servidor inacessível, não deu para ${acao}. Nada foi salvo.`
+    case 'permissao': return `Seu perfil não tem permissão para ${acao}. Nada foi salvo.`
+    case 'validacao': return `O banco recusou os dados${cod}: ${falha.details || falha.message || 'valor inválido'}. Nada foi salvo.`
+    default:          return `Falha ao ${acao}${cod}: ${falha.message || 'erro desconhecido'}. Nada foi salvo.`
+  }
+}
+
 export default function TerceirizadasPage() {
+  const { permissoes } = useMembro()
   const [lista, setLista] = useState<Terceirizada[]>([])
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [modal, setModal] = useState(false)
+  /** null = criando um envio novo; id = editando aquele lançamento. */
+  const [editandoId, setEditandoId] = useState<string | null>(null)
   const [form, setForm] = useState<Omit<Terceirizada, 'id'>>(VAZIO)
+  const [erro, setErro] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
 
   const carregar = async () => {
     const [lista, pedidosData] = await Promise.all([getTerceirizadas(), getPedidos()])
@@ -40,18 +65,68 @@ export default function TerceirizadasPage() {
 
   useEffect(() => { carregar() }, [])
 
-  async function handleSalvar() {
-    if (!form.nome || !form.dataEnvio) return alert('Preencha os campos obrigatórios.')
-    await criarTerceirizada(form)
-    setModal(false)
+  function abrirNovo() {
+    setEditandoId(null)
     setForm(VAZIO)
-    carregar()
+    setErro(null)
+    setModal(true)
+  }
+
+  function abrirEdicao(t: Terceirizada) {
+    const { id, ...dados } = t
+    setEditandoId(id)
+    setForm({ ...dados, dataRetornoReal: dados.dataRetornoReal ?? '' })
+    setErro(null)
+    setModal(true)
+  }
+
+  async function handleSalvar() {
+    if (!form.nome.trim() || !form.dataEnvio) {
+      setErro('Preencha a prestadora e a data de envio.')
+      return
+    }
+    setSalvando(true)
+    setErro(null)
+    try {
+      if (editandoId) {
+        await atualizarTerceirizada(editandoId, form)
+      } else {
+        await criarTerceirizada(form)
+      }
+      setModal(false)
+      setEditandoId(null)
+      setForm(VAZIO)
+      await carregar()
+    } catch (err) {
+      setErro(descreverFalha(err, editandoId ? 'salvar a alteração' : 'registrar o envio'))
+    } finally {
+      setSalvando(false)
+    }
   }
 
   async function avancarStatus(id: string, atual: Terceirizada['status']) {
     const prox = atual === 'enviado' ? 'retornado' : atual === 'retornado' ? 'pago' : 'pago'
-    await atualizarTerceirizada(id, { status: prox, ...(prox === 'retornado' ? { dataRetornoReal: new Date().toISOString().slice(0, 10) } : {}) })
-    carregar()
+    setErro(null)
+    try {
+      await atualizarTerceirizada(id, { status: prox, ...(prox === 'retornado' ? { dataRetornoReal: new Date().toISOString().slice(0, 10) } : {}) })
+    } catch (err) {
+      setErro(descreverFalha(err, 'mudar o status'))
+    }
+    // Recarrega sempre: se a gravação falhou, a tela volta ao que o banco tem.
+    await carregar()
+  }
+
+  async function handleExcluir(t: Terceirizada) {
+    const confirmacao = `Excluir o envio de ${t.nome}, de R$ ${t.valorCombinado.toFixed(2)}?\n\n` +
+      'Isso apaga também o histórico de pagamento deste lançamento. Não tem desfazer.'
+    if (!confirm(confirmacao)) return
+    setErro(null)
+    try {
+      await deletarTerceirizada(t.id)
+    } catch (err) {
+      setErro(descreverFalha(err, 'excluir o lançamento'))
+    }
+    await carregar()
   }
 
   const totalAPagar = lista.filter(t => t.status !== 'pago').reduce((a, t) => a + (t.valorCombinado - t.valorPago), 0)
@@ -63,10 +138,19 @@ export default function TerceirizadasPage() {
           <h1 className="text-2xl font-bold text-titulo">Terceirizadas</h1>
           <p className="text-sm text-suave mt-0.5">Controle de envios e pagamentos</p>
         </div>
-        <button onClick={() => setModal(true)} className="btn-primary">
+        <button onClick={abrirNovo} className="btn-primary">
           <PlusCircle className="w-4 h-4" /> Registrar Envio
         </button>
       </div>
+
+      {erro && (
+        <div className="card border border-red-200 bg-red-50 flex items-start gap-3 py-3">
+          <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+          <p className="text-sm text-red-700 flex-1">{erro}</p>
+          <button type="button" onClick={() => setErro(null)}
+            className="text-red-600 text-xs font-semibold hover:underline">fechar</button>
+        </div>
+      )}
 
       {/* Resumo financeiro */}
       <div className="grid grid-cols-3 gap-4">
@@ -138,12 +222,24 @@ export default function TerceirizadasPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        {t.status !== 'pago' && (
-                          <button onClick={() => avancarStatus(t.id, t.status)}
-                            className="text-marca-texto text-xs font-medium hover:underline">
-                            {t.status === 'enviado' ? 'Marcar retorno' : 'Marcar pago'}
+                        <div className="flex items-center justify-end gap-3">
+                          {t.status !== 'pago' && (
+                            <button onClick={() => avancarStatus(t.id, t.status)}
+                              className="text-marca-texto text-xs font-medium hover:underline whitespace-nowrap">
+                              {t.status === 'enviado' ? 'Marcar retorno' : 'Marcar pago'}
+                            </button>
+                          )}
+                          <button onClick={() => abrirEdicao(t)} title="Editar lançamento"
+                            className="text-fraco hover:text-marca-texto transition-colors">
+                            <Pencil className="w-4 h-4" />
                           </button>
-                        )}
+                          {permissoes.excluirTerceirizada && (
+                            <button onClick={() => handleExcluir(t)} title="Excluir lançamento"
+                              className="text-red-400 hover:text-red-600 transition-colors">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -157,8 +253,10 @@ export default function TerceirizadasPage() {
       {/* Modal */}
       {modal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-superficie rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4">
-            <h2 className="font-bold text-titulo text-lg">Registrar Envio</h2>
+          <div className="bg-superficie rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="font-bold text-titulo text-lg">
+              {editandoId ? 'Editar Envio' : 'Registrar Envio'}
+            </h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="label">Prestadora *</label>
@@ -203,14 +301,35 @@ export default function TerceirizadasPage() {
                 <label className="label">Valor já pago (R$)</label>
                 <input className="input" type="number" placeholder="0,00" value={form.valorPago || ''} onChange={e => setForm(f => ({ ...f, valorPago: parseFloat(e.target.value) || 0 }))} />
               </div>
+              <div>
+                <label className="label">Retorno real</label>
+                <input className="input" type="date" value={form.dataRetornoReal ?? ''}
+                  onChange={e => setForm(f => ({ ...f, dataRetornoReal: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Status</label>
+                <select className="input" value={form.status}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value as Terceirizada['status'] }))}>
+                  <option value="enviado">Enviado</option>
+                  <option value="retornado">Retornado</option>
+                  <option value="pago">Pago</option>
+                </select>
+              </div>
               <div className="col-span-2">
                 <label className="label">Observações</label>
                 <textarea className="input resize-none" rows={2} value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} />
               </div>
             </div>
+            {erro && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erro}</p>
+            )}
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setModal(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
-              <button onClick={handleSalvar} className="btn-primary flex-1 justify-center">Salvar</button>
+              <button onClick={() => { setModal(false); setErro(null) }} disabled={salvando}
+                className="btn-secondary flex-1 justify-center">Cancelar</button>
+              <button onClick={handleSalvar} disabled={salvando}
+                className="btn-primary flex-1 justify-center">
+                {salvando ? 'Salvando...' : 'Salvar'}
+              </button>
             </div>
           </div>
         </div>

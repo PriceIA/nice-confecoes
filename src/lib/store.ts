@@ -104,7 +104,7 @@ function mapTerceirizada(row: any): Terceirizada {
     numeroPedido: row.numero_pedido ?? '',
     itens: row.itens ?? '',
     dataEnvio: row.data_envio,
-    dataRetornoPrevisto: row.data_retorno_previsto,
+    dataRetornoPrevisto: row.data_retorno_previsto ?? '',
     dataRetornoReal: row.data_retorno_real ?? undefined,
     valorCombinado: Number(row.valor_combinado) || 0,
     valorPago: Number(row.valor_pago) || 0,
@@ -289,7 +289,7 @@ export async function criarTerceirizada(dados: Omit<Terceirizada, 'id'>): Promis
       numero_pedido: dados.numeroPedido,
       itens: dados.itens,
       data_envio: dados.dataEnvio,
-      data_retorno_previsto: dados.dataRetornoPrevisto,
+      data_retorno_previsto: dados.dataRetornoPrevisto || null,
       data_retorno_real: dados.dataRetornoReal || null,
       valor_combinado: dados.valorCombinado,
       valor_pago: dados.valorPago,
@@ -311,7 +311,7 @@ export async function atualizarTerceirizada(id: string, dados: Partial<Terceiriz
   if (dados.numeroPedido !== undefined) update.numero_pedido = dados.numeroPedido
   if (dados.itens !== undefined) update.itens = dados.itens
   if (dados.dataEnvio !== undefined) update.data_envio = dados.dataEnvio
-  if (dados.dataRetornoPrevisto !== undefined) update.data_retorno_previsto = dados.dataRetornoPrevisto
+  if (dados.dataRetornoPrevisto !== undefined) update.data_retorno_previsto = dados.dataRetornoPrevisto || null
   if (dados.dataRetornoReal !== undefined) update.data_retorno_real = dados.dataRetornoReal || null
   if (dados.valorCombinado !== undefined) update.valor_combinado = dados.valorCombinado
   if (dados.valorPago !== undefined) update.valor_pago = dados.valorPago
@@ -319,6 +319,12 @@ export async function atualizarTerceirizada(id: string, dados: Partial<Terceiriz
   if (dados.observacoes !== undefined) update.observacoes = dados.observacoes
 
   const { error } = await supabase.from('terceirizadas').update(update).eq('id', id)
+  if (error) throw error
+}
+
+export async function deletarTerceirizada(id: string): Promise<void> {
+  const supabase = criarClienteBrowser()
+  const { error } = await supabase.from('terceirizadas').delete().eq('id', id)
   if (error) throw error
 }
 

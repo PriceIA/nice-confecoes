@@ -8,6 +8,66 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase D1 — Filtros em /producao e edição de lançamento em /terceirizadas
+
+Sessão de 28/08/2026, a partir de cinco pedidos do Pedro. Esta é a primeira das quatro
+partes da Fase D, e a única **sem SQL nenhum** — por isso foi feita primeiro. As outras
+(cadastro de prestadores, visibilidade no Kanban, etapas de produção por pedido) estão
+especificadas em `claude/Fase-D-*` no Project.
+
+**Conferência do estado antes de começar** (a Fase D0 do documento): C0 e C2 estão
+aplicadas no código; a **C1 nunca começou** — só as migrations `010_*` foram escritas, e
+não rodaram. Próxima migration livre: `014_`. E `atualizar_progresso_pedido`
+(`009_rls_fase_b.sql`) **não valida status nem chaves** — só faz
+`update pedidos set progresso = <parâmetro>`, o que significa que a Fase D3 (etapas por
+pedido) vai poder gravar chaves e rótulos novos sem migration.
+
+#### 1. Filtros e ordenação em /producao
+
+A tela não tinha nenhum controle: com dezenas de pedidos abertos, achar "o que está quase
+pronto" era rolagem no olho.
+
+- **Busca** por número, cliente ou empresa — mesmo campo de `/pedidos`.
+- **Recorte** por estágio: Todos · Não iniciados · Em andamento · Quase prontos (≥ 75%) ·
+  Prontos. "Não iniciado" ignora `atendimento` de propósito: ele nasce concluído na criação
+  do pedido, sem ninguém clicar, e contá-lo faria todo pedido novo parecer já iniciado.
+- **Ordenação** com 6 opções: as 4 de data que `/pedidos` já tinha, mais "mais completos" e
+  "menos completos".
+- **Contador honesto** no subtítulo ("mostrando 12 de 47"), e um estado vazio com botão
+  "Limpar filtros" — filtro que esconde sem dizer quanto escondeu faz a pessoa achar que o
+  pedido sumiu.
+- Ordem e recorte guardados em `localStorage` (`nice-filtros-producao`); **a busca não é
+  guardada** de propósito — uma busca salva esconderia pedidos logo ao abrir a tela. Leitura
+  e escrita em `try/catch`: sem `localStorage` a escolha vale só na sessão, não vira erro.
+
+#### 2. Uma conta só de "% pronto"
+
+`resumoProgresso` e `ordenarPedidos` saíram para `src/lib/helpers.ts`. `/pedidos` tinha a
+própria cópia da ordenação e `/producao` a própria conta de percentual — com o filtro
+"quase prontos" lendo o mesmo número que a barra desenha, duas implementações divergiriam
+no dia em que alguém corrigisse só uma. É o mesmo erro que a tela de preços já custou.
+
+#### 3. Lançamento de terceirizada editável
+
+Valor lançado errado não tinha conserto pela tela.
+
+- Botão **Editar** em cada linha, abrindo o mesmo modal preenchido, com todos os campos —
+  incluindo dois que nem no cadastro existiam: **retorno real** e **status**.
+- **Excluir** com confirmação que nomeia prestadora e valor, e diz que leva junto o
+  histórico de pagamento. Flag nova `excluirTerceirizada` em `permissoes.ts`: **só gestor**.
+  É a segunda divergência entre gestor e recepcionista (a primeira é aprovar "pagar na
+  retirada").
+- `alert()` trocado por faixa de erro na tela, usando `classificarErro` — mesmo padrão do
+  Kanban e de `/tabela-precos`. Toda falha recarrega a lista do banco, para a tela nunca
+  ficar mostrando o que o banco não tem (regra 10).
+
+#### Corrigido
+
+- **`data_retorno_previsto` vazio ia como string vazia para uma coluna `date`.** Agora vai
+  como `null`, no insert e no update. Um envio sem retorno previsto podia ser recusado pelo
+  banco.
+- `mapTerceirizada` devolvia `dataRetornoPrevisto` nulo num campo tipado `string`.
+
 ### Fase C2 — PDF na arte, edição ampla do pedido, tabelas de preço editáveis e pagar na retirada
 
 Sessão de 26/08/2026, a partir de quatro pedidos do Pedro. **Tem SQL:** migrations `011`

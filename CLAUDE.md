@@ -106,11 +106,11 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | `/novo-pedido` | `src/app/novo-pedido/page.tsx` | Cadastro: cliente com autocomplete, seletor da tabela de preço do pedido, peças (com "outra peça" digitável e cadastrável), tamanhos (com tamanho livre), personalizações, parcelas, arte em imagem/PDF, vetorização |
 | `/clientes` | `src/app/clientes/page.tsx` | Lista, busca, edição inline, histórico de pedidos do cliente |
 | `/tabela-precos` | `src/app/tabela-precos/page.tsx` | **Várias** listas de preço (`Escolar 1`, `Escolar 2`, …), cada uma com grupos e peças criáveis/removíveis pela própria tela. Grade lida do banco, não do código |
-| `/producao` | `src/app/producao/page.tsx` | Acompanhamento dos 8 setores; clique cicla pendente → em_andamento → concluido |
+| `/producao` | `src/app/producao/page.tsx` | Acompanhamento dos 8 setores; clique cicla pendente → em_andamento → concluido. Busca, recorte por estágio e ordenação (inclusive por completude), guardados em `localStorage` |
 | `/entregas` | `src/app/entregas/page.tsx` | Fila de pedidos com os 8 setores concluídos ou não aplicáveis, ainda não entregues; botão "Marcar como entregue". Só gestor/recepcionista |
 | `/quadros` | `src/app/quadros/page.tsx` | Kanban livre: grid de quadros, com criar/renomear/arquivar/excluir |
 | `/quadros/[id]` | `src/app/quadros/[id]/page.tsx` + `components/kanban/QuadroBoard.tsx` | O quadro: listas lado a lado, cartões, drag-and-drop |
-| `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros |
+| `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros. Lançamento editável em todos os campos; excluir só o gestor (`excluirTerceirizada`) |
 | `/relatorios` | `src/app/relatorios/page.tsx` | Fechamento mensal: receita, unidades, distribuição por complexidade |
 | `/configuracoes` | `src/app/configuracoes/page.tsx` | Catálogo de peças e personalizações — **grava só em `localStorage`**, não vai para o banco nem é compartilhado entre dispositivos. Peça registrada pelo `/novo-pedido` NÃO passa por aqui: vai para `tabela_precos` |
 | `/login` | `src/app/login/page.tsx` + `LoginForm.tsx` | Única rota pública. Usuário curto + senha; o e-mail é montado como `usuario@niceconfec.app` |
@@ -153,7 +153,13 @@ Código compartilhado:
 - `src/components/kanban/` — `QuadroBoard`, `ColunaLista`, `CartaoKanban`, `PainelCartao`,
   `Modal`, `BannerErro`, `CriarCartaoDoPedido`. O `Modal` deixou de ser exclusivo do Kanban:
   `/tabela-precos` e `/pedidos/[id]` também o usam
-- `src/lib/helpers.ts` — `CATALOGO`, `PERSONALIZACOES`, `TAMANHOS`, `calcularComplexidade`, `STATUS_CONFIG`, `SETOR_LABELS`, `totalPecas`
+- `src/lib/helpers.ts` — `CATALOGO`, `PERSONALIZACOES`, `TAMANHOS`, `calcularComplexidade`,
+  `STATUS_CONFIG`, `SETOR_LABELS`, `totalPecas`, e desde a Fase D1 as duas funções
+  compartilhadas por `/pedidos` e `/producao`: **`resumoProgresso`** (quanto do pedido está
+  pronto — `nao_se_aplica` fora do numerador E do denominador) e **`ordenarPedidos`**
+  (as 6 ordens, sem mutar o array, data ausente sempre no fim, empate por `numero`).
+  **Não escreva uma segunda conta de "% pronto"** — a barra de progresso e o filtro
+  "quase prontos" precisam concordar sempre
 - `src/types/index.ts` — todos os tipos do domínio
 - `src/components/FotoUpload.tsx` — upload de arte por peça: imagem (com lightbox) ou PDF
   (abre em outra aba). O campo continua se chamando `fotos` por compatibilidade com o JSONB

@@ -110,6 +110,14 @@ type Permissoes = {
    * recusada. Diferente de `verFinanceiro`, que é só interface.
    */
   aprovarExcecaoPagamento: boolean
+  /**
+   * Excluir um lançamento de terceirizada.
+   *
+   * Editar é de gestor e recepcionista (as duas únicas com a rota); excluir
+   * é só do gestor, porque um envio apagado leva junto o histórico de
+   * pagamento daquele prestador e não tem desfazer.
+   */
+  excluirTerceirizada: boolean
 }
 
 /** Gestor: tudo, inclusive decidir sobre a exceção de pagamento. */
@@ -124,19 +132,21 @@ const ACESSO_TOTAL: Permissoes = {
   verFinanceiro: true,
   solicitarExcecaoPagamento: true,
   aprovarExcecaoPagamento: true,
+  excluirTerceirizada: true,
 }
 
 /**
  * Recepcionista: o mesmo acesso do gestor, MENOS a decisão sobre pagar na
- * retirada — ela pede, ele decide.
+ * retirada (ela pede, ele decide) e MENOS excluir lançamento de terceirizada.
  *
  * Até aqui os dois perfis compartilhavam literalmente o mesmo objeto. O
- * spread deixa explícito que a divergência é de UM campo: se amanhã surgir
- * outra, ela aparece nesta lista em vez de se esconder numa cópia inteira.
+ * spread deixa explícito quais campos divergem: cada divergência nova aparece
+ * nesta lista em vez de se esconder numa cópia inteira do objeto.
  */
 const RECEPCIONISTA: Permissoes = {
   ...ACESSO_TOTAL,
   aprovarExcecaoPagamento: false,
+  excluirTerceirizada: false,
 }
 
 /**
@@ -160,6 +170,7 @@ const LEITURA_PRODUCAO: Permissoes = {
   verFinanceiro: false,
   solicitarExcecaoPagamento: false,
   aprovarExcecaoPagamento: false,
+  excluirTerceirizada: false,
 }
 
 export const PERMISSOES: Record<Perfil, Permissoes> = {
