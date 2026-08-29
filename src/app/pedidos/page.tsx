@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { PlusCircle, Search, ArrowRight, Trash2 } from 'lucide-react'
 import { getPedidos, deletarPedido } from '@/lib/store'
-import { STATUS_CONFIG, totalPecas } from '@/lib/helpers'
+import { ORDENS_DATA, OrdemPedidos, STATUS_CONFIG, ordenarPedidos, totalPecas } from '@/lib/helpers'
 import { Pedido, StatusPedido } from '@/types'
 import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
@@ -22,39 +22,16 @@ const FILTROS: { value: StatusPedido | 'todos'; label: string }[] = [
 
 const ORDEM_CHAVE = 'nice-ordem-pedidos'
 
-type Ordem = 'entrada_desc' | 'entrada_asc' | 'entrega_asc' | 'entrega_desc'
-
-const ORDENS: { value: Ordem; label: string }[] = [
-  { value: 'entrada_desc', label: 'Mais recentes primeiro' },
-  { value: 'entrada_asc', label: 'Mais antigos primeiro' },
-  { value: 'entrega_asc', label: 'Entrega mais próxima' },
-  { value: 'entrega_desc', label: 'Entrega mais distante' },
-]
-
-function ordenarPedidos(pedidos: Pedido[], ordem: Ordem): Pedido[] {
-  const campo = ordem.startsWith('entrada') ? 'dataEntrada' : 'dataEntrega'
-  const asc = ordem.endsWith('_asc')
-
-  return [...pedidos].sort((a, b) => {
-    const va = a[campo]
-    const vb = b[campo]
-    // Sem data vai sempre pro fim, nas duas direções — não é "mais urgente"
-    // nem "mais distante", é ausência de dado.
-    if (!va && !vb) return b.numero.localeCompare(a.numero)
-    if (!va) return 1
-    if (!vb) return -1
-    const diff = new Date(va).getTime() - new Date(vb).getTime()
-    if (diff !== 0) return asc ? diff : -diff
-    return b.numero.localeCompare(a.numero)
-  })
-}
+// A ordenação vive em src/lib/helpers.ts porque /producao usa a mesma função.
+// Duas cópias divergem no dia em que alguém corrigir só uma.
+const ORDENS = ORDENS_DATA
 
 export default function PedidosPage() {
   const { permissoes } = useMembro()
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [filtro, setFiltro] = useState<StatusPedido | 'todos'>('todos')
   const [busca, setBusca] = useState('')
-  const [ordem, setOrdem] = useState<Ordem>('entrada_desc')
+  const [ordem, setOrdem] = useState<OrdemPedidos>('entrada_desc')
 
   const carregar = async () => setPedidos(await getPedidos())
 
@@ -62,10 +39,10 @@ export default function PedidosPage() {
 
   useEffect(() => {
     const salva = localStorage.getItem(ORDEM_CHAVE)
-    if (salva && ORDENS.some(o => o.value === salva)) setOrdem(salva as Ordem)
+    if (salva && ORDENS.some(o => o.value === salva)) setOrdem(salva as OrdemPedidos)
   }, [])
 
-  function mudarOrdem(valor: Ordem) {
+  function mudarOrdem(valor: OrdemPedidos) {
     setOrdem(valor)
     localStorage.setItem(ORDEM_CHAVE, valor)
   }
@@ -123,7 +100,7 @@ export default function PedidosPage() {
             ))}
           </div>
           <select className="input sm:w-56 print:hidden" value={ordem}
-            onChange={e => mudarOrdem(e.target.value as Ordem)}>
+            onChange={e => mudarOrdem(e.target.value as OrdemPedidos)}>
             {ORDENS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>

@@ -1,4 +1,4 @@
-import { Complexidade, EntradaProgresso, Personalizacao } from '@/types'
+import { Complexidade, EntradaProgresso, Personalizacao, Pedido, ProgressoSetor } from '@/types'
 import { format } from 'date-fns'
 
 export const CATALOGO = {
@@ -72,4 +72,104 @@ export function formatarTelefone(v: string) {
 export function autorSetorTexto(entrada: EntradaProgresso): string | null {
   if (!entrada.atualizadoPor || !entrada.atualizadoEm) return null
   return `${entrada.atualizadoPor}, ${format(new Date(entrada.atualizadoEm), 'dd/MM HH:mm')}`
+}
+
+// ---------------------------------------------------------------------------
+// Progresso de produção — uma conta só
+//
+// /producao, /pedidos/[id] e o filtro "quase prontos" precisam da MESMA
+// resposta para "quanto deste pedido está pronto?". Duas contas separadas é
+// como porcentagens começam a divergir entre telas.
+// ---------------------------------------------------------------------------
+
+/**
+ * O progresso lido de um pedido. Hoje `ProgressoSetor` tem as 8 chaves fixas,
+ * mas o JSONB do banco não tem schema — a forma aberta está aqui para que
+ * etapas por pedido (Fase D3) não obriguem a reescrever estas funções.
+ */
+export type ProgressoLido = ProgressoSetor | Record<string, EntradaProgresso>
+
+export type ResumoProgresso = {
+  /** Setores que se aplicam a este pedido (nao_se_aplica sai da conta). */
+  total: number
+  concluidos: number
+  /** 0–100, já arredondado. Sem setor aplicável = 100 (nada a fazer = pronto). */
+  pct: number
+}
+
+/**
+ * Setor `nao_se_aplica` sai do numerador E do denominador (Fase C0): 6 de 6
+ * concluídos é 100%, não 75%. O denominador zero é tratado explicitamente —
+ * pelo fluxo do modal isso não deveria acontecer, mas `NaN%` na tela não pode
+ * depender de sorte.
+ */
+export function resumoProgresso(progresso: ProgressoLido | undefined): ResumoProgresso {
+  const entradas = Object.values((progresso ?? {}) as Record<string, EntradaProgresso>)
+  const aplicaveis = entradas.filter(e => e?.status !== 'nao_se_aplica')
+  const concluidos = aplicaveis.filter(e => e?.status === 'concluido').length
+  const pct = aplicaveis.length === 0 ? 100 : Math.round((concluidos / aplicaveis.length) * 100)
+  return { total: aplicaveis.length, concluidos, pct }
+}
+
+// ---------------------------------------------------------------------------
+// Ordenação de pedidos — compartilhada por /pedidos e /producao
+// ---------------------------------------------------------------------------
+
+export type OrdemPedidos =
+  | 'entrada_desc' | 'entrada_asc'
+  | 'entrega_asc'  | 'entrega_desc'
+  | 'progresso_desc' | 'progresso_asc'
+
+export const ORDENS_DATA: { value: OrdemPedidos; label: string }[] = [
+  { value: 'entrada_desc', label: 'Mais recentes primeiro' },
+  { value: 'entrada_asc',  label: 'Mais antigos primeiro' },
+  { value: 'entrega_asc',  label: 'Entrega mais próxima' },
+  { value: 'entrega_desc', label: 'Entrega mais distante' },
+]
+
+export const ORDENS_PRODUCAO: { value: OrdemPedidos; label: string }[] = [
+  ...ORDENS_DATA,
+  { value: 'progresso_desc', label: 'Mais completos primeiro' },
+  { value: 'progresso_asc',  label: 'Menos completos primeiro' },
+]
+
+/**
+ * Ordena SEM mutar (`Array.sort` ordena no lugar, e mutar o array do useState
+ * dá bug de render que só aparece depois).
+ *
+ * Duas regras que valem para todas as ordens:
+ *  - data ausente vai sempre para o FIM, nas duas direções. Pedido sem data
+ *    não é "o mais urgente do mundo" nem "o mais distante" — é um pedido sem
+ *    data, e o lugar dele é no fim da fila.
+ *  - empate é desempatado por `numero` desc, para a lista não dançar entre
+ *    renders.
+ */
+export function ordenarPedidos<T extends Pick<Pedido, 'numero' | 'dataEntrada' | 'dataEntrega' | 'progresso'>>(
+  pedidos: T[],
+  ordem: OrdemPedidos,
+): T[] {
+  const desempate = (a: T, b: T) => b.numero.localeCompare(a.numero)
+
+  if (ordem === 'progresso_desc' || ordem === 'progresso_asc') {
+    const asc = ordem === 'progresso_asc'
+    return [...pedidos].sort((a, b) => {
+      const diff = resumoProgresso(a.progresso).pct - resumoProgresso(b.progresso).pct
+      if (diff !== 0) return asc ? diff : -diff
+      return desempate(a, b)
+    })
+  }
+
+  const campo = ordem.startsWith('entrada') ? 'dataEntrada' : 'dataEntrega'
+  const asc = ordem.endsWith('_asc')
+
+  return [...pedidos].sort((a, b) => {
+    const va = a[campo]
+    const vb = b[campo]
+    if (!va && !vb) return desempate(a, b)
+    if (!va) return 1
+    if (!vb) return -1
+    const diff = new Date(va).getTime() - new Date(vb).getTime()
+    if (diff !== 0) return asc ? diff : -diff
+    return desempate(a, b)
+  })
 }
