@@ -274,4 +274,50 @@ export interface Terceirizada {
   valorPago: number
   status: 'enviado' | 'retornado' | 'pago'
   observacoes: string
+  /**
+   * Fase D2.1. `prestadorId` vazio = lançamento "outro/avulso": `nome` foi
+   * digitado à mão, sem prestador do catálogo por trás. Quando preenchido,
+   * `nome` veio de `prestadores.nome` no momento do lançamento — texto
+   * copiado, não uma junção ao vivo (ver `src/lib/prestadores.ts`).
+   */
+  prestadorId?: string
+  /** Nome do serviço no momento do lançamento — texto solto, não FK. */
+  servico?: string
+  quantidade?: number
+  /**
+   * Copiado de `prestador_servicos.valor` no momento do lançamento. Nunca
+   * muda sozinho depois: editar o preço do serviço no cadastro não altera
+   * lançamentos já gravados.
+   */
+  valorUnitario?: number
+}
+
+/** O catálogo de um prestador terceirizado (migration 015, Fase D2.1). */
+export interface Prestador {
+  id: string
+  nome: string
+  telefone: string
+  documento: string
+  observacoes: string
+  /** Nunca excluído pela tela — só desativado. Ver `prestador_servicos`. */
+  ativo: boolean
+}
+
+/** 'peca': valor × quantidade. 'fixo': valor não escala com quantidade. */
+export type UnidadeServico = 'peca' | 'fixo'
+
+/**
+ * Um serviço com preço, de um prestador específico (ex.: "Bordado ponto
+ * cheio" da Vera, R$ 3,50/peça). `servico` é único por prestador — é o que
+ * permite identificar sem ambiguidade o texto gravado em
+ * `Terceirizada.servico` no momento do lançamento.
+ */
+export interface PrestadorServico {
+  id: string
+  prestadorId: string
+  servico: string
+  valor: number
+  unidade: UnidadeServico
+  /** Nunca excluído pela tela — só desativado. Some dos seletores, fica no histórico. */
+  ativo: boolean
 }

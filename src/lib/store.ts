@@ -167,6 +167,10 @@ function mapTerceirizada(row: any): Terceirizada {
     valorPago: Number(row.valor_pago) || 0,
     status: row.status,
     observacoes: row.observacoes ?? '',
+    prestadorId: row.prestador_id ?? undefined,
+    servico: row.servico ?? undefined,
+    quantidade: row.quantidade != null ? Number(row.quantidade) : undefined,
+    valorUnitario: row.valor_unitario != null ? Number(row.valor_unitario) : undefined,
   }
 }
 
@@ -361,6 +365,10 @@ export async function criarTerceirizada(dados: Omit<Terceirizada, 'id'>): Promis
       valor_pago: dados.valorPago,
       status: dados.status,
       observacoes: dados.observacoes,
+      prestador_id: dados.prestadorId || null,
+      servico: dados.servico || null,
+      quantidade: dados.quantidade ?? null,
+      valor_unitario: dados.valorUnitario ?? null,
     })
     .select()
     .single()
@@ -383,6 +391,17 @@ export async function atualizarTerceirizada(id: string, dados: Partial<Terceiriz
   if (dados.valorPago !== undefined) update.valor_pago = dados.valorPago
   if (dados.status !== undefined) update.status = dados.status
   if (dados.observacoes !== undefined) update.observacoes = dados.observacoes
+  // `in`, não `!== undefined`: o formulário de /terceirizadas manda o objeto
+  // INTEIRO ao salvar, e trocar pra "Outro/avulso" (`handlePrestadorChange('')`
+  // em page.tsx) grava esses 4 campos como `undefined` DENTRO do objeto — a
+  // chave existe, só o valor é undefined. `!== undefined` os ignorava, então
+  // limpar o prestador na tela nunca chegava a limpar `prestador_id` no banco.
+  // `avancarStatus` manda só `{ status }` — a chave nem existe ali, `in`
+  // continua certo em não mexer nesses campos nesse caso.
+  if ('prestadorId' in dados) update.prestador_id = dados.prestadorId || null
+  if ('servico' in dados) update.servico = dados.servico || null
+  if ('quantidade' in dados) update.quantidade = dados.quantidade ?? null
+  if ('valorUnitario' in dados) update.valor_unitario = dados.valorUnitario ?? null
 
   const { error } = await supabase.from('terceirizadas').update(update).eq('id', id)
   if (error) throw error

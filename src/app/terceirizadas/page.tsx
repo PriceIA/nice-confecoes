@@ -1,12 +1,16 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
-import { PlusCircle, CheckCircle2, Clock, Truck, Pencil, Trash2, AlertTriangle } from 'lucide-react'
+import { PlusCircle, CheckCircle2, Clock, Truck, Pencil, Trash2, AlertTriangle, Users } from 'lucide-react'
 import { getTerceirizadas, criarTerceirizada, atualizarTerceirizada, deletarTerceirizada, getPedidos } from '@/lib/store'
-import { Terceirizada, Pedido } from '@/types'
+import { getPrestadores, getServicos } from '@/lib/prestadores'
+import { Terceirizada, Pedido, Prestador, PrestadorServico } from '@/types'
 import { useMembro } from '@/components/AuthProvider'
 import { classificarErro } from '@/lib/erros'
+import PrestadorModal from '@/components/terceirizadas/PrestadorModal'
 import clsx from 'clsx'
+
+const round2 = (n: number) => Math.round(n * 100) / 100
 
 const TIPO_CONFIG = {
   costura:     { label: 'Costura',      color: 'text-blue-600',   bg: 'bg-blue-50' },
@@ -50,6 +54,8 @@ export default function TerceirizadasPage() {
   const { permissoes } = useMembro()
   const [lista, setLista] = useState<Terceirizada[]>([])
   const [pedidos, setPedidos] = useState<Pedido[]>([])
+  const [prestadores, setPrestadores] = useState<Prestador[]>([])
+  const [servicos, setServicos] = useState<PrestadorServico[]>([])
   const [modal, setModal] = useState(false)
   /** null = criando um envio novo; id = editando aquele lançamento. */
   const [editandoId, setEditandoId] = useState<string | null>(null)
@@ -57,10 +63,17 @@ export default function TerceirizadasPage() {
   const [erro, setErro] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
 
+  /** null = "Novo prestador"; um Prestador = editando aquele. `undefined` = modal fechado. */
+  const [modalPrestador, setModalPrestador] = useState<Prestador | null | undefined>(undefined)
+
   const carregar = async () => {
-    const [lista, pedidosData] = await Promise.all([getTerceirizadas(), getPedidos()])
+    const [lista, pedidosData, prestadoresData, servicosData] = await Promise.all([
+      getTerceirizadas(), getPedidos(), getPrestadores(), getServicos(),
+    ])
     setLista(lista)
     setPedidos(pedidosData.filter(p => !['entregue', 'cancelado'].includes(p.status)))
+    setPrestadores(prestadoresData)
+    setServicos(servicosData)
   }
 
   useEffect(() => { carregar() }, [])
@@ -78,6 +91,51 @@ export default function TerceirizadasPage() {
     setForm({ ...dados, dataRetornoReal: dados.dataRetornoReal ?? '' })
     setErro(null)
     setModal(true)
+  }
+
+  /**
+   * Trocar de prestador reseta serviço/quantidade/valor — o cálculo do
+   * prestador anterior não faz sentido pro novo. '' = "outro/avulso": some o
+   * vínculo, e `nome` volta a ser texto livre.
+   */
+  function handlePrestadorChange(id: string) {
+    if (!id) {
+      setForm(f => ({ ...f, prestadorId: undefined, servico: undefined, quantidade: undefined, valorUnitario: undefined }))
+      return
+    }
+    const p = prestadores.find(x => x.id === id)
+    setForm(f => ({
+      ...f, prestadorId: id, nome: p?.nome ?? f.nome,
+      servico: undefined, quantidade: undefined, valorUnitario: undefined,
+    }))
+  }
+
+  /**
+   * Serviço escolhido preenche quantidade (1, se ainda não houver) e o valor
+   * unitário DO CATÁLOGO — uma cópia, não uma referência: editar o preço do
+   * serviço depois não muda este lançamento (regra 1 da Fase D2.1). Dali pra
+   * frente quantidade e valor unitário continuam editáveis à mão.
+   */
+  function handleServicoChange(nomeServico: string) {
+    if (!nomeServico) {
+      setForm(f => ({ ...f, servico: undefined }))
+      return
+    }
+    const s = servicos.find(x => x.prestadorId === form.prestadorId && x.servico === nomeServico)
+    setForm(f => {
+      const quantidade = f.quantidade || 1
+      const valorUnitario = s?.valor ?? f.valorUnitario ?? 0
+      return { ...f, servico: nomeServico, quantidade, valorUnitario, valorCombinado: round2(quantidade * valorUnitario) }
+    })
+  }
+
+  /** quantidade × valor unitário preenche o valor combinado; o campo continua editável depois (regra 2). */
+  function handleQuantidadeChange(quantidade: number) {
+    setForm(f => ({ ...f, quantidade, valorCombinado: round2(quantidade * (f.valorUnitario ?? 0)) }))
+  }
+
+  function handleValorUnitarioChange(valorUnitario: number) {
+    setForm(f => ({ ...f, valorUnitario, valorCombinado: round2((f.quantidade ?? 0) * valorUnitario) }))
   }
 
   async function handleSalvar() {
@@ -183,6 +241,51 @@ export default function TerceirizadasPage() {
         </div>
       </div>
 
+      {/* Prestadores (Fase D2.1) */}
+      <div className="card space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-fraco" />
+            <h2 className="font-semibold text-titulo">Prestadores</h2>
+          </div>
+          <button onClick={() => setModalPrestador(null)} className="btn-secondary text-sm">
+            <PlusCircle className="w-4 h-4" /> Novo Prestador
+          </button>
+        </div>
+
+        {prestadores.length === 0 ? (
+          <p className="text-sm text-fraco py-4">Nenhum prestador cadastrado ainda.</p>
+        ) : (
+          <div className="space-y-2">
+            {prestadores.map(p => {
+              const servicosDele = servicos.filter(s => s.prestadorId === p.id)
+              const ativos = servicosDele.filter(s => s.ativo).length
+              return (
+                <div key={p.id}
+                  className={clsx('flex items-center gap-3 px-3 py-2 rounded-xl border border-borda',
+                    p.ativo ? 'bg-superficie-2' : 'bg-superficie-3 opacity-70')}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-conteudo truncate">
+                      {p.nome}
+                      {!p.ativo && <span className="ml-2 text-xs text-fraco font-normal">(inativo)</span>}
+                    </div>
+                    <div className="text-xs text-fraco">
+                      {p.telefone || 'sem telefone'} · {servicosDele.length === 0
+                        ? 'nenhum serviço cadastrado'
+                        : `${ativos} de ${servicosDele.length} serviço(s) ativo(s)`}
+                    </div>
+                  </div>
+                  <button onClick={() => setModalPrestador(p)} title="Editar prestador"
+                    className="text-fraco hover:text-marca-texto transition-colors shrink-0">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Lista */}
       <div className="card p-0 overflow-hidden">
         {lista.length === 0 ? (
@@ -259,9 +362,47 @@ export default function TerceirizadasPage() {
             </h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="label">Prestadora *</label>
-                <input className="input" placeholder="Ex: Talícia, Quésia..." value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
+                <label className="label">Prestador</label>
+                <select className="input" value={form.prestadorId ?? ''} onChange={e => handlePrestadorChange(e.target.value)}>
+                  <option value="">Outro / avulso (digitar nome)</option>
+                  {prestadores.filter(p => p.ativo || p.id === form.prestadorId).map(p => (
+                    <option key={p.id} value={p.id}>{p.nome}{!p.ativo ? ' (inativo)' : ''}</option>
+                  ))}
+                </select>
               </div>
+              <div className="col-span-2">
+                <label className="label">Prestadora (nome) *</label>
+                <input className="input" placeholder="Ex: Talícia, Quésia..." value={form.nome}
+                  onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
+              </div>
+              {form.prestadorId && (
+                <>
+                  <div className="col-span-2">
+                    <label className="label">Serviço</label>
+                    <select className="input" value={form.servico ?? ''} onChange={e => handleServicoChange(e.target.value)}>
+                      <option value="">— Nenhum (lançar valor à mão) —</option>
+                      {servicos
+                        .filter(s => s.prestadorId === form.prestadorId && (s.ativo || s.servico === form.servico))
+                        .map(s => (
+                          <option key={s.id} value={s.servico}>
+                            {s.servico} — R$ {s.valor.toFixed(2)} {s.unidade === 'peca' ? '/ peça' : 'fixo'}
+                            {!s.ativo ? ' (inativo)' : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Quantidade</label>
+                    <input className="input" type="number" placeholder="1" value={form.quantidade ?? ''}
+                      onChange={e => handleQuantidadeChange(parseFloat(e.target.value) || 0)} />
+                  </div>
+                  <div>
+                    <label className="label">Valor unitário (R$)</label>
+                    <input className="input" type="number" step="0.01" placeholder="0,00" value={form.valorUnitario ?? ''}
+                      onChange={e => handleValorUnitarioChange(parseFloat(e.target.value) || 0)} />
+                  </div>
+                </>
+              )}
               <div>
                 <label className="label">Tipo de Serviço</label>
                 <select className="input" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as any }))}>
@@ -333,6 +474,16 @@ export default function TerceirizadasPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de prestador (Fase D2.1) */}
+      {modalPrestador !== undefined && (
+        <PrestadorModal
+          prestador={modalPrestador}
+          servicos={servicos}
+          onFechar={() => setModalPrestador(undefined)}
+          onSalvo={carregar}
+        />
       )}
     </div>
   )

@@ -8,6 +8,73 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase D2.1 — Cadastro de prestadores terceirizados e preço por serviço
+
+Sessão de 29/08/2026. **Tem SQL, já executado.** O Pedro rodou `015_prestadores.sql` no SQL
+Editor antes desta sessão começar — o arquivo neste repo é reconstrução do que ele colou,
+igual `007_kanban.sql`. Especificação completa em `claude/Fase-D-terceirizadas-filtros-
+etapas-e-visibilidade.md`, seção 2.1, no Project.
+
+#### O que existe agora
+
+- **Tabela `prestadores`**: nome, telefone, documento, observações, `ativo`. Nunca excluído
+  pela tela — só desativado.
+- **Tabela `prestador_servicos`**: um serviço com preço, de um prestador específico (ex.:
+  "Bordado ponto cheio" da Vera, R$ 3,50 por peça). `unidade` é `'peca'` (escala com
+  quantidade) ou `'fixo'` (não escala). Único por `(prestador_id, servico)`.
+- **Seção "Prestadores" em `/terceirizadas`**: lista, criar, editar, ativar/desativar, e os
+  serviços de cada um — tudo no mesmo modal (`PrestadorModal.tsx`). Um prestador NOVO não
+  tem id ainda, então a seção de serviços só aparece depois de salvar; o modal não fecha ao
+  criar, ele transiciona pro modo edição do registro recém-criado.
+- **O formulário de lançamento troca "Prestadora" (texto livre) por um seletor de
+  prestador** — com "Outro / avulso" pra não travar quem ainda não foi cadastrado — e,
+  quando um prestador é escolhido, um seletor de serviço (só os ativos) que preenche
+  quantidade e valor unitário.
+
+#### Quatro regras que não podiam passar batido (e viraram regra 11 do CLAUDE.md)
+
+1. **`valor_unitario` é copiado no momento do lançamento, nunca muda sozinho depois.** Editar
+   o preço da Vera em outubro não altera lançamentos de setembro — é histórico financeiro.
+2. **Quantidade × valor unitário preenche o valor combinado automaticamente, mas o campo
+   continua editável.** Testado: escolher o serviço preenche 1 × R$ 3,50 = R$ 3,50; mudar a
+   quantidade para 4 recalcula pra R$ 14,00; sobrescrever à mão pra R$ 20,00 e reabrir o
+   lançamento mantém R$ 20,00 — o recálculo só acontece quando quantidade ou valor unitário
+   mudam de novo, nunca por conta própria.
+3. **`nome` continua em `terceirizadas`, preenchido a partir do prestador, mas não é FK
+   obrigatória.** `prestador_id` é opcional — "outro/avulso" grava só o nome digitado.
+4. **Desativar, nunca excluir.** Testado: desativar o prestador o tira do seletor de novo
+   lançamento, mas o lançamento já existente que o usa continua abrindo com ele selecionado
+   (marcado "(inativo)"), porque o histórico não pode perder a quem se refere.
+
+#### Corrigido — `atualizarTerceirizada` não limpava prestador ao voltar para "avulso"
+
+Achado na revisão do diff, antes do commit. `atualizarTerceirizada` (`store.ts`) checava
+`dados.prestadorId !== undefined` para decidir se gravava `prestador_id` — mas
+`handlePrestadorChange('')`, chamada ao trocar o seletor de volta pra "Outro/avulso", grava
+esses 4 campos como `undefined` **dentro** do objeto do formulário, não os remove dele. A
+chave existe, só o valor é `undefined`, e `!== undefined` não enxerga diferença entre isso e
+"a chave nem foi mandada" — então editar um lançamento com prestador, trocar pra avulso e
+salvar não limpava `prestador_id`/`servico`/`quantidade`/`valor_unitario` no banco, mesmo a
+tela mostrando limpo.
+
+Troca: as 4 checagens viraram `'campo' in dados`, que distingue as duas situações de
+verdade. `avancarStatus` manda só `{ status }` — a chave nem existe ali, `in` continua
+certo em não mexer nesses campos nesse caso.
+
+Testado depois da correção: editei um lançamento com prestador vinculado, troquei pra
+"Outro/avulso", salvei, recarreguei a página inteira e reabri o lançamento — os 4 campos
+vieram `null`, confirmado lendo o estado que a própria tela já tinha buscado do banco (sem
+chamada nova, só inspeção do que o React já carregou).
+
+#### Testado antes do commit
+
+Criado prestador de teste, serviço de teste, lançamento usando os dois — confirmado o
+cálculo automático, a cópia congelada do valor unitário (mudei o preço do serviço depois do
+lançamento: o lançamento não mudou), e o desativar/reaparecer no seletor. Lançamento de
+teste excluído ao final. O prestador e o serviço de teste ficaram desativados no banco (não
+há exclusão pela tela, de propósito) — nomeados "TESTE PRESTADOR D2.1 - APAGAR" e "TESTE
+BUGFIX D2.1 - APAGAR" pra quem quiser limpar via SQL.
+
 ### Fase D3 — Etapas de produção por pedido: catálogo, ordem, lixeira e criar etapa
 
 Sessão de 29/08/2026. **Tem SQL, já executado.** O Pedro rodou `014_fase_d_auditoria.sql`

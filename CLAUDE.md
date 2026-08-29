@@ -110,7 +110,7 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | `/entregas` | `src/app/entregas/page.tsx` | Fila de pedidos com **todas as etapas** concluídas ou não aplicáveis, ainda não entregues; botão "Marcar como entregue". Só gestor/recepcionista |
 | `/quadros` | `src/app/quadros/page.tsx` | Kanban livre: grid de quadros, com criar/renomear/arquivar/excluir |
 | `/quadros/[id]` | `src/app/quadros/[id]/page.tsx` + `components/kanban/QuadroBoard.tsx` | O quadro: listas lado a lado, cartões, drag-and-drop |
-| `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros. Lançamento editável em todos os campos; excluir só o gestor (`excluirTerceirizada`) |
+| `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros. Lançamento editável em todos os campos; excluir só o gestor (`excluirTerceirizada`). Seção **Prestadores**: cadastro com serviços e valor por prestador — o lançamento passa a escolher prestador + serviço num seletor (com "outro/avulso" pra não travar ninguém), que preenche quantidade × valor unitário automaticamente |
 | `/relatorios` | `src/app/relatorios/page.tsx` | Fechamento mensal: receita, unidades, distribuição por complexidade |
 | `/configuracoes` | `src/app/configuracoes/page.tsx` | **Etapas de produção** — criar, renomear, reordenar, ativar/desativar; esta seção **vai para o banco** (`etapas_producao`). O catálogo de peças e personalizações, logo abaixo, continua gravando **só em `localStorage`**: não vai para o banco nem é compartilhado entre dispositivos. Peça registrada pelo `/novo-pedido` NÃO passa por aqui: vai para `tabela_precos` |
 | `/login` | `src/app/login/page.tsx` + `LoginForm.tsx` | Única rota pública. Usuário curto + senha; o e-mail é montado como `usuario@niceconfec.app` |
@@ -168,6 +168,10 @@ Código compartilhado:
 - `src/components/producao/FluxoEtapas.tsx` — o fluxo de etapas de um pedido: status,
   lixeira, arrasto e adicionar. **Compartilhado por `/producao` e `/pedidos/[id]`** — não
   faça uma segunda cópia. Arrasto otimista com rollback e faixa de erro, igual ao Kanban
+- `src/lib/prestadores.ts` — catálogo de prestadores terceirizados e preço por serviço
+  (migration 015, Fase D2.1): `getPrestadores`/`criarPrestador`/`atualizarPrestador` e
+  `getServicos`/`criarServico`/`atualizarServico`. Nunca oferece excluir — só `ativo`.
+  Consumido só por `/terceirizadas` (`components/terceirizadas/PrestadorModal.tsx`)
 - `src/types/index.ts` — todos os tipos do domínio
 - `src/components/FotoUpload.tsx` — upload de arte por peça: imagem (com lightbox) ou PDF
   (abre em outra aba). O campo continua se chamando `fotos` por compatibilidade com o JSONB
@@ -219,7 +223,7 @@ liberadas pro `anon`).
 
 ## Modelo de dados
 
-Oito tabelas + um bucket de Storage. Schema versionado em `supabase/migrations/`.
+Dez tabelas + um bucket de Storage. Schema versionado em `supabase/migrations/`.
 
 ### `pedidos`
 
@@ -261,7 +265,37 @@ responsavel · endereco · documento · data_cadastro timestamptz · updated_at 
 id uuid pk · nome · tipo · pedido_id uuid fk→pedidos · numero_pedido · itens
 data_envio · data_retorno_previsto · data_retorno_real
 valor_combinado numeric · valor_pago numeric · status · observacoes
+prestador_id uuid fk→prestadores · servico text · quantidade numeric · valor_unitario numeric
 ```
+
+As últimas 4 colunas são da migration 015 (Fase D2.1), **nullable de propósito**: um
+lançamento "outro/avulso" (sem prestador do catálogo) não tem nenhuma delas, e lançamento
+gravado antes da migration também não. `nome` continua a fonte do que a tela mostra —
+`prestador_id` PREENCHE `nome` no momento do lançamento, mas não é FK obrigatória, então
+excluir um prestador (se algum dia acontecer) não apaga o nome do histórico. `valor_unitario`
+é cópia de `prestador_servicos.valor` no mesmo momento, não referência viva: mudar o preço no
+cadastro depois não altera lançamento já gravado.
+
+### `prestadores` e `prestador_servicos`
+
+```
+prestadores          id uuid pk · nome text · telefone · documento · observacoes
+                     · ativo bool · created_at · updated_at
+prestador_servicos   id uuid pk · prestador_id uuid fk→prestadores (on delete cascade)
+                     · servico text · valor numeric · unidade text ('peca'|'fixo')
+                     · ativo bool · created_at · updated_at
+                     · unique (prestador_id, servico)
+```
+
+Cadastro de prestadores terceirizados e o preço de cada serviço deles (migration 015, Fase
+D2.1). **Nunca excluído pela tela — só `ativo=false`.** Some dos seletores de novo
+lançamento em `/terceirizadas`, mas continua existindo pro histórico que já referencia:
+`terceirizadas.prestador_id` não tem `on delete cascade` (diferente de
+`prestador_servicos.prestador_id`, que tem — apagar os serviços de um prestador junto com
+ele faria sentido, mas isso nunca acontece pela tela mesmo assim). `unidade = 'fixo'` é
+serviço que não escala com quantidade (frete, ajuste avulso); `'peca'` multiplica por
+quantidade. RLS igual ao resto: select para qualquer perfil com linha em `equipe`, write só
+gestor/recepcionista.
 
 ### `tabela_precos`
 
@@ -385,7 +419,7 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
 - Os arquivos de migration têm **prefixos duplicados**: existem dois `002_` e dois `004_`.
   `004_pedido_imagem.sql` e `004_vetorizacao.sql` criam a mesma coluna `vetorizacao`
   (ambos com `if not exists`, então é idempotente, mas confuso). Já foram usadas até a
-  `014_` (Fase D3a). Numere a próxima a partir de `015_`.
+  `015_` (Fase D2.1). Numere a próxima a partir de `016_`.
 - Colunas órfãs, criadas por migration e **não usadas em nenhum lugar do código**:
   `pedidos.imagem` e `clientes.responsavel_empresa`. Não assuma que estão populadas.
 
@@ -489,6 +523,22 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
     gravação falhar a posição **volta** e um banner diz explicitamente que não salvou
     (`QuadroBoard.tsx`, função `gravar`). Este projeto já teve exatamente esse bug na tela
     de preços — não reintroduza "salvou na tela, não salvou no banco".
+11. **Prestador e serviço nunca são excluídos pela tela — só desativados** (Fase D2.1,
+    `src/lib/prestadores.ts`). `ativo=false` some dos seletores de novo lançamento em
+    `/terceirizadas`, mas o registro continua existindo pro histórico que já o referencia.
+
+    **`Terceirizada.valorUnitario` é uma cópia de `prestador_servicos.valor` no momento do
+    lançamento, nunca uma referência viva.** Editar o preço de um serviço no cadastro não
+    muda nenhum lançamento já gravado — é histórico financeiro, não segue o preço atual.
+
+    **`Terceirizada.valorCombinado` é sempre editável**, mesmo depois de
+    quantidade × valor unitário preencher ele automaticamente ao escolher um serviço —
+    combinação fora da tabela acontece na prática, e a tela não pode travar nisso.
+
+    **`Terceirizada.nome` continua sendo o que a tela mostra**, preenchido a partir do
+    prestador escolhido no momento do lançamento — mas não é FK obrigatória
+    (`prestador_id` é opcional). O seletor do lançamento sempre tem "outro/avulso" pra não
+    travar em quem ainda não foi cadastrado.
 
 ## Convenções de trabalho
 
