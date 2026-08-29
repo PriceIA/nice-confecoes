@@ -106,13 +106,13 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | `/novo-pedido` | `src/app/novo-pedido/page.tsx` | Cadastro: cliente com autocomplete, seletor da tabela de preço do pedido, peças (com "outra peça" digitável e cadastrável), tamanhos (com tamanho livre), personalizações, parcelas, arte em imagem/PDF, vetorização |
 | `/clientes` | `src/app/clientes/page.tsx` | Lista, busca, edição inline, histórico de pedidos do cliente |
 | `/tabela-precos` | `src/app/tabela-precos/page.tsx` | **Várias** listas de preço (`Escolar 1`, `Escolar 2`, …), cada uma com grupos e peças criáveis/removíveis pela própria tela. Grade lida do banco, não do código |
-| `/producao` | `src/app/producao/page.tsx` | Acompanhamento dos 8 setores; clique cicla pendente → em_andamento → concluido. Busca, recorte por estágio e ordenação (inclusive por completude), guardados em `localStorage` |
-| `/entregas` | `src/app/entregas/page.tsx` | Fila de pedidos com os 8 setores concluídos ou não aplicáveis, ainda não entregues; botão "Marcar como entregue". Só gestor/recepcionista |
+| `/producao` | `src/app/producao/page.tsx` | Acompanhamento das etapas do pedido; clique cicla pendente → em_andamento → concluido. Lixeira marca "não se aplica"; a gestão arrasta para reordenar e adiciona etapa. Busca, recorte por estágio e ordenação (inclusive por completude), guardados em `localStorage` |
+| `/entregas` | `src/app/entregas/page.tsx` | Fila de pedidos com **todas as etapas** concluídas ou não aplicáveis, ainda não entregues; botão "Marcar como entregue". Só gestor/recepcionista |
 | `/quadros` | `src/app/quadros/page.tsx` | Kanban livre: grid de quadros, com criar/renomear/arquivar/excluir |
 | `/quadros/[id]` | `src/app/quadros/[id]/page.tsx` + `components/kanban/QuadroBoard.tsx` | O quadro: listas lado a lado, cartões, drag-and-drop |
 | `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros. Lançamento editável em todos os campos; excluir só o gestor (`excluirTerceirizada`) |
 | `/relatorios` | `src/app/relatorios/page.tsx` | Fechamento mensal: receita, unidades, distribuição por complexidade |
-| `/configuracoes` | `src/app/configuracoes/page.tsx` | Catálogo de peças e personalizações — **grava só em `localStorage`**, não vai para o banco nem é compartilhado entre dispositivos. Peça registrada pelo `/novo-pedido` NÃO passa por aqui: vai para `tabela_precos` |
+| `/configuracoes` | `src/app/configuracoes/page.tsx` | **Etapas de produção** — criar, renomear, reordenar, ativar/desativar; esta seção **vai para o banco** (`etapas_producao`). O catálogo de peças e personalizações, logo abaixo, continua gravando **só em `localStorage`**: não vai para o banco nem é compartilhado entre dispositivos. Peça registrada pelo `/novo-pedido` NÃO passa por aqui: vai para `tabela_precos` |
 | `/login` | `src/app/login/page.tsx` + `LoginForm.tsx` | Única rota pública. Usuário curto + senha; o e-mail é montado como `usuario@niceconfec.app` |
 | `/perfil` | `src/app/perfil/page.tsx` | Mostra nome e perfil do usuário logado e permite trocar a própria senha. Aberta a todos os perfis |
 | `/api/keep-alive` | `src/app/api/keep-alive/route.ts` | Route handler; cron diário 06:00 UTC (`vercel.json`) para evitar a pausa por inatividade do Supabase free. **Fora do matcher do middleware** — o cron não tem sessão |
@@ -160,6 +160,14 @@ Código compartilhado:
   (as 6 ordens, sem mutar o array, data ausente sempre no fim, empate por `numero`).
   **Não escreva uma segunda conta de "% pronto"** — a barra de progresso e o filtro
   "quase prontos" precisam concordar sempre
+- `src/lib/etapas.ts` — o catálogo de etapas (`etapas_producao`) e, mais importante, a
+  RESOLUÇÃO de nome e ordem: `rotuloEtapa` (catálogo → `SETOR_LABELS` → a própria chave) e
+  `etapasDoPedido` (ordem do pedido → do catálogo → canônica). `ETAPAS_PADRAO` é **semente**,
+  não fonte — `carregarEtapas` cai nela no erro `42P01`, para o código subir antes de a
+  migration 014 rodar sem quebrar a tela de produção
+- `src/components/producao/FluxoEtapas.tsx` — o fluxo de etapas de um pedido: status,
+  lixeira, arrasto e adicionar. **Compartilhado por `/producao` e `/pedidos/[id]`** — não
+  faça uma segunda cópia. Arrasto otimista com rollback e faixa de erro, igual ao Kanban
 - `src/types/index.ts` — todos os tipos do domínio
 - `src/components/FotoUpload.tsx` — upload de arte por peça: imagem (com lightbox) ou PDF
   (abre em outra aba). O campo continua se chamando `fotos` por compatibilidade com o JSONB
@@ -211,7 +219,7 @@ liberadas pro `anon`).
 
 ## Modelo de dados
 
-Sete tabelas + um bucket de Storage. Schema versionado em `supabase/migrations/`.
+Oito tabelas + um bucket de Storage. Schema versionado em `supabase/migrations/`.
 
 ### `pedidos`
 
@@ -317,6 +325,25 @@ Pontos que mudam como se escreve código contra elas:
 - **A visibilidade por perfil vale no banco, não só na tela.** A policy de select em `cards`
   filtra por `meu_perfil()`; o quadro não "esconde" cartões, ele simplesmente não os recebe.
 
+### `etapas_producao`
+
+```
+chave text pk · rotulo text · ordem int · ativa bool · canonica bool
+created_at · updated_at
+```
+
+O catálogo de etapas de produção (migration 014, Fase D3a). **`chave` é o que vai para dentro
+de `pedidos.progresso`** — é ela que identifica a etapa, nunca o rótulo; renomear não pode
+perder status gravado. Etapas criadas pelo Pedro levam prefixo `extra_` e um sufixo aleatório,
+para que excluir e recriar "Bordado" não herde em silêncio o status dos pedidos antigos.
+
+`canonica = true` marca as 8 originais. **Elas não podem ser excluídas, e a trava vale no
+banco:** a policy de delete tem `and not canonica`. Sem isso, um DELETE direto no PostgREST
+apagaria `corte` do catálogo e todos os pedidos ficariam com um setor sem nome.
+
+`ordem` aqui é a ordem PADRÃO, usada só para semear pedido novo e listar o catálogo. **A ordem
+de um pedido específico vive no JSONB dele** (`EntradaProgresso.ordem`), porque é por pedido.
+
 ### `public.meu_perfil()`
 
 Função `security definer`, `search_path` fixo em `public`. Devolve o `perfil` do usuário
@@ -357,8 +384,8 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
   insert/update. Ao adicionar campo, mexa nos dois lados.
 - Os arquivos de migration têm **prefixos duplicados**: existem dois `002_` e dois `004_`.
   `004_pedido_imagem.sql` e `004_vetorizacao.sql` criam a mesma coluna `vetorizacao`
-  (ambos com `if not exists`, então é idempotente, mas confuso). A Fase B já gastou a
-  `009_`. Numere a próxima a partir de `010_`.
+  (ambos com `if not exists`, então é idempotente, mas confuso). Já foram usadas até a
+  `014_` (Fase D3a). Numere a próxima a partir de `015_`.
 - Colunas órfãs, criadas por migration e **não usadas em nenhum lugar do código**:
   `pedidos.imagem` e `clientes.responsavel_empresa`. Não assuma que estão populadas.
 
@@ -397,10 +424,33 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
    (`calcularDataEntrega`, `store.ts:325`).
 6. **Complexidade P1–P5 é calculada, não escolhida.** Derivada do tipo da peça + número de
    personalizações em `calcularComplexidade` (`helpers.ts:20-31`).
-7. **Progresso tem 8 setores fixos**, sempre nesta ordem: atendimento, compra, corte,
-   costura, estamparia_silk, prensa_dtf, prensa_sublimacao, acabamento
-   (`types/index.ts:29-38`). Pedido novo nasce com `atendimento: 'concluido'` e o resto
-   pendente (`store.ts:107-116`).
+7. **Progresso é uma LISTA DE ETAPAS POR PEDIDO, não 8 setores fixos** (mudou na Fase D3,
+   28/08/2026 — esta regra dizia "8 setores fixos" até então).
+
+   `Pedido.progresso` é `Record<string, EntradaProgresso>`: as chaves são etapas, e cada
+   pedido tem as suas. **O JSONB do pedido é a verdade sobre o fluxo daquele pedido** —
+   `normalizarProgresso` converte formato na leitura e não acrescenta nem remove etapa.
+
+   A lixeira da tela marca `nao_se_aplica` e **nunca apaga a chave**, então um pedido não
+   perde etapa que já tenha. Mas ela pode nunca ter entrado: desativar `prensa_sublimacao`
+   no catálogo faz os pedidos criados depois simplesmente não a terem.
+
+   **Portanto: nunca assuma que uma canônica existe.** Escreva
+   `progresso.acabamento?.status`, nunca `progresso.acabamento.status`. Esta regra já foi
+   violada uma vez nesta própria fase e só apareceu na revisão do diff.
+
+   O que é novo: o Pedro cria etapas próprias pelo catálogo `etapas_producao`
+   (migration 014). Elas entram como chaves com prefixo **`extra_`** no mesmo JSONB, e o
+   nome delas vem do catálogo, não do código.
+
+   **A ORDEM é por pedido.** `EntradaProgresso.ordem` guarda a posição naquele pedido, e é
+   o que o arrasto grava. Ausente = cai na ordem do catálogo, e depois na canônica — por
+   isso pedido antigo continua aparecendo exatamente como sempre apareceu, sem migração
+   de dado. Toda a resolução está em `etapasDoPedido` (`src/lib/etapas.ts`); **nenhuma tela
+   deve reimplementar essa ordem.**
+
+   Pedido novo nasce com as etapas ATIVAS do catálogo, `atendimento: 'concluido'`, o resto
+   pendente, e `ordem` 1..n (`criarPedido`, `store.ts`).
 
    Cada setor guarda `EntradaProgresso { status, atualizadoPor?, atualizadoEm? }`, não só o
    status — quem clicou por último e quando, gravado a partir de `useMembro().nome` no
@@ -422,11 +472,17 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
    `nao_se_aplica` desfaz e volta pra `pendente`. Autoria é obrigatória, igual aos outros
    setores. Entra e sai do banco sem migration — é o mesmo JSONB sem schema que já
    permitiu a autoria por setor.
+
+   **Quem pode o quê**, e a divisão é deliberada: marcar `nao_se_aplica` (a lixeira) é de
+   todos os perfis com `editarProducao` — quem está trabalhando no pedido sabe se ele passa
+   por ali. **Reordenar, criar etapa e mexer no catálogo é `editarFluxoProducao`**, só
+   gestor/recepcionista: a sequência da produção é decisão de quem gerencia a produção.
 8. **`/producao` e `/quadros` são módulos diferentes, e nenhum substitui o outro.**
-   `/producao` é a fonte da verdade do progresso real dos pedidos pelos 8 setores; o Kanban
+   `/producao` é a fonte da verdade do progresso real dos pedidos pelas etapas deles; o Kanban
    é um quadro de tarefas livres. Exportar um pedido para cartão **não** muda nada no pedido.
-9. **Cartão a partir de pedido é sugestão, nunca automação.** A ação só aparece com os 8
-   setores **concluídos ou não aplicáveis** (`pedidoConcluido`, `kanban-ui.ts`), e nada é
+9. **Cartão a partir de pedido é sugestão, nunca automação.** A ação só aparece quando
+   **todas as etapas do pedido** estão concluídas ou não aplicáveis (`pedidoConcluido`,
+   `kanban-ui.ts` — ela itera as chaves do pedido, não uma lista fixa), e nada é
    criado sem alguém escolher quadro, lista e confirmar — o texto vem pré-preenchido só
    para poupar digitação.
 10. **No Kanban, a tela nunca mostra o que o banco não tem.** Arrastar é otimista, mas se a

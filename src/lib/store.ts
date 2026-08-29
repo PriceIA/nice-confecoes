@@ -1,8 +1,9 @@
-import { Cliente, Parcela, Pedido, ProgressoSetor, StatusSetor, Terceirizada } from '@/types'
+import { Cliente, EntradaProgresso, Parcela, Pedido, Progresso, StatusSetor, Terceirizada } from '@/types'
 import { addBusinessDays, format } from 'date-fns'
 import { supabase } from './supabase'
 import { criarClienteBrowser } from './supabase/client'
 import { sanitizarNome } from './arquivos'
+import { carregarEtapas } from './etapas'
 
 // Fase B: pedidos/clientes/terceirizadas ganharam RLS baseada em auth.uid()
 // (ver CLAUDE.md, "Estado de segurança atual"). O client anônimo de
@@ -32,14 +33,70 @@ function normalizarStatusSetor(v: unknown): StatusSetor {
   return STATUS_SETOR_VALIDOS.includes(v as StatusSetor) ? (v as StatusSetor) : 'pendente'
 }
 
-function normalizarProgresso(raw: any): ProgressoSetor {
-  const out = {} as ProgressoSetor
-  for (const setor of SETORES_PROGRESSO) {
-    const v = raw?.[setor]
-    out[setor] = typeof v === 'string'
-      ? { status: normalizarStatusSetor(v) }
-      : { status: normalizarStatusSetor(v?.status), atualizadoPor: v?.atualizadoPor, atualizadoEm: v?.atualizadoEm }
+/**
+ * Converte o `progresso` cru do banco no formato atual, na LEITURA.
+ *
+ * Três formatos convivem no JSONB, e esta função é o único lugar que sabe
+ * disso — o resto do código só vê o formato de hoje:
+ *
+ *  1. string crua      — pedidos anteriores à autoria por setor
+ *  2. { status, ... }  — com atualizadoPor/atualizadoEm
+ *  3. + `ordem`        — Fase D3b, a posição da etapa NESTE pedido
+ *
+ * **O JSONB do pedido é a verdade sobre o fluxo DAQUELE pedido.** Esta função
+ * não acrescenta nem remove etapa: converte formato, e só.
+ *
+ * - **Chave desconhecida é PRESERVADA**, nunca descartada. Antes da D3 esta
+ *   função iterava só as 8 canônicas e jogava fora o resto — com etapas criadas
+ *   pelo Pedro (`extra_*`), isso apagaria o trabalho dele em silêncio a cada
+ *   leitura/gravação.
+ * - **Canônica ausente NÃO é recriada.** Até a revisão da D3 ela era: a função
+ *   unia as 8 fixas às chaves do JSONB e devolvia as que faltavam como
+ *   `pendente`. Isso anulava o "Desativar" do catálogo — o Pedro tirava
+ *   `prensa_sublimacao` do fluxo padrão, `criarPedido` corretamente não a
+ *   incluía, e a leitura seguinte a ressuscitava como pendente. Pior no
+ *   `atendimento`, que nasce `concluido` e voltaria `pendente`, quebrando a
+ *   regra em silêncio.
+ *
+ * Consequência para quem escreve código: **não assuma que uma canônica existe.**
+ * Use `progresso.acabamento?.status`, nunca `progresso.acabamento.status`.
+ *
+ * O único caso em que esta função inventa alguma coisa é progresso vazio ou
+ * nulo — dado corrompido, não escolha de fluxo. Aí ela semeia as 8, porque um
+ * pedido sem etapa nenhuma apareceria como 100% pronto em `resumoProgresso`.
+ *
+ * E é permissiva com o desconhecido: status que ela não reconhece vira
+ * `pendente`, nunca `undefined` — pedido antigo não pode quebrar a tela.
+ */
+function normalizarProgresso(raw: any): Progresso {
+  const out: Progresso = {}
+  const cru = (raw && typeof raw === 'object') ? raw : {}
+  const chaves = Object.keys(cru).length > 0
+    ? Object.keys(cru)
+    : [...SETORES_PROGRESSO]   // progresso vazio/nulo: dado corrompido, não fluxo escolhido
+
+  for (const chave of chaves) {
+    const v = cru[chave]
+
+    if (typeof v === 'string') {
+      out[chave] = { status: normalizarStatusSetor(v) }
+      continue
+    }
+
+    if (v && typeof v === 'object') {
+      const entrada: EntradaProgresso = { status: normalizarStatusSetor(v.status) }
+      if (v.atualizadoPor) entrada.atualizadoPor = v.atualizadoPor
+      if (v.atualizadoEm) entrada.atualizadoEm = v.atualizadoEm
+      if (typeof v.ordem === 'number' && Number.isFinite(v.ordem)) entrada.ordem = v.ordem
+      out[chave] = entrada
+      continue
+    }
+
+    // Só alcança aqui na semeadura de progresso vazio, ou se o JSONB tiver a
+    // chave com valor nulo.
+    out[chave] = { status: 'pendente' }
   }
+
   return out
 }
 
@@ -151,17 +208,26 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
   console.log('[criarPedido] cliente ok:', cliente.id)
   const numero = await gerarNumero()
   console.log('[criarPedido] numero gerado:', numero)
-  // Sem autor: é o sistema criando o pedido, ninguém clicou em nada ainda.
-  const progresso: ProgressoSetor = {
-    atendimento: { status: 'concluido' },
-    compra: { status: 'pendente' },
-    corte: { status: 'pendente' },
-    costura: { status: 'pendente' },
-    estamparia_silk: { status: 'pendente' },
-    prensa_dtf: { status: 'pendente' },
-    prensa_sublimacao: { status: 'pendente' },
-    acabamento: { status: 'pendente' },
-  }
+  // O fluxo de um pedido novo vem do CATÁLOGO (etapas_producao), não de uma
+  // lista fixa: se o Pedro cadastrou "Bordado" e deixou ativo, todo pedido
+  // novo já nasce com ele. Etapa desativada não entra.
+  //
+  // Sem autor em nenhuma entrada: é o sistema criando o pedido, ninguém clicou
+  // em nada ainda. `atendimento` nasce concluído, como sempre.
+  //
+  // Se a migration 014 ainda não rodou, `carregarEtapas` devolve a semente com
+  // as 8 canônicas — ou seja, exatamente o comportamento anterior.
+  const { etapas } = await carregarEtapas()
+  const progresso: Progresso = {}
+  etapas
+    .filter(e => e.ativa)
+    .sort((a, b) => a.ordem - b.ordem || a.chave.localeCompare(b.chave))
+    .forEach((etapa, i) => {
+      progresso[etapa.chave] = {
+        status: etapa.chave === 'atendimento' ? 'concluido' : 'pendente',
+        ordem: i + 1,
+      }
+    })
 
   const parcelas = dados.parcelas ?? []
   const vTotal = parcelas.length > 0

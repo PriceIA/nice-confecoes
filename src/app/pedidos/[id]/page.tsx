@@ -2,10 +2,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { ArrowLeft, Printer, ChevronRight, CheckCircle2, Circle, Loader2, MinusCircle, Pencil, Save, X, PlusCircle, Trash2 } from 'lucide-react'
+import { ArrowLeft, Printer, ChevronRight, Pencil, Save, X, PlusCircle, Trash2 } from 'lucide-react'
 import { getPedidoById, atualizarPedido } from '@/lib/store'
-import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade, autorSetorTexto } from '@/lib/helpers'
-import { Pedido, Peca, Parcela, ExcecaoPagamento, StatusPedido, StatusSetor, ProgressoSetor, EntradaProgresso, Personalizacao, TamanhoQuantidade, TipoPedido } from '@/types'
+import { carregarEtapas, etapasDoPedido } from '@/lib/etapas'
+import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade } from '@/lib/helpers'
+import { Pedido, Peca, Parcela, ExcecaoPagamento, StatusPedido, StatusSetor, EtapaProducao, Personalizacao, TamanhoQuantidade, TipoPedido } from '@/types'
 import FotoUpload from '@/components/FotoUpload'
 import MiniaturaArquivo from '@/components/MiniaturaArquivo'
 import { primeiraImagem, contarPdfs } from '@/lib/arquivos'
@@ -15,6 +16,7 @@ import {
 } from '@/lib/excecaoPagamento'
 import CriarCartaoDoPedido from '@/components/kanban/CriarCartaoDoPedido'
 import ModalProntoParaEnvio from '@/components/producao/ModalProntoParaEnvio'
+import FluxoEtapas from '@/components/producao/FluxoEtapas'
 import Modal from '@/components/kanban/Modal'
 import { pedidoConcluido } from '@/lib/kanban-ui'
 import { useMembro } from '@/components/AuthProvider'
@@ -146,6 +148,8 @@ export default function DetalhePedidoPage() {
   const [salvando, setSalvando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState<string | null>(null)
   const [modalAberto, setModalAberto] = useState(false)
+  const [etapas, setEtapas] = useState<EtapaProducao[]>([])
+  const [catalogoSemente, setCatalogoSemente] = useState(true)
 
   // Exceção "pagar na retirada": o modal serve para pedir (recepcionista),
   // liberar direto (gestor) e recusar (gestor com observação).
@@ -155,7 +159,12 @@ export default function DetalhePedidoPage() {
   const [salvandoExcecao, setSalvandoExcecao] = useState(false)
 
   const carregar = async () => {
-    const p = await getPedidoById(id as string)
+    const [p, catalogo] = await Promise.all([
+      getPedidoById(id as string),
+      carregarEtapas(),
+    ])
+    setEtapas(catalogo.etapas)
+    setCatalogoSemente(catalogo.semente)
     if (!p) router.push('/pedidos')
     else setPedido(p)
   }
@@ -315,28 +324,6 @@ export default function DetalhePedidoPage() {
     carregar()
   }
 
-  async function ciclarSetor(setor: keyof ProgressoSetor) {
-    const ciclo: StatusSetor[] = ['pendente', 'em_andamento', 'concluido']
-    const atual = pedido!.progresso[setor].status
-    const proximo = ciclo[(ciclo.indexOf(atual) + 1) % ciclo.length]
-    const entrada: EntradaProgresso = {
-      status: proximo,
-      atualizadoPor: membro?.nome,
-      atualizadoEm: new Date().toISOString(),
-    }
-    const progresso = { ...pedido!.progresso, [setor]: entrada }
-    await atualizarPedido(pedido!.id, { progresso })
-    await carregar()
-
-    // Modal "Pronto para envio?" — mesma regra de /producao: a gravação
-    // acima já aconteceu, o modal só pergunta o que fazer com o resto.
-    if (setor === 'acabamento' && proximo === 'concluido') {
-      const pendentes = (Object.keys(progresso) as (keyof ProgressoSetor)[])
-        .filter(s => s !== 'acabamento' && (progresso[s].status === 'pendente' || progresso[s].status === 'em_andamento'))
-      if (pendentes.length > 0) setModalAberto(true)
-    }
-  }
-
   async function marcarParcelaPaga(parcelaId: string, pago: boolean) {
     const parcelas = pedido!.parcelas.map(p =>
       p.id === parcelaId
@@ -394,18 +381,13 @@ export default function DetalhePedidoPage() {
     await gravarExcecao(decidir(pedido!.excecaoPagamento!, true, membro?.nome ?? 'desconhecido'))
   }
 
-  const setorIcone = (s: StatusSetor) => {
-    if (s === 'concluido') return <CheckCircle2 className="w-4 h-4 text-nice-500" />
-    if (s === 'em_andamento') return <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
-    if (s === 'nao_se_aplica') return <MinusCircle className="w-4 h-4 text-fraco" />
-    return <Circle className="w-4 h-4 text-fraco" />
-  }
 
   // "Segunda porta": quem pulou o modal (ou o Acabamento já estava concluído
   // antes desta fase) ainda precisa de um jeito de abri-lo depois.
-  const podeLiberarEnvio = pedido.progresso.acabamento.status === 'concluido' &&
-    (Object.keys(pedido.progresso) as (keyof ProgressoSetor)[])
-      .some(s => s !== 'acabamento' && (pedido.progresso[s].status === 'pendente' || pedido.progresso[s].status === 'em_andamento'))
+  const podeLiberarEnvio = pedido.progresso?.acabamento?.status === 'concluido' &&
+    Object.keys(pedido.progresso).some(s =>
+      s !== 'acabamento' &&
+      (pedido.progresso[s]?.status === 'pendente' || pedido.progresso[s]?.status === 'em_andamento'))
 
   const totalParcelas = pedido.parcelas.reduce((a, p) => a + (p.valor || 0), 0)
   const totalPago = pedido.parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
@@ -995,42 +977,28 @@ export default function DetalhePedidoPage() {
           {/* Progresso setores */}
           <div className="card space-y-4">
             <h2 className="font-semibold text-titulo">Progresso por Setor</h2>
-            <div className="space-y-2">
-              {(Object.keys(pedido.progresso) as (keyof ProgressoSetor)[]).map(setor => {
-                const entrada = pedido.progresso[setor]
-                const status = entrada.status
-                const autor = autorSetorTexto(entrada)
-                return (
-                  <button key={setor} onClick={() => ciclarSetor(setor)}
-                    disabled={!permissoes.editarPedido}
-                    className={clsx(
-                      'w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm disabled:cursor-default',
-                      status === 'concluido' ? 'bg-marca-suave border-marca-borda' :
-                      status === 'em_andamento' ? 'bg-orange-50 border-orange-200' :
-                      status === 'nao_se_aplica' ? 'bg-superficie-3 border-borda' :
-                      'bg-superficie-2 border-borda hover:border-borda'
-                    )}>
-                    <div className="flex items-center gap-3">
-                      {setorIcone(status)}
-                      <div className="flex flex-col items-start">
-                        <span className={clsx('font-medium', status === 'concluido' ? 'text-marca-texto' : status === 'em_andamento' ? 'text-orange-600' : 'text-suave')}>
-                          {SETOR_LABELS[setor]}
-                        </span>
-                        {autor && <span className="text-[11px] font-normal text-fraco">{autor}</span>}
-                      </div>
-                    </div>
-                    <span className={clsx('text-xs font-semibold capitalize',
-                      status === 'concluido' ? 'text-marca-texto' : status === 'em_andamento' ? 'text-orange-500' : 'text-fraco')}>
-                      {status === 'pendente' ? 'pendente' : status === 'em_andamento' ? 'em andamento' : status === 'nao_se_aplica' ? 'não se aplica' : 'concluído'}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            <p className="text-xs text-fraco">Clique em um setor para avançar o status</p>
-            {podeLiberarEnvio && permissoes.editarPedido && (
+
+            <FluxoEtapas
+              pedidoId={pedido.id}
+              progresso={pedido.progresso}
+              etapas={etapas}
+              catalogoSemente={catalogoSemente}
+              podeEditarStatus={permissoes.editarProducao}
+              podeEditarFluxo={permissoes.editarFluxoProducao}
+              nomeMembro={membro?.nome}
+              onGravado={carregar}
+              onAcabamentoConcluido={() => setModalAberto(true)}
+              variante="lista"
+            />
+
+            <p className="text-xs text-fraco print:hidden">
+              Clique numa etapa para avançar o status.
+              {permissoes.editarFluxoProducao && ' Arraste pelo ⠿ para mudar a ordem deste pedido.'}
+            </p>
+
+            {podeLiberarEnvio && permissoes.editarProducao && (
               <button type="button" onClick={() => setModalAberto(true)}
-                className="text-marca-texto text-xs font-medium hover:underline">
+                className="text-marca-texto text-xs font-medium hover:underline print:hidden">
                 Este pedido está pronto para envio?
               </button>
             )}
@@ -1136,16 +1104,30 @@ export default function DetalhePedidoPage() {
       {pedido.pecas.map((p, i) => {
         const cc = COMPLEXIDADE_CONFIG[p.complexidade]
         const statusPersonalizacao = combinarStatus([
-          pedido.progresso.estamparia_silk.status,
-          pedido.progresso.prensa_dtf.status,
-          pedido.progresso.prensa_sublimacao.status,
+          pedido.progresso.estamparia_silk?.status ?? 'pendente',
+          pedido.progresso.prensa_dtf?.status ?? 'pendente',
+          pedido.progresso.prensa_sublimacao?.status ?? 'pendente',
         ])
+        // As 6 colunas fixas são o formulário de papel da fábrica, não uma
+        // tradução de SETOR_LABELS: 'Matéria Prima' é o setor `compra`, os três
+        // setores de estampa viram uma coluna só, e 'Loja' é um campo manual
+        // que não existe no sistema. Por isso a lista é escrita à mão.
+        //
+        // O que a Fase D3 acrescenta: as etapas criadas pelo Pedro (`extra_*`)
+        // entram DEPOIS das fixas, na ordem deste pedido. Sem isso, uma etapa
+        // "Bordado" simplesmente não sairia na ficha — some da folha sem erro
+        // nenhum, que é o pior tipo de falha.
+        const extras = etapasDoPedido(pedido.progresso, etapas)
+          .filter(e => e.chave.startsWith('extra_'))
+          .map(e => ({ label: e.rotulo, status: e.entrada.status }))
+
         const setoresLinha: { label: string; status: StatusSetor }[] = [
-          { label: 'Matéria Prima', status: pedido.progresso.compra.status },
-          { label: 'Corte', status: pedido.progresso.corte.status },
+          { label: 'Matéria Prima', status: pedido.progresso.compra?.status ?? 'pendente' },
+          { label: 'Corte', status: pedido.progresso.corte?.status ?? 'pendente' },
           { label: 'Personalização', status: statusPersonalizacao },
-          { label: 'Costura', status: pedido.progresso.costura.status },
-          { label: 'Acabamento', status: pedido.progresso.acabamento.status },
+          { label: 'Costura', status: pedido.progresso.costura?.status ?? 'pendente' },
+          ...extras,
+          { label: 'Acabamento', status: pedido.progresso.acabamento?.status ?? 'pendente' },
           { label: 'Loja', status: 'pendente' },
         ]
         return (
@@ -1388,6 +1370,7 @@ export default function DetalhePedidoPage() {
     {modalAberto && (
       <ModalProntoParaEnvio
         pedido={pedido}
+        etapas={etapas}
         onFechar={() => setModalAberto(false)}
         onSalvo={carregar}
         nomeMembro={membro?.nome}

@@ -8,6 +8,128 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase D3 — Etapas de produção por pedido: catálogo, ordem, lixeira e criar etapa
+
+Sessão de 29/08/2026. **Tem SQL, já executado.** O Pedro rodou `014_fase_d_auditoria.sql`
+primeiro — confirmou as 8 chaves canônicas presentes nos 38 pedidos existentes e nenhuma
+tabela inesperada — e depois `014_etapas_producao.sql`, sem precisar de backfill. Conferido
+com `select * from etapas_producao order by ordem`: as 8 linhas gravaram, todas `canonica`.
+
+Roteiro de teste completo, feito depois da migration: marcar Silk e Sublimação como "não se
+aplica" levou o percentual a 100% (não 75%) e o pedido apareceu em `/entregas`; a ficha A4
+não mostrou "pendente" nos setores não aplicáveis; criar "Bordado" e arrastar pra depois do
+Corte persistiu a ordem certa depois de recarregar a página; e um perfil de chão de fábrica
+(o Alex) marcou "não se aplica" normalmente mas não viu a alça de arrastar, "Adicionar
+etapa" nem a seção de etapas em `/configuracoes` — confirmado pelo DOM, não só pela ausência
+de erro.
+
+**Esta fase reescreve a regra 7 do CLAUDE.md**, que dizia "progresso tem 8 setores fixos".
+Não é mais verdade, e a regra foi reescrita junto — deixar uma regra marcada como inviolável
+em desacordo com o código é como este projeto cria a próxima confusão.
+
+#### O problema
+
+> "em produção quase nunca o pedido terá os 3 tipos silk, DTF e sublimação... vamos deixar
+> colocar uma lixeira, excluir aquele processo, e o drag para ele conseguir mudar a ordem,
+> pois ele escolhe a sequência que a produção dele irá trabalhar" — Pedro, via Felipe
+
+A Fase C0 já tinha resolvido metade disso com o estado `nao_se_aplica`, mas só pelo modal do
+Acabamento. Faltava o caminho direto, a ordem por pedido, e etapas que o sistema não tem.
+
+#### Decisões tomadas antes de escrever código
+
+- **Lixeira marca "não se aplica", não apaga.** Card apagado, fora da conta do percentual,
+  com quem marcou e quando, e um clique desfaz. A chave nunca sai do JSONB.
+- **Catálogo GLOBAL de nomes, ordem POR PEDIDO.** A primeira ideia era permitir renomear
+  etapa dentro de cada pedido; foi descartada porque a mesma etapa viraria "Bordado",
+  "Bordado manual" e "Bord." em pedidos diferentes, e nenhum filtro ou relatório por etapa
+  sobreviveria a isso. É o mesmo erro de taxonomia divergente que a tabela de preços custou.
+- **Só a gestão mexe no fluxo.** Marcar "não se aplica" é de todos os 8 perfis (quem está
+  no pedido sabe se ele passa por ali). Reordenar, adicionar e criar etapa é
+  `editarFluxoProducao`, flag nova: só gestor e recepcionista.
+
+#### 1. `etapas_producao` — o catálogo (migration 014)
+
+`chave` (pk) · `rotulo` · `ordem` · `ativa` · `canonica`. Semeada com as 8 canônicas, com os
+rótulos idênticos aos de `SETOR_LABELS`.
+
+- **`chave` identifica a etapa, nunca o rótulo.** Etapa criada pelo Pedro vira
+  `extra_<slug>_<6 hex>`. O sufixo aleatório evita que excluir e recriar "Bordado" herde em
+  silêncio o status gravado nos pedidos antigos.
+- **As 8 canônicas não podem ser excluídas, e a trava está no BANCO:** a policy de delete tem
+  `and not canonica`. Sem ela, um DELETE direto no PostgREST com a sessão da Kalomira
+  apagaria `corte` do catálogo e todos os pedidos ficariam com um setor sem nome.
+- **SELECT liberado a qualquer perfil com linha em `equipe`.** Restringir aqui faria os cards
+  aparecerem com a chave crua no lugar do nome — e sem erro nenhum, que é o modo de falha
+  que este documento já repete: RLS que barra não dá erro, dá zero linhas.
+- **O código tolera a migration não ter rodado.** `carregarEtapas` trata o erro `42P01` caindo
+  na semente `ETAPAS_PADRAO`, exatamente como `carregarPrecos` trata o `42703`. Subir o
+  código antes do SQL não quebra nada; a tela só não oferece "criar etapa".
+
+#### 2. Sem SQL para a ordem — conferido, não suposto
+
+A ordem de um pedido mora em `EntradaProgresso.ordem`, dentro do JSONB `progresso`. Isso não
+precisou de migration porque `atualizar_progresso_pedido` (`009_rls_fase_b.sql`) grava a
+coluna inteira **sem validar chave nem status** — conferido lendo o corpo da função, não
+assumido.
+
+#### 3. `FluxoEtapas` — um componente, duas telas
+
+`/producao` e `/pedidos/[id]` passaram a usar o mesmo `FluxoEtapas`, em vez de cada uma ter
+sua cópia do grid de setores. Arrastar (`@dnd-kit`, já no projeto por causa do Kanban) é
+**otimista com rollback**: se a gravação falhar, a ordem volta e uma faixa diz com todas as
+letras que não salvou. Regra 10 — este projeto já teve esse bug na tela de preços.
+
+O arrasto tem alça própria (⠿) e distância mínima de 6px: sem isso, tocar num card no celular
+ficaria ambíguo entre ciclar o status e mover a etapa.
+
+#### 4. O efeito dominó
+
+- **`normalizarProgresso` (`store.ts`) foi reescrita duas vezes, e a segunda é a que importa.**
+  Ela iterava só as 8 canônicas e descartava o resto — com etapas `extra_*`, isso apagaria o
+  trabalho do Pedro em silêncio a cada leitura. A primeira correção passou a unir as 8 fixas
+  às chaves do JSONB; **a revisão do diff mostrou que essa união anulava o "Desativar" do
+  catálogo**: o Pedro tirava `prensa_sublimacao` do fluxo padrão, `criarPedido` corretamente
+  não a incluía, e a leitura seguinte a ressuscitava como `pendente`. No `atendimento` era
+  pior — ele nasce `concluido` e voltaria `pendente`, quebrando a regra 7 sem erro nenhum.
+
+  **A regra agora: o JSONB do pedido é a verdade sobre o fluxo daquele pedido.** A função
+  converte formato e não acrescenta nem remove etapa. Único caso em que ela semeia as 8:
+  progresso vazio ou nulo, que é dado corrompido e não escolha de fluxo — sem isso um pedido
+  sem etapa nenhuma apareceria como 100% pronto em `resumoProgresso`.
+
+  **Consequência para quem escrever código daqui pra frente:** não assuma que uma canônica
+  existe. `progresso.acabamento?.status`, nunca `progresso.acabamento.status`.
+- **`/configuracoes` não deixa desativar a última etapa ativa.** Fluxo vazio faria pedido novo
+  nascer sem etapa nenhuma — e, pela conta acima, nascer "100% pronto".
+- **`criarPedido` semeia do catálogo**, não de uma lista fixa: etapa ativa nova já entra nos
+  pedidos seguintes.
+- **Ficha A4:** o bloco de impressão montava a lista de setores à mão, com rótulos literais
+  no JSX (`'Matéria Prima'`, `'Loja'`). As 6 colunas fixas são o formulário de papel da
+  fábrica e continuam como estão — mas etapas `extra_*` agora entram **entre "Costura" e
+  "Acabamento"**, que é onde elas cabem: acabamento/embalagem é a última etapa real, e
+  "Loja" é campo manual. Sem isso, uma etapa "Bordado" simplesmente não sairia na folha,
+  sem erro nenhum.
+- **`ModalProntoParaEnvio`** itera as chaves do pedido e nomeia pelo catálogo. Etapa criada
+  pelo Pedro nasce **desmarcada**, com ⚠️ — só silk/DTF/sublimação vêm pré-marcados.
+- **`pedidoConcluido`** já iterava `Object.values(progresso)`, então `/entregas` e o botão
+  "Criar cartão no Kanban" funcionaram sem mudança.
+- **`/configuracoes`** ganhou a seção "Etapas de produção" — a **primeira** seção dessa tela
+  que grava no banco. O catálogo de peças logo abaixo continua em `localStorage`, dívida
+  conhecida e inalterada.
+
+#### Tipos
+
+`Pedido.progresso` passou de `ProgressoSetor` (8 chaves fixas) para `Progresso`
+(`Record<string, EntradaProgresso>`).
+
+`ProgressoSetor` continua existindo, mas **não descreve mais o progresso de um pedido**:
+serve como referência do vocabulário original (semente do catálogo, rótulos de fallback).
+Um pedido pode ter menos que as 8, ou mais.
+
+Por isso, e vale repetir porque esta fase já tropeçou nisso uma vez:
+**`progresso.acabamento?.status`, nunca `progresso.acabamento.status`.**
+
 ### Fase D1 — Filtros em /producao e edição de lançamento em /terceirizadas
 
 Sessão de 28/08/2026, a partir de cinco pedidos do Pedro. Esta é a primeira das quatro

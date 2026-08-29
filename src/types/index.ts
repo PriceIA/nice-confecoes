@@ -58,8 +58,40 @@ export interface EntradaProgresso {
   atualizadoPor?: string
   /** ISO 8601. */
   atualizadoEm?: string
+  /**
+   * Posição desta etapa NESTE pedido (Fase D3b), 1-based.
+   *
+   * `undefined` em pedido gravado antes da D3 — e continua assim até alguém
+   * arrastar. `etapasDoPedido` (src/lib/etapas.ts) trata a ausência caindo na
+   * ordem do catálogo e depois na ordem canônica, então pedido antigo aparece
+   * exatamente como sempre apareceu, sem migração de dado nenhuma.
+   */
+  ordem?: number
 }
 
+/**
+ * O progresso de um pedido, como ele realmente é no banco: um JSONB sem
+ * schema, cujas chaves são etapas.
+ *
+ * Virou aberto na Fase D3: os 8 setores deixaram de ser fixos, e o Pedro pode
+ * acrescentar etapas próprias (bordado, lavanderia) pelo catálogo
+ * `etapas_producao`. As chaves criadas por ele levam o prefixo `extra_`.
+ *
+ * A "lixeira" da tela marca `nao_se_aplica` e NUNCA apaga a chave, então uma
+ * canônica não some de um pedido que já a tem. Mas ela pode nunca ter entrado:
+ * se o Pedro desativar `prensa_sublimacao` no catálogo, os pedidos criados
+ * depois disso simplesmente não a terão.
+ *
+ * **Por isso: nunca assuma que uma canônica existe.** Use
+ * `progresso.acabamento?.status`, não `progresso.acabamento.status`.
+ */
+export type Progresso = Record<string, EntradaProgresso>
+
+/**
+ * As 8 chaves canônicas do sistema. **Não descreve mais o progresso de um
+ * pedido** — serve como referência do vocabulário original (semente do
+ * catálogo, rótulos de fallback). Um pedido pode ter menos que estas, ou mais.
+ */
 export interface ProgressoSetor {
   atendimento: EntradaProgresso
   compra: EntradaProgresso
@@ -131,7 +163,7 @@ export interface Pedido {
   parcelas: Parcela[]
   dataEntrada: string
   dataEntrega: string
-  progresso: ProgressoSetor
+  progresso: Progresso
   observacoes: string
   valorTotal: number
   valorPago: number
@@ -149,6 +181,25 @@ export interface Pedido {
    * o caso da esmagadora maioria dos pedidos.
    */
   excecaoPagamento?: ExcecaoPagamento
+}
+
+/**
+ * Uma etapa do catálogo de produção (tabela `etapas_producao`, migration 014).
+ *
+ * `chave` é o que vai para dentro de `pedidos.progresso` — é ela que
+ * identifica a etapa, não o rótulo. Renomear não pode perder status gravado.
+ *
+ * `canonica` marca as 8 originais do sistema: elas não podem ser excluídas do
+ * catálogo, e a trava vale no banco (policy de delete da migration 014), não
+ * só no botão escondido da tela.
+ */
+export interface EtapaProducao {
+  chave: string
+  rotulo: string
+  /** Ordem PADRÃO, usada para semear pedido novo e listar o catálogo. */
+  ordem: number
+  ativa: boolean
+  canonica: boolean
 }
 
 export interface Cliente {

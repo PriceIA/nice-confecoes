@@ -64,8 +64,19 @@ type Permissoes = {
   criarPedido: boolean
   editarPedido: boolean
   excluirPedido: boolean
-  /** Marcar avanço de setor na tela de produção. */
+  /** Marcar avanço de setor na tela de produção, e marcar etapa como não aplicável. */
   editarProducao: boolean
+  /**
+   * Mudar o FLUXO de um pedido: arrastar para reordenar as etapas, adicionar
+   * etapa e criar etapa no catálogo (`etapas_producao`).
+   *
+   * Separado de `editarProducao` de propósito. Quem está trabalhando no pedido
+   * sabe se ele passa por uma etapa — por isso marcar "não se aplica" é de
+   * todos. Já a SEQUÊNCIA da produção é decisão de quem gerencia a produção, e
+   * etapa criada errada no celular do chão de fábrica polui o pedido de um
+   * jeito que só aparece quando a ficha sai impressa.
+   */
+  editarFluxoProducao: boolean
   /**
    * Ver QUALQUER valor em dinheiro de um pedido: parcelas, total, pago,
    * restante, valor unitário de peça, vetorização.
@@ -128,6 +139,7 @@ const ACESSO_TOTAL: Permissoes = {
   editarPedido: true,
   excluirPedido: true,
   editarProducao: true,
+  editarFluxoProducao: true,
   editarKanban: true,
   verFinanceiro: true,
   solicitarExcecaoPagamento: true,
@@ -166,6 +178,7 @@ const LEITURA_PRODUCAO: Permissoes = {
   editarPedido: false,
   excluirPedido: false,
   editarProducao: true,
+  editarFluxoProducao: false,
   editarKanban: false,
   verFinanceiro: false,
   solicitarExcecaoPagamento: false,

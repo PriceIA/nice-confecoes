@@ -2,8 +2,8 @@
 import { useState } from 'react'
 import Modal from '@/components/kanban/Modal'
 import { atualizarPedido } from '@/lib/store'
-import { SETOR_LABELS } from '@/lib/helpers'
-import { EntradaProgresso, Pedido, ProgressoSetor } from '@/types'
+import { rotuloEtapa } from '@/lib/etapas'
+import { EntradaProgresso, EtapaProducao, Pedido, Progresso } from '@/types'
 
 // Modal "Pronto para envio?", aberto ao concluir Acabamento/Embalagem quando
 // ainda há setor pendente/em_andamento (Fase C0, docs/fase-c0.md).
@@ -15,19 +15,29 @@ import { EntradaProgresso, Pedido, ProgressoSetor } from '@/types'
 // Sempre montado condicionalmente pelo componente pai (nunca com aberto=false
 // persistente): assim o estado dos checkboxes nasce limpo a cada pedido.
 
-const PRE_MARCADOS: (keyof ProgressoSetor)[] = ['estamparia_silk', 'prensa_dtf', 'prensa_sublimacao']
+// Os setores de estampa vêm pré-marcados: é o caso real que o Pedro descreveu
+// (camiseta lisa não passa por nenhum dos três) e o que vai acontecer na maioria
+// das vezes. Todo o resto — inclusive etapa criada por ele, como "Bordado" —
+// vem desmarcado e com um ⚠️: dizer que um pedido não passou pela costura é uma
+// afirmação grande e merece um toque consciente.
+const PRE_MARCADOS = ['estamparia_silk', 'prensa_dtf', 'prensa_sublimacao']
 
 type Props = {
   pedido: Pedido
+  /** Catálogo, para nomear etapas criadas pelo Pedro (`extra_*`). */
+  etapas: EtapaProducao[]
   onFechar: () => void
   /** Chamado depois de salvar com sucesso, para o pai recarregar a lista. */
   onSalvo: () => void
   nomeMembro?: string
 }
 
-export default function ModalProntoParaEnvio({ pedido, onFechar, onSalvo, nomeMembro }: Props) {
-  const setoresPendentes = (Object.keys(pedido.progresso) as (keyof ProgressoSetor)[])
-    .filter(s => s !== 'acabamento' && (pedido.progresso[s].status === 'pendente' || pedido.progresso[s].status === 'em_andamento'))
+export default function ModalProntoParaEnvio({ pedido, etapas, onFechar, onSalvo, nomeMembro }: Props) {
+  // Itera as chaves DO PEDIDO, não uma lista fixa de 8: desde a Fase D3 um
+  // pedido pode ter etapas próprias, e elas também precisam ser oferecidas aqui.
+  const setoresPendentes = Object.keys(pedido.progresso ?? {})
+    .filter(s => s !== 'acabamento' &&
+      (pedido.progresso[s]?.status === 'pendente' || pedido.progresso[s]?.status === 'em_andamento'))
 
   const [marcados, setMarcados] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(setoresPendentes.map(s => [s, PRE_MARCADOS.includes(s)]))
@@ -45,10 +55,15 @@ export default function ModalProntoParaEnvio({ pedido, onFechar, onSalvo, nomeMe
     setErro(false)
     try {
       const agora = new Date().toISOString()
-      const progresso = { ...pedido.progresso }
+      const progresso: Progresso = { ...pedido.progresso }
       for (const s of setoresPendentes) {
         if (marcados[s]) {
-          const entrada: EntradaProgresso = { status: 'nao_se_aplica', atualizadoPor: nomeMembro, atualizadoEm: agora }
+          const entrada: EntradaProgresso = {
+            ...progresso[s],
+            status: 'nao_se_aplica',
+            atualizadoPor: nomeMembro,
+            atualizadoEm: agora,
+          }
           progresso[s] = entrada
         }
       }
@@ -86,7 +101,7 @@ export default function ModalProntoParaEnvio({ pedido, onFechar, onSalvo, nomeMe
                 <input type="checkbox" checked={!!marcados[s]}
                   onChange={e => setMarcados(prev => ({ ...prev, [s]: e.target.checked }))}
                   className="w-5 h-5 accent-nice-500 shrink-0" />
-                <span className="text-sm text-conteudo flex-1">{SETOR_LABELS[s]}</span>
+                <span className="text-sm text-conteudo flex-1">{rotuloEtapa(s, etapas)}</span>
                 {!PRE_MARCADOS.includes(s) && <span className="text-xs" title="Confirme com atenção: é uma afirmação grande">⚠️</span>}
               </label>
             ))}
@@ -95,7 +110,7 @@ export default function ModalProntoParaEnvio({ pedido, onFechar, onSalvo, nomeMe
 
         {!tudoMarcado && (
           <p className="text-xs text-suave">
-            O pedido continua na produção porque {restantes.map(s => SETOR_LABELS[s]).join(', ')}{' '}
+            O pedido continua na produção porque {restantes.map(s => rotuloEtapa(s, etapas)).join(', ')}{' '}
             ainda {restantes.length > 1 ? 'estão pendentes' : 'está pendente'}.
           </p>
         )}
