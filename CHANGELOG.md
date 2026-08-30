@@ -8,6 +8,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Documentação — tabela de equipe atualizada no CLAUDE.md
+
+Sessão de 30/08/2026. Só CLAUDE.md, nada de código. A seção `equipe` ganhou o resultado real
+da auditoria de 29/08/2026 (`014_fase_d_auditoria.sql`, item 5) — quem está cadastrado hoje,
+com nome e perfil: Pedro Benedetti (gestor), Kalomira (recepcionista), Alex
+(estamparia_serigrafia), Davi Luiz (estamparia_sublimacao), Kezia/Regina/Vera (costureira).
+`corte`, `designer` e `acabamento` seguem sem ninguém cadastrado. Fecha a pendência que
+estava aberta desde 14/08/2026 e que a própria auditoria da Fase D já tinha sinalizado.
+
 ### Fase D2.2 — Visibilidade do cartão no Kanban: 5 opções, inclusive privado
 
 Sessão de 29/08/2026. **SQL já executado antes desta sessão** — `016_cards_visibilidade.sql`

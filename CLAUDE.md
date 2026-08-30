@@ -410,6 +410,25 @@ São **8 perfis**. Dois administrativos (`gestor`, `recepcionista`) com acesso t
 de chão de fábrica que compartilham o mesmo objeto `LEITURA_PRODUCAO` em `permissoes.ts`:
 leem `/pedidos`, operam `/producao`, leem `/quadros`, e nada além disso.
 
+**Quem está cadastrado hoje** — resultado real da auditoria de 29/08/2026
+(`014_fase_d_auditoria.sql`, item 5; era pendência aberta desde 14/08/2026):
+
+| Nome | Perfil | Status |
+|---|---|---|
+| Pedro Benedetti | gestor | cadastrado |
+| Kalomira | recepcionista | cadastrado |
+| Alex | estamparia_serigrafia | cadastrado |
+| Davi Luiz | estamparia_sublimacao | cadastrado |
+| Kezia | costureira | cadastrado |
+| Regina | costureira | cadastrado |
+| Vera | costureira | cadastrado |
+
+`corte`, `designer` e `acabamento` continuam **sem ninguém cadastrado** — os três perfis
+existem na matriz de permissões e no CHECK da tabela, mas nenhum usuário real loga com eles
+hoje. Relevante para qualquer feature que dependa de "gente de verdade" nesses perfis (ex.:
+visibilidade por pessoa no Kanban, Fase D2.2) — o seletor mostra o perfil, mas não há quem
+escolher ali.
+
 `auth_user_id` liga a linha ao usuário do Supabase Auth. É por ele que o middleware
 (`src/middleware.ts`) e o layout raiz descobrem nome e perfil de quem está logado. Usuário
 autenticado **sem** linha em `equipe` não entra: é devolvido para `/login`.
