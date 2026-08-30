@@ -21,7 +21,7 @@
 // ============================================================================
 
 import { criarClienteBrowser } from '@/lib/supabase/client'
-import type { Cartao, CorLista, Lista, Quadro } from '@/types'
+import type { Cartao, CorLista, Lista, MembroEquipe, Quadro } from '@/types'
 import type { Perfil } from '@/lib/permissoes'
 
 // ---------------------------------------------------------------------------
@@ -100,10 +100,18 @@ function mapCartao(row: any): Cartao {
     // Array vazio no banco significaria "ninguém vê"; tratamos como público,
     // igual a null, porque um cartão invisível para todos é sempre engano.
     perfisVisiveis: row.perfis_visiveis?.length ? (row.perfis_visiveis as Perfil[]) : null,
+    // Mesma regra do perfisVisiveis, mesmo motivo (Fase D2.2, migration 016).
+    membrosVisiveis: row.membros_visiveis?.length ? (row.membros_visiveis as string[]) : null,
+    criadoPor: row.criado_por ?? null,
+    privado: row.privado === true,
     pedidoId: row.pedido_id ?? null,
     prazo: row.prazo ?? null,
     concluido: row.concluido ?? false,
   }
+}
+
+function mapMembroEquipe(row: any): MembroEquipe {
+  return { id: row.id, nome: row.nome ?? '', perfil: row.perfil as Perfil }
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +311,17 @@ export type DadosCartao = {
   descricao?: string
   posicao: number
   perfisVisiveis?: Perfil[] | null
+  membrosVisiveis?: string[] | null
+  privado?: boolean
+  /**
+   * `equipe.id` de quem está criando — OBRIGATÓRIO, nunca opcional. A policy
+   * de select do banco (migration 016) usa `criado_por = meu_id_equipe()`
+   * como uma das cláusulas de acesso a um cartão restrito/privado: se isso
+   * ficar nulo, o próprio criador pode ficar sem ver o cartão que acabou de
+   * criar. Vem de `useMembro().membro!.id` em quem chama esta função — nunca
+   * descoberto de outro jeito.
+   */
+  criadoPor: string
   pedidoId?: string | null
   prazo?: string | null
 }
@@ -317,6 +336,9 @@ export async function criarCartao(dados: DadosCartao): Promise<Cartao> {
       descricao: dados.descricao ?? '',
       posicao: dados.posicao,
       perfis_visiveis: dados.perfisVisiveis?.length ? dados.perfisVisiveis : null,
+      membros_visiveis: dados.membrosVisiveis?.length ? dados.membrosVisiveis : null,
+      privado: dados.privado ?? false,
+      criado_por: dados.criadoPor,
       pedido_id: dados.pedidoId || null,
       prazo: dados.prazo || null,
     })
@@ -328,16 +350,33 @@ export async function criarCartao(dados: DadosCartao): Promise<Cartao> {
 
 export async function atualizarCartao(
   id: string,
-  dados: Partial<Pick<Cartao, 'titulo' | 'descricao' | 'prazo' | 'perfisVisiveis' | 'pedidoId' | 'concluido' | 'listaId' | 'posicao'>>
+  dados: Partial<Pick<Cartao, 'titulo' | 'descricao' | 'prazo' | 'perfisVisiveis' | 'membrosVisiveis' | 'privado' | 'criadoPor' | 'pedidoId' | 'concluido' | 'listaId' | 'posicao'>>
 ): Promise<void> {
   const supabase = criarClienteBrowser()
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (dados.titulo !== undefined) update.titulo = dados.titulo
+  // `criadoPor` normalmente NUNCA é reescrito depois de criado — é só para
+  // o caso de "adotar" um cartão antigo (de antes da Fase D2.2, sem dono)
+  // no instante em que ele vira privado/restrito por pessoa. Ver
+  // QuadroBoard.tsx, `salvarCartao`, que é o único chamador que usa isto.
+  if (dados.criadoPor !== undefined) update.criado_por = dados.criadoPor
   if (dados.descricao !== undefined) update.descricao = dados.descricao
   if (dados.prazo !== undefined) update.prazo = dados.prazo || null
-  if (dados.perfisVisiveis !== undefined) {
+  // `in`, não `!== undefined`: o painel de edição do cartão manda o objeto
+  // INTEIRO ao salvar, e trocar de opção de visibilidade (ex.: de "Grupo"
+  // para "Todos") grava `perfisVisiveis`/`membrosVisiveis` como `null`
+  // DENTRO do objeto — a chave existe, só o valor é `null`. Isso já foi um
+  // bug real na Fase D2.1 (`atualizarTerceirizada`, ver CHANGELOG): `!==
+  // undefined` não distingue "a chave nem foi mandada" de "foi mandada
+  // explicitamente vazia", e a segunda é exatamente o caso de limpar a
+  // visibilidade anterior ao trocar de opção.
+  if ('perfisVisiveis' in dados) {
     update.perfis_visiveis = dados.perfisVisiveis?.length ? dados.perfisVisiveis : null
   }
+  if ('membrosVisiveis' in dados) {
+    update.membros_visiveis = dados.membrosVisiveis?.length ? dados.membrosVisiveis : null
+  }
+  if (dados.privado !== undefined) update.privado = dados.privado
   if (dados.pedidoId !== undefined) update.pedido_id = dados.pedidoId || null
   if (dados.concluido !== undefined) update.concluido = dados.concluido
   if (dados.listaId !== undefined) update.lista_id = dados.listaId
@@ -396,4 +435,31 @@ export async function numerosDePedidos(ids: string[]): Promise<Map<string, strin
   const { data, error } = await supabase.from('pedidos').select('id, numero').in('id', unicos)
   if (error) throw error
   return new Map((data ?? []).map(p => [p.id as string, p.numero as string]))
+}
+
+// ---------------------------------------------------------------------------
+// Ponte com a equipe (Fase D2.2 — seletor "Pessoas específicas")
+// ---------------------------------------------------------------------------
+
+/**
+ * Lista de gente para marcar no seletor "Pessoas específicas".
+ *
+ * Leitura direta de `equipe` pelo client autenticado — não existe RPC pronta
+ * para isso: `listar_equipe()` foi escrita na migration 010 (Fase C1), que
+ * nunca rodou. Só quem chega neste seletor tem `editarKanban` (gestor ou
+ * recepcionista), e nenhuma migration deste repo liga RLS em `equipe` — mas
+ * a tabela foi criada fora do repo (ver CLAUDE.md), então isso não é
+ * garantia. Se um dia essa leitura voltar zero linhas com gente cadastrada
+ * de verdade, é policy de RLS bloqueando, não a equipe estar vazia — o
+ * mesmo modo de falha silencioso que este projeto já documentou várias
+ * vezes: RLS que barra não dá erro, dá zero linhas.
+ */
+export async function getEquipe(): Promise<MembroEquipe[]> {
+  const supabase = criarClienteBrowser()
+  const { data, error } = await supabase
+    .from('equipe')
+    .select('id, nome, perfil')
+    .order('nome', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map(mapMembroEquipe)
 }

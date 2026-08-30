@@ -3,6 +3,7 @@
 
 import { differenceInCalendarDays, format } from 'date-fns'
 import type { Cartao, CorLista, Pedido } from '@/types'
+import type { Perfil } from '@/lib/permissoes'
 import { totalPecas } from '@/lib/helpers'
 import { classificarErro, sufixoCodigo } from '@/lib/erros'
 
@@ -178,4 +179,53 @@ export function porPosicao<T extends { posicao: number; id: string }>(a: T, b: T
 
 export function cartoesDaLista(cartoes: Cartao[], listaId: string): Cartao[] {
   return cartoes.filter(c => c.listaId === listaId).sort(porPosicao)
+}
+
+// ---------------------------------------------------------------------------
+// Visibilidade do cartão (Fase D2.2)
+// ---------------------------------------------------------------------------
+
+export type ModoVisibilidade = 'todos' | 'gestao' | 'grupo' | 'pessoas' | 'privado'
+
+export const OPCOES_VISIBILIDADE: { value: ModoVisibilidade; label: string }[] = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'gestao', label: 'Só a gestão' },
+  { value: 'grupo', label: 'Grupo (perfis)' },
+  { value: 'pessoas', label: 'Pessoas específicas' },
+  { value: 'privado', label: 'Privado (só eu)' },
+]
+
+/** A dupla que "Só a gestão" grava em `perfisVisiveis` — sempre as duas juntas. */
+export const PERFIS_GESTAO: Perfil[] = ['gestor', 'recepcionista']
+
+function mesmoConjunto(a: Perfil[], b: Perfil[]): boolean {
+  return a.length === b.length && a.every(p => b.includes(p))
+}
+
+/**
+ * As 5 opções de visibilidade são mutuamente exclusivas na TELA, mas o banco
+ * só guarda 3 colunas (`privado`, `perfis_visiveis`, `membros_visiveis`) — é
+ * esta função que faz o caminho de volta, pro seletor de edição nascer na
+ * opção certa em vez de sempre em "Todos".
+ *
+ * A ordem de checagem importa e é a mesma que a gravação respeita:
+ * `privado` vence tudo (é a única opção que esconde até da gestão);
+ * depois `membrosVisiveis` (Pessoas específicas); depois o caso especial de
+ * `perfisVisiveis` ser EXATAMENTE `['gestor','recepcionista']` (Só a
+ * gestão) — sem essa checagem, editar um cartão assim reabriria mostrando
+ * "Grupo" com os dois perfis certos marcados, o que não está errado, mas
+ * esconde que existe o atalho; por fim `perfisVisiveis` não-vazio é
+ * "Grupo", e a ausência de tudo é "Todos".
+ *
+ * 34 dos 42 cartões existentes hoje já têm `perfisVisiveis` restrito — não
+ * pode nascer mostrando "Todos" errado pra eles.
+ */
+export function modoVisibilidadeDe(
+  cartao: Pick<Cartao, 'privado' | 'membrosVisiveis' | 'perfisVisiveis'>,
+): ModoVisibilidade {
+  if (cartao.privado) return 'privado'
+  if (cartao.membrosVisiveis && cartao.membrosVisiveis.length > 0) return 'pessoas'
+  if (cartao.perfisVisiveis && mesmoConjunto(cartao.perfisVisiveis, PERFIS_GESTAO)) return 'gestao'
+  if (cartao.perfisVisiveis && cartao.perfisVisiveis.length > 0) return 'grupo'
+  return 'todos'
 }

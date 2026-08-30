@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { CheckCircle2, KanbanSquare } from 'lucide-react'
 import Modal from '@/components/kanban/Modal'
 import BannerErro from '@/components/kanban/BannerErro'
+import { useMembro } from '@/components/AuthProvider'
 import {
   ESPACO_POSICAO, criarCartao, getListas, getQuadros, ultimaPosicaoDaLista,
 } from '@/lib/kanban'
@@ -19,6 +20,7 @@ import type { Lista, Pedido, Quadro } from '@/types'
 // digitação — quem cria pode reescrever tudo antes de salvar.
 
 export default function CriarCartaoDoPedido({ pedido }: { pedido: Pedido }) {
+  const { membro } = useMembro()
   const [aberto, setAberto] = useState(false)
   const [quadros, setQuadros] = useState<Quadro[]>([])
   const [listas, setListas] = useState<Lista[]>([])
@@ -60,7 +62,7 @@ export default function CriarCartaoDoPedido({ pedido }: { pedido: Pedido }) {
   }, [quadroId])
 
   async function salvar() {
-    if (!listaId || !titulo.trim()) return
+    if (!listaId || !titulo.trim() || !membro) return
     setSalvando(true)
     try {
       // Posição no fim da lista escolhida. Uma leitura a mais, mas evita entrar
@@ -71,6 +73,10 @@ export default function CriarCartaoDoPedido({ pedido }: { pedido: Pedido }) {
         titulo: titulo.trim(),
         descricao,
         prazo: prazo || null,
+        // Cartão nascido daqui é sempre público (sem seletor de visibilidade
+        // nesta ação) — mas `criado_por` precisa ser gravado do mesmo jeito,
+        // pela mesma regra da Fase D2.2 (ver QuadroBoard.tsx).
+        criadoPor: membro.id,
         pedidoId: pedido.id,
         posicao: ultima + ESPACO_POSICAO,
       })
@@ -117,7 +123,7 @@ export default function CriarCartaoDoPedido({ pedido }: { pedido: Pedido }) {
             <button onClick={() => setAberto(false)} className="btn-secondary flex-1 justify-center">
               Cancelar
             </button>
-            <button onClick={salvar} disabled={salvando || !listaId || !titulo.trim()}
+            <button onClick={salvar} disabled={salvando || !listaId || !titulo.trim() || !membro}
               className="btn-primary flex-1 justify-center disabled:opacity-50">
               {salvando ? 'Criando...' : 'Criar cartão'}
             </button>

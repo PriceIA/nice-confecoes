@@ -71,10 +71,17 @@ export function CartaoVisual({
         <p className="text-xs text-suave line-clamp-2 whitespace-pre-line">{cartao.descricao}</p>
       )}
 
-      {(prazo || cartao.perfisVisiveis || cartao.pedidoId) && (
+      {(prazo || cartao.privado || cartao.perfisVisiveis || cartao.membrosVisiveis || cartao.pedidoId) && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {prazo && (
             <span className={clsx('badge', prazo.classes)} title={prazo.titulo}>{prazo.texto}</span>
+          )}
+
+          {/* Precisa dar pra notar de relance, sem abrir o cartão (Fase D2.2). */}
+          {cartao.privado && (
+            <span className="badge bg-red-100 text-red-700 gap-1" title="Privado — só quem criou vê este cartão">
+              <Lock className="w-3 h-3" /> Privado
+            </span>
           )}
 
           {/* perfisVisiveis nulo = público, e público não merece etiqueta. */}
@@ -85,6 +92,20 @@ export function CartaoVisual({
             >
               <Lock className="w-3 h-3" />
               {cartao.perfisVisiveis.map(p => PERFIL_LABEL_CURTO[p] ?? p).join(', ')}
+            </span>
+          )}
+
+          {/* Mesma lógica do perfisVisiveis, mas por pessoa (Fase D2.2). Sem
+              nome aqui de propósito: resolver nome por id exigiria buscar a
+              equipe inteira só pra desenhar o board — o painel do cartão já
+              mostra quem, ao abrir. */}
+          {cartao.membrosVisiveis && (
+            <span
+              className="badge bg-superficie-3 text-suave gap-1"
+              title={`Visível só para ${cartao.membrosVisiveis.length} pessoa(s) específica(s)`}
+            >
+              <Lock className="w-3 h-3" />
+              {cartao.membrosVisiveis.length} pessoa{cartao.membrosVisiveis.length > 1 ? 's' : ''}
             </span>
           )}
 

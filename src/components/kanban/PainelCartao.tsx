@@ -1,19 +1,22 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ExternalLink, Link2, Lock, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Link2, Lock, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 import Modal from '@/components/kanban/Modal'
-import { PERFIL_LABEL, PERFIS, type Perfil } from '@/lib/permissoes'
-import { badgePrazo } from '@/lib/kanban-ui'
+import { PERFIL_LABEL, PERFIL_LABEL_CURTO, PERFIS, type Perfil } from '@/lib/permissoes'
+import { badgePrazo, modoVisibilidadeDe, OPCOES_VISIBILIDADE, PERFIS_GESTAO, type ModoVisibilidade } from '@/lib/kanban-ui'
 import { getPedidos } from '@/lib/store'
-import type { Cartao, Pedido } from '@/types'
+import { getEquipe } from '@/lib/kanban'
+import type { Cartao, MembroEquipe, Pedido } from '@/types'
 
 export type DadosPainel = {
   titulo: string
   descricao: string
   prazo: string | null
   perfisVisiveis: Perfil[] | null
+  membrosVisiveis: string[] | null
+  privado: boolean
   pedidoId: string | null
   concluido: boolean
 }
@@ -31,30 +34,51 @@ type Props = {
 }
 
 const VAZIO: DadosPainel = {
-  titulo: '', descricao: '', prazo: null, perfisVisiveis: null, pedidoId: null, concluido: false,
+  titulo: '', descricao: '', prazo: null,
+  perfisVisiveis: null, membrosVisiveis: null, privado: false,
+  pedidoId: null, concluido: false,
 }
 
 export default function PainelCartao({
   aberto, cartao, numeroPedido, podeEditar, salvando, onSalvar, onExcluir, onFechar,
 }: Props) {
   const [dados, setDados] = useState<DadosPainel>(VAZIO)
+  const [modo, setModo] = useState<ModoVisibilidade>('todos')
   const [buscandoPedido, setBuscandoPedido] = useState(false)
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [buscaPedido, setBuscaPedido] = useState('')
+  const [equipe, setEquipe] = useState<MembroEquipe[]>([])
+  const [equipeErro, setEquipeErro] = useState(false)
 
   useEffect(() => {
     if (!aberto) return
-    setDados(cartao ? {
+    const iniciais = cartao ? {
       titulo: cartao.titulo,
       descricao: cartao.descricao,
       prazo: cartao.prazo,
       perfisVisiveis: cartao.perfisVisiveis,
+      membrosVisiveis: cartao.membrosVisiveis,
+      privado: cartao.privado,
       pedidoId: cartao.pedidoId,
       concluido: cartao.concluido,
-    } : VAZIO)
+    } : VAZIO
+    setDados(iniciais)
+    // O seletor precisa nascer na opção certa, lendo o estado atual do
+    // cartão — boa parte dos cartões já existentes tem `perfisVisiveis`
+    // restrito, e "Todos" errado por padrão seria pior que não ter seletor.
+    setModo(modoVisibilidadeDe(iniciais))
     setBuscandoPedido(false)
     setBuscaPedido('')
   }, [aberto, cartao])
+
+  // Só busca a equipe quando "Pessoas específicas" é escolhido — não faz
+  // sentido carregar a lista toda vez que alguém abre qualquer cartão.
+  useEffect(() => {
+    if (modo !== 'pessoas' || equipe.length > 0) return
+    getEquipe()
+      .then(setEquipe)
+      .catch(() => setEquipeErro(true))
+  }, [modo, equipe.length])
 
   // Os pedidos só são buscados quando o usuário pede para vincular — não faz
   // sentido carregar a base inteira toda vez que alguém abre um cartão.
@@ -80,16 +104,59 @@ export default function PainelCartao({
   const rotuloPedido = pedidoVinculado?.numero ?? numeroPedido
 
   const prazo = badgePrazo(dados.prazo, dados.concluido)
-  const publico = dados.perfisVisiveis === null
 
-  function alternarPerfil(p: Perfil) {
+  /**
+   * Troca de opção: grava os 3 campos JUNTOS, exatamente como a tabela da
+   * Fase D2.2 manda — nunca só um deles. Trocar de "Grupo" para "Todos", por
+   * exemplo, precisa limpar `perfisVisiveis` pra `null` no mesmo instante em
+   * que zera `privado`; deixar um campo do modo anterior sobrando é como o
+   * cartão nasceria com uma visibilidade que a tela não mostra mais.
+   */
+  function escolherModo(m: ModoVisibilidade) {
+    setModo(m)
+    setDados(d => {
+      switch (m) {
+        case 'todos':   return { ...d, perfisVisiveis: null, membrosVisiveis: null, privado: false }
+        case 'gestao':  return { ...d, perfisVisiveis: [...PERFIS_GESTAO], membrosVisiveis: null, privado: false }
+        case 'grupo':   return { ...d, perfisVisiveis: [], membrosVisiveis: null, privado: false }
+        case 'pessoas': return { ...d, perfisVisiveis: null, membrosVisiveis: [], privado: false }
+        case 'privado': return { ...d, perfisVisiveis: null, membrosVisiveis: null, privado: true }
+      }
+    })
+  }
+
+  function alternarPerfilGrupo(p: Perfil) {
     setDados(d => {
       const atual = d.perfisVisiveis ?? []
       const proximo = atual.includes(p) ? atual.filter(x => x !== p) : [...atual, p]
-      // Nenhum perfil marcado volta a significar público. Um cartão restrito a
-      // ninguém seria um cartão que ninguém vê — sempre engano.
-      return { ...d, perfisVisiveis: proximo.length === 0 ? null : proximo }
+      return { ...d, perfisVisiveis: proximo }
     })
+  }
+
+  function alternarMembro(id: string) {
+    setDados(d => {
+      const atual = d.membrosVisiveis ?? []
+      const proximo = atual.includes(id) ? atual.filter(x => x !== id) : [...atual, id]
+      return { ...d, membrosVisiveis: proximo }
+    })
+  }
+
+  // "Grupo" sem nenhum perfil marcado, ou "Pessoas específicas" sem ninguém
+  // marcado, seria um cartão que ninguém vê — sempre engano (mesma regra que
+  // já valia pro seletor de perfis antigo). Bloqueia salvar em vez de virar
+  // "Todos" sozinho, porque isso esconderia o engano em vez de evitá-lo.
+  const grupoVazio = modo === 'grupo' && (dados.perfisVisiveis?.length ?? 0) === 0
+  const pessoasVazio = modo === 'pessoas' && (dados.membrosVisiveis?.length ?? 0) === 0
+  const visibilidadeInvalida = grupoVazio || pessoasVazio
+
+  function resumoVisibilidadeLeitura(): string {
+    switch (modoVisibilidadeDe(dados)) {
+      case 'privado': return 'Privado — só quem criou vê'
+      case 'pessoas': return 'Pessoas específicas'
+      case 'gestao':  return 'Só a gestão'
+      case 'grupo':   return dados.perfisVisiveis!.map(p => PERFIL_LABEL[p]).join(', ')
+      default:        return 'Todos os perfis'
+    }
   }
 
   const titulo = cartao ? (podeEditar ? 'Editar cartão' : 'Cartão') : 'Novo cartão'
@@ -109,7 +176,7 @@ export default function PainelCartao({
             </button>
           )}
           <button onClick={onFechar} className="btn-secondary flex-1 justify-center">Cancelar</button>
-          <button onClick={() => onSalvar(dados)} disabled={salvando || !dados.titulo.trim()}
+          <button onClick={() => onSalvar(dados)} disabled={salvando || !dados.titulo.trim() || visibilidadeInvalida}
             className="btn-primary flex-1 justify-center disabled:opacity-50">
             {salvando ? 'Salvando...' : 'Salvar'}
           </button>
@@ -178,31 +245,87 @@ export default function PainelCartao({
             <Lock className="w-3.5 h-3.5" /> Quem vê este cartão
           </label>
           {podeEditar ? (
-            <>
-              <div className="flex flex-wrap gap-2">
-                {PERFIS.map(p => {
-                  const marcado = dados.perfisVisiveis?.includes(p) ?? false
-                  return (
-                    <button key={p} type="button" onClick={() => alternarPerfil(p)}
-                      className={clsx('px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors',
-                        marcado
-                          ? 'bg-nice-500 text-white border-nice-500'
-                          : 'bg-superficie border-borda text-suave hover:border-nice-300')}>
-                      {PERFIL_LABEL[p]}
-                    </button>
-                  )
-                })}
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1.5">
+                {OPCOES_VISIBILIDADE.map(o => (
+                  <label key={o.value}
+                    className="flex items-center gap-2 text-sm text-conteudo cursor-pointer">
+                    <input type="radio" name="modo-visibilidade" className="accent-nice-500"
+                      checked={modo === o.value} onChange={() => escolherModo(o.value)} />
+                    {o.label}
+                  </label>
+                ))}
               </div>
-              <p className="text-xs text-fraco mt-2">
-                {publico
-                  ? 'Nenhum perfil marcado: o cartão é público, todos veem.'
-                  : 'Só os perfis marcados veem este cartão — a regra vale no banco, não só na tela.'}
-              </p>
-            </>
+
+              {modo === 'grupo' && (
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                    {PERFIS.map(p => {
+                      const marcado = dados.perfisVisiveis?.includes(p) ?? false
+                      return (
+                        <button key={p} type="button" onClick={() => alternarPerfilGrupo(p)}
+                          className={clsx('px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors',
+                            marcado
+                              ? 'bg-nice-500 text-white border-nice-500'
+                              : 'bg-superficie border-borda text-suave hover:border-nice-300')}>
+                          {PERFIL_LABEL[p]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {grupoVazio && (
+                    <p className="text-xs text-red-600 mt-1.5">Marque ao menos um perfil.</p>
+                  )}
+                </div>
+              )}
+
+              {modo === 'pessoas' && (
+                <div>
+                  {equipeErro ? (
+                    <p className="text-xs text-red-600 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Não deu para carregar a lista de
+                      pessoas. Confirme com o Pedro se isso persistir.
+                    </p>
+                  ) : equipe.length === 0 ? (
+                    <p className="text-xs text-fraco">Carregando pessoas...</p>
+                  ) : (
+                    <div className="border border-borda rounded-xl divide-y divide-borda max-h-48 overflow-y-auto">
+                      {equipe.map(m => {
+                        const marcado = dados.membrosVisiveis?.includes(m.id) ?? false
+                        return (
+                          <label key={m.id}
+                            className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-superficie-2">
+                            <input type="checkbox" className="accent-nice-500" checked={marcado}
+                              onChange={() => alternarMembro(m.id)} />
+                            <span className="text-conteudo">{m.nome}</span>
+                            <span className="text-xs text-fraco">{PERFIL_LABEL_CURTO[m.perfil]}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {pessoasVazio && (
+                    <p className="text-xs text-red-600 mt-1.5">Marque ao menos uma pessoa.</p>
+                  )}
+                </div>
+              )}
+
+              {modo === 'privado' && (
+                <p className="text-xs text-red-600 font-medium bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                  Só você verá este cartão. Nem o Pedro nem a Kalomira.
+                </p>
+              )}
+
+              {(modo === 'todos' || modo === 'gestao') && (
+                <p className="text-xs text-fraco">
+                  {modo === 'todos'
+                    ? 'Todos os perfis veem este cartão.'
+                    : 'Só gestor e recepcionista veem este cartão.'}
+                </p>
+              )}
+            </div>
           ) : (
-            <p className="text-sm text-suave">
-              {publico ? 'Todos os perfis' : dados.perfisVisiveis!.map(p => PERFIL_LABEL[p]).join(', ')}
-            </p>
+            <p className="text-sm text-suave">{resumoVisibilidadeLeitura()}</p>
           )}
         </div>
 

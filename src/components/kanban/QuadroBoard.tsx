@@ -31,7 +31,7 @@ type Estado = { listas: Lista[]; cartoes: Cartao[] }
 type Ativo = { id: string; tipo: 'lista' | 'cartao' } | null
 
 export default function QuadroBoard({ quadroId }: { quadroId: string }) {
-  const { permissoes } = useMembro()
+  const { membro, permissoes } = useMembro()
   const podeEditar = permissoes.editarKanban
 
   const [quadro, setQuadro] = useState<Quadro | null>(null)
@@ -328,8 +328,16 @@ export default function QuadroBoard({ quadroId }: { quadroId: string }) {
     setSalvando(true)
     try {
       if (cartaoEmFoco) {
-        await atualizarCartao(cartaoEmFoco.id, dados)
-        setCartoes(prev => prev.map(c => (c.id === cartaoEmFoco.id ? { ...c, ...dados } : c)))
+        // Cartão de antes da Fase D2.2 (ou criado por algum caminho que não
+        // gravou `criado_por`) que agora vira privado/restrito por pessoa
+        // precisa ganhar um dono NESTE instante — sem isso, a policy do
+        // banco nunca deixaria nem quem está editando ver de novo depois.
+        const ficaRestritoPorPessoa = dados.privado || (dados.membrosVisiveis?.length ?? 0) > 0
+        const precisaAdotar = ficaRestritoPorPessoa && !cartaoEmFoco.criadoPor
+        const paraGravar = precisaAdotar ? { ...dados, criadoPor: membro!.id } : dados
+
+        await atualizarCartao(cartaoEmFoco.id, paraGravar)
+        setCartoes(prev => prev.map(c => (c.id === cartaoEmFoco.id ? { ...c, ...paraGravar } : c)))
       } else if (listaAlvo) {
         const ultimo = cartoesDaLista(cartoes, listaAlvo).at(-1)
         const novo = await criarCartao({
@@ -338,6 +346,13 @@ export default function QuadroBoard({ quadroId }: { quadroId: string }) {
           descricao: dados.descricao,
           prazo: dados.prazo,
           perfisVisiveis: dados.perfisVisiveis,
+          membrosVisiveis: dados.membrosVisiveis,
+          privado: dados.privado,
+          // Crítico (Fase D2.2): sem isso, o criador de um cartão restrito
+          // pode ficar sem ver o próprio cartão — a policy de select depende
+          // de `criado_por = meu_id_equipe()`. `podeEditar` já garante que
+          // `membro` existe aqui (só editarKanban chega neste branch).
+          criadoPor: membro!.id,
           pedidoId: dados.pedidoId,
           posicao: (ultimo?.posicao ?? 0) + ESPACO_POSICAO,
         })

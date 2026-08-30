@@ -21,11 +21,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (user) {
     const { data } = await supabase
       .from('equipe')
-      .select('nome, perfil')
+      .select('id, nome, perfil')
       .eq('auth_user_id', user.id)
       .maybeSingle()
     if (data) {
-      membro = { nome: data.nome, perfil: data.perfil as Perfil, email: user.email ?? '' }
+      membro = { id: data.id, nome: data.nome, perfil: data.perfil as Perfil, email: user.email ?? '' }
     }
   }
 

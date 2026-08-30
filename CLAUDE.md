@@ -133,9 +133,13 @@ Código compartilhado:
 - `src/lib/supabase.ts` — client singleton, anon key, **sem sessão**; hoje só usado pelo
   Storage (`uploadFotoPeca`, `store.ts`). Não confundir com os clients de auth acima
 - `src/lib/kanban.ts` — acesso a dados do Kanban. **Usa o client AUTENTICADO**, não o
-  anônimo — ver "Dois clients Supabase" abaixo. Nunca misture com `store.ts`
+  anônimo — ver "Dois clients Supabase" abaixo. Nunca misture com `store.ts`. Desde a Fase
+  D2.2 também tem `getEquipe()` (nome/perfil de cada linha de `equipe`, para o seletor
+  "Pessoas específicas") — leitura direta, sem RPC
 - `src/lib/kanban-ui.ts` — apresentação do Kanban: `CORES_LISTA`, `badgePrazo`,
-  `descreverFalhaKanban`, `pedidoConcluido`, `porPosicao`. Apesar do nome, `pedidoConcluido`
+  `descreverFalhaKanban`, `pedidoConcluido`, `porPosicao`, e desde a Fase D2.2
+  `modoVisibilidadeDe`/`OPCOES_VISIBILIDADE` (as 5 opções de visibilidade do cartão e a
+  resolução de qual delas um cartão já gravado representa). Apesar do nome, `pedidoConcluido`
   e `badgePrazo` também são usados fora do Kanban — em `/pedidos/[id]` (botão "Criar cartão")
   e em `/entregas` (fila e badge de prazo) — porque é o mesmo cálculo, não uma cópia
 - `src/lib/tabelasPreco.ts` — leitura e escrita das listas de preço (estrutura + valores),
@@ -344,7 +348,8 @@ quadros  id uuid pk · titulo · descricao · arquivado bool · created_at · up
 listas   id uuid pk · quadro_id fk→quadros · titulo · posicao numeric · cor text
                     · created_at · updated_at
 cards    id uuid pk · lista_id fk→listas · titulo · descricao · posicao numeric
-                    · perfis_visiveis text[] · pedido_id fk→pedidos (opcional)
+                    · perfis_visiveis text[] · membros_visiveis uuid[] · privado bool
+                    · criado_por uuid fk→equipe · pedido_id fk→pedidos (opcional)
                     · prazo date · concluido bool · created_at · updated_at
 ```
 
@@ -355,9 +360,15 @@ Pontos que mudam como se escreve código contra elas:
   entre vizinhos aperta (< 0.0001), `posicaoEntre` devolve `null` e o chamador renormaliza
   aquela lista. Não troque por integer sem reescrever isso.
 - **`perfis_visiveis` nulo = público.** Array vazio é tratado como nulo no mapeamento, porque
-  um cartão restrito a ninguém é sempre engano.
-- **A visibilidade por perfil vale no banco, não só na tela.** A policy de select em `cards`
-  filtra por `meu_perfil()`; o quadro não "esconde" cartões, ele simplesmente não os recebe.
+  um cartão restrito a ninguém é sempre engano. Mesma regra vale para `membros_visiveis`
+  (Fase D2.2) — os dois nunca convivem preenchidos no mesmo cartão, ver regra abaixo.
+- **A visibilidade vale no banco, não só na tela.** A policy de select em `cards` decide por
+  `meu_perfil()`, `meu_id_equipe()` e `criado_por` (`cards_select`, migration 016); o quadro
+  não "esconde" cartões, ele simplesmente não os recebe.
+- **`membros_visiveis`, `privado` e `criado_por` são da Fase D2.2** (migration
+  `016_cards_visibilidade.sql`). Ver a regra de negócio sobre visibilidade do cartão, abaixo,
+  para a tabela completa das 5 opções e por que `criado_por` nunca pode ficar nulo num
+  cartão restrito.
 
 ### `etapas_producao`
 
@@ -539,6 +550,34 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
     prestador escolhido no momento do lançamento — mas não é FK obrigatória
     (`prestador_id` é opcional). O seletor do lançamento sempre tem "outro/avulso" pra não
     travar em quem ainda não foi cadastrado.
+12. **Visibilidade do cartão no Kanban tem 5 opções mutuamente exclusivas** (Fase D2.2,
+    migration `016_cards_visibilidade.sql`), não um multi-select de perfis solto:
+
+    | Opção | Grava no banco |
+    |---|---|
+    | Todos (padrão) | `perfisVisiveis: null, membrosVisiveis: null, privado: false` |
+    | Só a gestão | `perfisVisiveis: ['gestor','recepcionista'], membrosVisiveis: null, privado: false` |
+    | Grupo (perfis) | `perfisVisiveis` com os marcados, `membrosVisiveis: null`, `privado: false` |
+    | Pessoas específicas | `perfisVisiveis: null`, `membrosVisiveis` com os `equipe.id` marcados |
+    | Privado (só eu) | `privado: true, perfisVisiveis: null, membrosVisiveis: null` |
+
+    **"Privado" é a única opção que esconde até da gestão.** Nas outras quatro, gestor e
+    recepcionista sempre veem por trás — é a policy do banco (`cards_select`, migration 016)
+    que garante isso, a tela só oferece o seletor.
+
+    **`criado_por` (equipe.id de quem criou) nunca pode ficar nulo num cartão
+    privado/restrito por pessoa** — a policy usa `criado_por = meu_id_equipe()` como uma das
+    cláusulas de acesso, e sem isso o próprio criador fica sem ver o que acabou de criar.
+    `criarCartao` (`kanban.ts`) por isso exige `criadoPor` no tipo, não opcional. Cartão
+    anterior a esta fase (todos os que existiam antes, sem dono) que vira privado/restrito
+    por pessoa "adota" quem está editando na hora — ver `salvarCartao`
+    (`QuadroBoard.tsx`).
+
+    **O seletor de edição precisa nascer na opção certa**, lendo o cartão de verdade — a
+    resolução (`modoVisibilidadeDe`, `kanban-ui.ts`) segue uma precedência fixa: `privado` >
+    `membrosVisiveis` preenchido > `perfisVisiveis` EXATAMENTE `['gestor','recepcionista']` >
+    `perfisVisiveis` preenchido > "Todos". A maioria dos cartões já existentes tem
+    `perfisVisiveis` restrito — "Todos" por padrão errado seria pior que não ter seletor.
 
 ## Convenções de trabalho
 

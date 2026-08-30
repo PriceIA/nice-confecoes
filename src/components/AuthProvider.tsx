@@ -5,6 +5,10 @@ import { criarClienteBrowser } from '@/lib/supabase/client'
 import { permissoesDe, type Perfil } from '@/lib/permissoes'
 
 export type Membro = {
+  /** `equipe.id` — PK do banco, não `auth.users.id`. Precisa disso para gravar
+   * `criado_por` num cartão do Kanban (Fase D2.2): a policy de select do
+   * banco compara com `meu_id_equipe()`, que lê exatamente esta coluna. */
+  id: string
   nome: string
   perfil: Perfil
   email: string

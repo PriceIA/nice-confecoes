@@ -253,11 +253,38 @@ export interface Cartao {
   posicao: number
   /** null = público (todos os perfis veem). Não-nulo = só os perfis listados. */
   perfisVisiveis: Perfil[] | null
+  /**
+   * Fase D2.2 (migration 016). null = não restringe por pessoa. Não-nulo = só
+   * estas pessoas (`equipe.id`) veem, além da gestão — igual `perfisVisiveis`,
+   * mas por indivíduo em vez de por perfil.
+   */
+  membrosVisiveis: string[] | null
+  /**
+   * `equipe.id` de quem criou o cartão. Gravado na criação, nunca editado
+   * depois. Crítico: a policy de select do banco usa
+   * `criado_por = meu_id_equipe()` como uma das cláusulas de acesso — sem
+   * isso, o próprio criador de um cartão "Pessoas específicas"/"Privado"
+   * pode ficar sem conseguir ver o cartão que ele mesmo criou.
+   */
+  criadoPor: string | null
+  /**
+   * true = só quem criou vê — nem a gestão. Diferente de `perfisVisiveis`/
+   * `membrosVisiveis`, que a gestão sempre enxerga por trás; `privado` é a
+   * única opção que também esconde da gestão.
+   */
+  privado: boolean
   /** Vínculo opcional com um pedido; o cartão mostra link para ele. */
   pedidoId: string | null
   /** 'AAAA-MM-DD' ou null. */
   prazo: string | null
   concluido: boolean
+}
+
+/** Uma linha de `equipe`, só o que o seletor "Pessoas específicas" precisa. */
+export interface MembroEquipe {
+  id: string
+  nome: string
+  perfil: Perfil
 }
 
 export interface Terceirizada {

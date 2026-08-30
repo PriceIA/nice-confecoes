@@ -8,6 +8,97 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase D2.2 — Visibilidade do cartão no Kanban: 5 opções, inclusive privado
+
+Sessão de 29/08/2026. **SQL já executado antes desta sessão** — `016_cards_visibilidade.sql`
+rodou e está confirmado: `cards` ganhou `membros_visiveis uuid[]`, `criado_por uuid
+references equipe(id)` e `privado boolean not null default false`; a função
+`meu_id_equipe()` (security definer) existe; as policies viraram `cards_select`,
+`cards_insert`, `cards_update`, `cards_delete` (não existe mais `cards_write`). Este bloco é
+só front-end.
+
+#### O que existe agora
+
+O seletor de visibilidade do cartão (criar e editar, mesmo modal) virou 5 opções
+mutuamente exclusivas em vez do multi-select de perfis solto que já existia:
+
+| Opção | Grava no banco |
+|---|---|
+| Todos (padrão) | `perfisVisiveis: null, membrosVisiveis: null, privado: false` |
+| Só a gestão | `perfisVisiveis: ['gestor','recepcionista'], membrosVisiveis: null, privado: false` |
+| Grupo (perfis) | `perfisVisiveis` com os perfis marcados, `membrosVisiveis: null`, `privado: false` |
+| Pessoas específicas | `perfisVisiveis: null`, `membrosVisiveis` com os `equipe.id` marcados, `privado: false` |
+| Privado (só eu) | `privado: true, perfisVisiveis: null, membrosVisiveis: null` |
+
+- **O seletor de edição nasce na opção certa**, lendo o cartão de verdade — não em "Todos"
+  por padrão. A resolução (`modoVisibilidadeDe`, `src/lib/kanban-ui.ts`) segue uma
+  precedência fixa: `privado` vence tudo → `membrosVisiveis` preenchido é "Pessoas
+  específicas" → `perfisVisiveis` EXATAMENTE `['gestor','recepcionista']` é "Só a gestão" →
+  `perfisVisiveis` preenchido (qualquer outra combinação) é "Grupo" → o resto é "Todos".
+  Importava porque boa parte dos cartões já existentes tem `perfisVisiveis` restrito.
+- **"Privado" é a única opção que esconde até da gestão.** Todas as outras (Grupo, Só a
+  gestão, Pessoas específicas) continuam deixando a gestão ver por trás — é a policy do
+  banco que garante isso, a tela só oferece o seletor. O aviso "Só você verá este cartão.
+  Nem o Pedro nem a Kalomira." fica visível o tempo todo com "Privado" marcado, não só no
+  instante do clique.
+- **Seletor de "Pessoas específicas"** lê `equipe` (nome + perfil) direto pelo client
+  autenticado — não existe RPC pronta (`listar_equipe()` foi escrita na migration 010, Fase
+  C1, que nunca rodou). Testado ao vivo: a leitura funciona sem bloqueio de RLS.
+- **Ícone de cadeado no board**, sem precisar abrir o cartão: vermelho pra "Privado",
+  neutro pra "Grupo"/"Só a gestão" (com os perfis) e pra "Pessoas específicas" (com a
+  contagem — sem nome, porque resolver nome por id exigiria buscar a equipe inteira só pra
+  desenhar o board).
+
+#### O crítico: `criado_por` nunca pode ficar nulo num cartão restrito
+
+A policy nova depende de `criado_por = meu_id_equipe()` como uma das cláusulas de acesso a
+um cartão privado/restrito por pessoa. Sem isso, o próprio criador ficaria sem ver o que
+acabou de criar.
+
+- **`Membro` (`AuthProvider.tsx`) ganhou o campo `id`** — o `equipe.id`, não o
+  `auth.users.id`. Antes só existia `nome`/`perfil`/`email`; o layout raiz (`layout.tsx`) já
+  fazia a consulta certa em `equipe` por `auth_user_id`, só faltava pedir a coluna `id`
+  também. Não inventei uma segunda forma de descobrir quem é o usuário — segui o caminho que
+  já existia.
+- **`criarCartao` (`kanban.ts`) exige `criadoPor` — não é mais opcional no tipo.** Os dois
+  lugares que criam cartão (`QuadroBoard.tsx` e `CriarCartaoDoPedido.tsx`) passam
+  `membro.id`. O TypeScript pegou os dois call sites na hora — nenhum ficou esquecido.
+- **Cartão antigo (de antes desta fase, sem dono) que vira privado/restrito por pessoa
+  "adota" o editor na hora**, dentro do mesmo `atualizarCartao`: se `cartaoEmFoco.criadoPor`
+  já vier nulo e a nova visibilidade for `privado` ou tiver `membrosVisiveis`, o update grava
+  `criadoPor` junto. Sem isso, qualquer um dos cartões já existentes (todos nascidos sem
+  `criado_por`, porque a coluna não existia) ficaria travado pra sempre no instante em que
+  alguém tentasse restringi-lo por pessoa.
+
+#### Corrigido — mesmo bug de classe da Fase D2.1, antes de acontecer
+
+`atualizarCartao` tinha exatamente o padrão que já causou o bug real de `atualizarTerceirizada`
+(ver Fase D2.1 abaixo): `if (dados.perfisVisiveis !== undefined)`. Trocar de opção de
+visibilidade manda o objeto inteiro do formulário, com `perfisVisiveis`/`membrosVisiveis`
+como `null` **dentro** do objeto — a chave existe, seria só o valor que mudaria de
+`!== undefined` pra `=== undefined` se alguém usasse `undefined` em vez de `null` amanhã.
+Trocado para `'perfisVisiveis' in dados` / `'membrosVisiveis' in dados` antes de qualquer
+teste — desta vez o bug foi pego na escrita do código, não na revisão depois.
+
+#### Testado ao vivo (Claude in Chrome), com Pedro (gestor) e Kalomira (recepcionista)
+
+Quadro descartável "TESTE D2.2 - APAGAR", apagado ao final:
+
+- Cartão "Grupo (perfis)" com só `Corte` marcado (nenhum perfil de gestão): **apareceu**
+  tanto pro Pedro quanto pra Kalomira, depois de um reload completo da página — confirma que
+  a cláusula de gestão da policy vale mesmo sem gestor/recepcionista na lista.
+- Cartão "Privado" criado pelo Pedro: apareceu pra ele, **não apareceu** pra Kalomira
+  logada numa sessão separada — confirmado que "Privado" esconde até de outro perfil com
+  acesso total, diferente das outras 4 opções.
+- Cartão "Só a gestão" (perfisVisiveis exatamente `['gestor','recepcionista']`): reaberto,
+  o seletor voltou marcado em "Só a gestão", não em "Grupo".
+- Cartão real já existente com `perfisVisiveis` de 4 perfis (`CLAUDINHO BJJ`, quadro "ARTE
+  SUBLIMAÇÃO"): reaberto, o seletor voltou em "Grupo" com os 4 certos marcados.
+- Cartão "Pessoas específicas" marcando a Alex: reaberto, "Pessoas específicas" com a Alex
+  marcada. Trocado depois para "Todos" e salvo — **reload completo confirmou
+  `membrosVisiveis` null de verdade**, não só escondido na tela (o teste que existe
+  justamente por causa do bug corrigido acima).
+
 ### Fase D2.1 — Cadastro de prestadores terceirizados e preço por serviço
 
 Sessão de 29/08/2026. **Tem SQL, já executado.** O Pedro rodou `015_prestadores.sql` no SQL
