@@ -8,6 +8,29 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase E1 — `/pedidos` abre por entrega mais próxima (código commitado; passo PAUSADO)
+
+Sessão de 04/09/2026. Um arquivo, sem SQL: `src/app/pedidos/page.tsx` — o `useState` da
+ordem passou de `'entrada_desc'` para `'entrega_asc'`, igual ao padrão que `/producao` já
+usava. Quem já tinha escolhido uma ordem em `/pedidos` (chave `nice-ordem-pedidos` no
+`localStorage`) não sente diferença nenhuma — o `useEffect` existente sobrescreve o padrão.
+
+`npx tsc --noEmit` e `npm run build` limpos.
+
+**Medição obrigatória do documento (`docs/fase-e.md`) deu problema: 10 de 10 dos primeiros
+pedidos são `entregue`/`cancelado`.** Isso é o efeito colateral que o documento avisou para
+medir antes de fechar o passo — `/pedidos` lista todos os status por padrão, e ordenar por
+entrega mais próxima crescente põe pedidos entregues há meses no topo, empurrando os pedidos
+que realmente estão por vir para baixo. Resultado pior que o padrão anterior.
+
+Por instrução do próprio documento ("se forem 3 ou mais dos 10, pare o passo E1 aí"), o passo
+foi **pausado**: código e commit ficam como estão, sem consertar o efeito colateral por conta
+própria (mudaria o comportamento da tela sem o Felipe ter pedido isso). Decisão de como
+corrigir (empurrar entregue/cancelado para o fim, mudar o filtro padrão de status, ou outra
+saída) fica para o Felipe/Cowork definirem no próximo passo (E1-b). Ver
+`docs/fase-e.md` → "Registro de execução" para a tabela completa dos 10 primeiros pedidos
+medidos.
+
 ### Documentação — tabela de equipe atualizada no CLAUDE.md
 
 Sessão de 30/08/2026. Só CLAUDE.md, nada de código. A seção `equipe` ganhou o resultado real

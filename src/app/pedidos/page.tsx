@@ -31,7 +31,11 @@ export default function PedidosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [filtro, setFiltro] = useState<StatusPedido | 'todos'>('todos')
   const [busca, setBusca] = useState('')
-  const [ordem, setOrdem] = useState<OrdemPedidos>('entrada_desc')
+  // Padrão = "entrega mais próxima" (Fase E1, 04/09/2026), igual /producao — as duas
+  // telas abrem na mesma lógica agora. entrega_asc é crescente: data mais antiga primeiro.
+  // Quem já escolheu uma ordem alguma vez tem valor salvo em ORDEM_CHAVE e o useEffect
+  // abaixo sobrescreve este padrão; só quem nunca mexeu no seletor sente a mudança.
+  const [ordem, setOrdem] = useState<OrdemPedidos>('entrega_asc')
 
   const carregar = async () => setPedidos(await getPedidos())
 
