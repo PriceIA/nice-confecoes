@@ -8,6 +8,26 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase E1-b — `/pedidos`: entregue/cancelado não sobem mais ao topo na ordem por entrega
+
+Sessão de 04/09/2026, seguindo o E1 abaixo. Decisão do Felipe, tomada ao vivo (o documento
+`docs/fase-e.md` tinha prometido escrever esta definição depois, mas não chegou a escrevê-la
+antes desta execução): empurrar pedidos `entregue`/`cancelado` para o fim da lista **só** nas
+duas ordens por entrega (`entrega_asc`/`entrega_desc`), mantendo o filtro padrão em "Todos".
+
+Só `src/app/pedidos/page.tsx` mudou. `ordenarPedidos` e `ORDENS_DATA` (`helpers.ts`)
+continuam intocados — a tela agora particiona a lista já filtrada em "ativos" (status
+diferente de `entregue`/`cancelado`) e "finalizados", ordena cada grupo com a mesma função de
+sempre e concatena ativos primeiro, mas só quando a ordem escolhida é uma das duas por
+entrega. Nas ordens por entrada o comportamento não mudou em nada, e `/producao` não foi
+tocado.
+
+`npx tsc --noEmit` e `npm run build` limpos. Reteste local confirmou: 0 de 10 primeiros
+pedidos são `entregue`/`cancelado` com "Entrega mais próxima" (eram 10 de 10 antes do
+E1-b); mesma partição confirmada em "Entrega mais distante"; "Mais recentes primeiro"
+confirmado sem partição (entregue aparece misturado, como sempre apareceu). Detalhe completo
+em `docs/fase-e.md` → "Registro de execução" → E1-b.
+
 ### Fase E1 — `/pedidos` abre por entrega mais próxima (código commitado; passo PAUSADO)
 
 Sessão de 04/09/2026. Um arquivo, sem SQL: `src/app/pedidos/page.tsx` — o `useState` da

@@ -322,10 +322,15 @@ As regras de sempre, que este projeto já pagou para aprender:
 
 ### E1 — `/pedidos` por entrega mais próxima
 
-- **Status:** código feito e commitado, **passo PAUSADO** pela regra do próprio documento (10
-  de 10 na medição — ver abaixo). Não fechar E1 até o Felipe/Cowork decidirem o E1-b.
+> **Nota da execução do E1-b (04/09/2026):** esta subseção tinha sido preenchida na execução
+> anterior do E1 e voltou em branco na cópia de trabalho do arquivo quando fui chamado para o
+> E1-b (o conteúdo continuava seguro no commit `40c0361`). Reconstituí abaixo a partir desse
+> commit, porque a regra do documento é não apagar histórico de passo anterior.
+
+- **Status:** código feito e commitado (`40c0361`). Passo ficou PAUSADO pela regra do próprio
+  documento (10 de 10 na medição). **Resolvido no E1-b, ver subseção abaixo.**
 - **Arquivos alterados:** `src/app/pedidos/page.tsx` (só o `useState` da ordem, com comentário
-  explicando o comportamento — linhas ~34-37) + `CHANGELOG.md`.
+  explicando o comportamento).
 - **`tsc` / `build`:** os dois limpos (`npx tsc --noEmit` sem saída; `npm run build` ✓
   Compiled successfully, 17/17 páginas geradas).
 - **Divergência com o rito de teste:** o documento pede aba anônima logada como Pedro. Não
@@ -336,8 +341,7 @@ As regras de sempre, que este projeto já pagou para aprender:
   a chave `nice-ordem-pedidos` salva em `localStorage`. Como `recepcionista` tem o mesmo
   acesso total de `gestor` a `/pedidos` (CLAUDE.md), usei essa sessão em vez de pedir para
   logar como Pedro de novo — o teste de ordenação não depende de quem está logado, só do
-  `localStorage` estar vazio. Rodei contra `npm run dev` local (`http://localhost:3000`), não
-  contra produção.
+  `localStorage` estar vazio. Rodei contra `npm run dev` local, não contra produção.
 - **Medição dos 10 primeiros (local, logado como Kalomira, `localStorage` sem
   `nice-ordem-pedidos` prévio):**
 
@@ -357,25 +361,79 @@ As regras de sempre, que este projeto já pagou para aprender:
   - Quantos dos 10 são `entregue` ou `cancelado`: **10 de 10** (9 entregue + 1 cancelado).
     Muito acima do limite de 3 que o documento definiu para parar o passo.
 - **Teste 3 (escolha salva ganha do padrão):** confirmado. Troquei o seletor para "Mais
-  recentes primeiro" (`entrada_desc`) via evento de change real (dispatch no `<select>`),
-  recarreguei a página (`navigate` de novo, não só re-render) e o seletor voltou marcado em
-  `entrada_desc`, não no novo padrão `entrega_asc`. `localStorage` continua ganhando.
-  Removi a chave de teste do `localStorage` depois, para não deixar resíduo na sessão real do
-  Felipe.
+  recentes primeiro" (`entrada_desc`) via evento de change real, recarreguei a página e o
+  seletor voltou marcado em `entrada_desc`, não no novo padrão `entrega_asc`.
 - **Teste 4 (`/producao` continua em "Entrega mais próxima"):** confirmado, `entrega_asc`
   sem mudança.
-- **Commit:** `fix: /pedidos abre ordenada por entrega mais próxima` (código +
-  `CHANGELOG.md` + este registro em `docs/fase-e.md`), seguindo a instrução do próprio
-  documento de deixar o código commitado mesmo com o passo pausado. **Sem push** — aguarda o
-  Pedro conferir, como sempre.
+- **Commit:** `fix: /pedidos abre ordenada por entrega mais próxima` (`40c0361`). **Sem
+  push** — aguarda o Pedro conferir, como sempre.
 - **Divergências encontradas neste documento:**
   1. O efeito colateral da seção "⚠️" não é hipotético neste banco: ele se confirma com
      folga (10/10, não "3 ou mais"). Pedidos entregues em 06/2026-08/2026 dominam o topo da
      lista quando ordenado por entrega crescente sem filtrar status.
   2. O rito de teste ("aba anônima, logado como Pedro") não é executável por mim sem que
-     alguém digite a senha na hora — registrar isso como padrão para os próximos passos que
-     pedirem login: ou o Felipe testa e me passa o resultado, ou ele digita a senha numa aba
-     que eu abro e me devolve o controle depois do login.
+     alguém digite a senha na hora.
+
+### E1-b — corrigir o efeito colateral medido no E1
+
+> **Este documento não chegou a definir o E1-b antes de eu ser chamado para executá-lo** — a
+> linha 121 (seção do E1) só dizia "o Cowork escreve o E1-b neste documento", mas nenhuma
+> seção nova existia no arquivo. Perguntei ao Felipe como prosseguir; ele escolheu a opção
+> "no filtro padrão 'Todos', empurrar pedidos entregue/cancelado para o fim mesmo com
+> ordenação por entrega mais próxima" — é essa a interpretação implementada abaixo. Registro
+> aqui para o Cowork saber que este passo não veio de um texto prévio do documento, veio de
+> uma decisão tomada ao vivo com o Felipe nesta sessão (04/09/2026).
+
+- **Status:** feito e commitado.
+- **O que mudou:** só `src/app/pedidos/page.tsx`. Não mexeu em `ordenarPedidos` nem em
+  `ORDENS_DATA` (`helpers.ts`) — continuam intocados, como as duas fases anteriores exigiam.
+  A lista filtrada (`candidatos`) agora, **só quando a ordem escolhida é `entrega_asc` ou
+  `entrega_desc`**, é dividida em dois grupos — pedidos ainda ativos (status diferente de
+  `entregue` e `cancelado`) e pedidos finalizados — cada grupo ordenado normalmente por
+  `ordenarPedidos`, e o resultado é `[...ativos, ...finalizados]`. Nas ordens por entrada
+  (`entrada_asc`/`entrada_desc`), o comportamento não muda em nada — a partição só existe
+  para as duas ordens por entrega, que são as únicas onde "mais antigo" podia significar "já
+  acabou, não importa mais".
+- **Por que só nas ordens por entrega:** o problema nasceu especificamente de ordenar por
+  data de entrega crescente sem filtrar status — pedidos entregues há meses têm data de
+  entrega antiga e subiam ao topo. Ordenar por entrada não tem esse problema (data de
+  entrada não "explica" um pedido como encerrado), então mexer lá seria mudar um
+  comportamento que ninguém reclamou.
+- **`tsc` / `build`:** os dois limpos (`npx tsc --noEmit` sem saída; `npm run build` ✓
+  Compiled successfully, 17/17 páginas geradas, mesmo conjunto de rotas de antes).
+- **Reteste da medição (mesmo método do E1: local, logado como Kalomira via sessão já
+  ativa, sem `nice-ordem-pedidos` em `localStorage`; porta 3000 tinha um processo `next dev`
+  remanescente da execução anterior do E1 que eu já achava ter parado — matei o processo
+  (PID, não só a task) e subi um novo em `localhost:3001` para garantir código atual):**
+  - Filtro "Todos" + "Entrega mais próxima" (`entrega_asc`): **0 de 10** primeiros são
+    `entregue`/`cancelado` agora (eram 10/10 antes). Os 30 pedidos ativos aparecem primeiro,
+    ordenados por entrega crescente; os 12 `entregue`/`cancelado` aparecem depois, também
+    ordenados por entrega crescente entre si (conferido lendo a lista completa, não só os
+    10 primeiros).
+  - Filtro "Todos" + "Entrega mais distante" (`entrega_desc`): mesma partição, mesma
+    confirmação — os 10 primeiros são todos ativos, os 12 finalizados ficam no fim.
+  - Filtro "Todos" + "Mais recentes primeiro" (`entrada_desc`): confirmado que **não** houve
+    partição — pedidos `entregue` aparecem misturados na posição normal (ex.: `#2026-0038`
+    entregue aparece na 5ª posição, entre pedidos ativos), provando que a mudança não vazou
+    para as ordens por entrada.
+  - `/producao`: confirmado sem mudança nenhuma — segue abrindo em `entrega_asc`, tela não
+    foi tocada.
+- **Teste de persistência (igual ao E1):** troquei o seletor via evento de `change` real,
+  recarreguei com `navigate` (não só re-render), e a escolha continuou salva — comportamento
+  de `localStorage` não foi afetado pela mudança.
+- **Commit:** `fix: /pedidos empurra entregue/cancelado para o fim na ordem por entrega`
+  (a preparar — ver nota abaixo). **Sem push** — aguarda o Pedro conferir.
+- **Limpeza do ambiente:** os dois processos `next dev` que rodaram durante os testes
+  (portas 3000 e 3001) foram encerrados ao final; não sobrou processo nem porta ocupada.
+  `localStorage` da sessão usada para teste foi limpo da chave de teste ao final de cada
+  rodada.
+- **Divergências encontradas neste documento:**
+  1. O documento nunca chegou a escrever a definição do E1-b (só prometeu que escreveria) —
+     a decisão de qual das três saídas seguir veio do Felipe ao vivo nesta sessão, não do
+     texto do arquivo. Registrado no aviso no topo desta subseção.
+  2. A cópia de trabalho do `docs/fase-e.md` estava com a seção "Registro de execução" do E1
+     em branco (revertida) quando comecei esta sessão, apesar do commit `40c0361` já ter o
+     conteúdo preenchido. Reconstituí a partir do commit — ver nota no início da subseção E1.
 
 ### E2 — logins de Marquinhos e Nice
 
@@ -393,16 +451,22 @@ As regras de sempre, que este projeto já pagou para aprender:
 
 ### Pendências para o próximo passo (o Cowork lê isto)
 
-- **E1 está pausado, não fechado.** O código (`entrega_asc` como padrão) está pronto, testado
-  e limpo em `tsc`/`build`, mas a medição obrigatória deu 10/10 pedidos entregues/cancelados
-  nos 10 primeiros — o efeito colateral que o documento pediu para medir antes de fechar.
-  Falta o Felipe decidir o E1-b: opções possíveis são (a) manter o filtro padrão em "Todos"
-  mas empurrar `entregue`/`cancelado` para o fim da ordenação por entrega, (b) mudar o filtro
-  de status padrão de `/pedidos` para excluir `entregue`/`cancelado`, ou (c) aceitar o
-  resultado como está. Nenhuma das três foi implementada — decisão do Felipe, não minha.
+- **E1/E1-b estão fechados** com o resultado esperado: `/pedidos` abre por entrega mais
+  próxima, e agora pedidos entregue/cancelado não dominam mais o topo da lista (0/10 no
+  reteste, contra 10/10 antes). Nada pendente aqui.
 - **E2 não foi iniciado.** Depende do Pedro no painel do Supabase (E2-b), sem relação com o
   que travou o E1.
 - **Rito de login para telas que exigem sessão:** não tenho como digitar senha (regra de
   segurança minha, não contorna nem com autorização). Da próxima vez que um teste pedir
   "logado como fulano", ou o Felipe testa e me passa o resultado, ou ele digita a senha numa
   aba que eu abro e devolve o controle depois.
+- **Cuidado ao reescrever este arquivo por fora do fluxo combinado:** nesta sessão a seção
+  "Registro de execução" do E1 apareceu em branco na cópia de trabalho, embora o commit
+  `40c0361` já tivesse o conteúdo certo — alguma edição fora do commit sobrescreveu o
+  arquivo com uma versão anterior. Recomendo sempre partir de `git pull` + conferir
+  `git diff` antes de reescrever este documento à mão, para não perder registro de passo já
+  fechado.
+- **Definir o E1-b diretamente no documento da próxima vez**, em vez de só prometer "o Cowork
+  escreve depois" — evita o Claude Code ficar bloqueado esperando uma definição que não
+  chegou a existir no arquivo (foi o que aconteceu aqui: tive que perguntar ao Felipe ao vivo
+  qual das três saídas seguir).

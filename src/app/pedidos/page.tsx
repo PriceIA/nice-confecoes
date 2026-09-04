@@ -51,12 +51,26 @@ export default function PedidosPage() {
     localStorage.setItem(ORDEM_CHAVE, valor)
   }
 
-  const filtrados = ordenarPedidos(pedidos.filter(p => {
+  const candidatos = pedidos.filter(p => {
     const matchStatus = filtro === 'todos' || p.status === filtro
     const q = busca.toLowerCase()
     const matchBusca = !q || p.cliente.nome.toLowerCase().includes(q) || p.numero.includes(q) || p.cliente.empresa?.toLowerCase().includes(q)
     return matchStatus && matchBusca
-  }), ordem)
+  })
+
+  // Fase E1-b (04/09/2026): medição do E1 achou 10 dos 10 primeiros pedidos como
+  // entregue/cancelado quando ordenado por entrega_asc com o filtro "Todos" — pedidos já
+  // encerrados há meses empurravam os que realmente estão por vir para baixo da lista.
+  // Só nas ordens por ENTREGA (as únicas onde "mais antigo" pode significar "já acabou, não
+  // importa mais"), pedidos entregue/cancelado vão sempre para o fim, mantendo a ordenação
+  // normal dentro de cada grupo. Não mexe em ordenarPedidos/ORDENS_DATA (helpers.ts, também
+  // usado por /producao) nem no comportamento das ordens por entrada — só reorganiza aqui.
+  const filtrados = (ordem === 'entrega_asc' || ordem === 'entrega_desc')
+    ? [
+        ...ordenarPedidos(candidatos.filter(p => p.status !== 'entregue' && p.status !== 'cancelado'), ordem),
+        ...ordenarPedidos(candidatos.filter(p => p.status === 'entregue' || p.status === 'cancelado'), ordem),
+      ]
+    : ordenarPedidos(candidatos, ordem)
 
   async function handleDeletar(id: string) {
     if (confirm('Deseja excluir este pedido?')) {
