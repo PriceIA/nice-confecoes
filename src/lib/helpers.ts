@@ -1,5 +1,5 @@
-import { Complexidade, EntradaProgresso, Personalizacao, Pedido, ProgressoSetor } from '@/types'
-import { format } from 'date-fns'
+import { Complexidade, EntradaProgresso, Personalizacao, Pedido, ProgressoSetor, StatusPedido } from '@/types'
+import { differenceInCalendarDays, format } from 'date-fns'
 
 export const CATALOGO = {
   Esportivo: ['Camiseta sublimada futebol', 'Short sublimado', 'Rashguard', 'Bermuda Jiu-jitsu/MMA', 'Bermuda Muay Thai'],
@@ -173,3 +173,81 @@ export function ordenarPedidos<T extends Pick<Pedido, 'numero' | 'dataEntrada' |
     return desempate(a, b)
   })
 }
+
+// ---------------------------------------------------------------------------
+// Busca de pedidos — compartilhada por /pedidos e /dashboard
+// ---------------------------------------------------------------------------
+
+/**
+ * O predicado de busca de pedido, compartilhado por /pedidos e /dashboard.
+ * Procura em nome do cliente, empresa e número do pedido. Busca vazia casa com tudo.
+ */
+export function pedidoCasaComBusca(
+  pedido: Pick<Pedido, 'numero' | 'cliente'>,
+  busca: string,
+): boolean {
+  const q = busca.trim().toLowerCase()
+  if (!q) return true
+  return pedido.cliente.nome.toLowerCase().includes(q)
+    || pedido.numero.toLowerCase().includes(q)
+    || (pedido.cliente.empresa?.toLowerCase().includes(q) ?? false)
+}
+
+// ---------------------------------------------------------------------------
+// Prazo de entrega em dias — compartilhado pela tabela e pela faixa de
+// urgentes do /dashboard
+// ---------------------------------------------------------------------------
+
+export type TomPrazo = 'atrasado' | 'proximo' | 'normal' | 'sem_data'
+
+/**
+ * O prazo de entrega como a pessoa lê: "em 4 dias", "atrasado 1 dia", "amanhã".
+ * `tom` é a severidade, para a tela escolher a cor — a função não escolhe classe
+ * nenhuma, porque /dashboard e uma futura tela podem pintar isso diferente.
+ */
+export function prazoTexto(dataEntrega: string | null | undefined): {
+  texto: string
+  tom: TomPrazo
+  data: string | null
+} {
+  if (!dataEntrega) return { texto: 'sem data', tom: 'sem_data', data: null }
+  const d = new Date(dataEntrega)
+  if (Number.isNaN(d.getTime())) return { texto: 'sem data', tom: 'sem_data', data: null }
+
+  const dias = differenceInCalendarDays(d, new Date())
+  const data = format(d, 'dd/MM/yyyy')
+
+  if (dias < 0) {
+    const n = Math.abs(dias)
+    return { texto: `atrasado ${n} ${n === 1 ? 'dia' : 'dias'}`, tom: 'atrasado', data }
+  }
+  if (dias === 0) return { texto: 'entrega hoje', tom: 'atrasado', data }
+  if (dias === 1) return { texto: 'amanhã', tom: 'proximo', data }
+  if (dias <= 7) return { texto: `em ${dias} dias`, tom: 'proximo', data }
+  return { texto: `em ${dias} dias`, tom: 'normal', data }
+}
+
+// ---------------------------------------------------------------------------
+// Chips do /dashboard
+// ---------------------------------------------------------------------------
+
+export type FiltroDashboard = StatusPedido | 'todos' | 'urgentes'
+
+/**
+ * Os chips do /dashboard. Sete, não oito: `entregue` e `cancelado` não entram
+ * porque a tela só lista pedido ativo, e entraria um chip que nunca acha nada.
+ *
+ * `urgentes` não é um status — é `pedido.tipo`. Ele está na mesma fileira de
+ * propósito: é o recorte mais usado, e é o que o botão da faixa de alerta aciona.
+ * Consequência aceita: um filtro por vez. "Urgentes" + "Em Produção" ao mesmo
+ * tempo exigiria dois estados independentes, e essa tela não precisa disso.
+ */
+export const FILTROS_DASHBOARD: { value: FiltroDashboard; label: string }[] = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'urgentes', label: 'Urgentes' },
+  { value: 'orcamento', label: 'Orçamento' },
+  { value: 'aprovado', label: 'Aprovado' },
+  { value: 'aguardando_pagamento', label: 'Ag. Pagamento' },
+  { value: 'em_producao', label: 'Em Produção' },
+  { value: 'finalizado', label: 'Finalizado' },
+]

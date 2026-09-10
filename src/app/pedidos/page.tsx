@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { PlusCircle, Search, ArrowRight, Trash2 } from 'lucide-react'
 import { getPedidos, deletarPedido } from '@/lib/store'
-import { ORDENS_DATA, OrdemPedidos, STATUS_CONFIG, ordenarPedidos, totalPecas } from '@/lib/helpers'
+import { ORDENS_DATA, OrdemPedidos, STATUS_CONFIG, ordenarPedidos, pedidoCasaComBusca, totalPecas } from '@/lib/helpers'
 import { Pedido, StatusPedido } from '@/types'
 import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
@@ -53,9 +53,7 @@ export default function PedidosPage() {
 
   const candidatos = pedidos.filter(p => {
     const matchStatus = filtro === 'todos' || p.status === filtro
-    const q = busca.toLowerCase()
-    const matchBusca = !q || p.cliente.nome.toLowerCase().includes(q) || p.numero.includes(q) || p.cliente.empresa?.toLowerCase().includes(q)
-    return matchStatus && matchBusca
+    return matchStatus && pedidoCasaComBusca(p, busca)
   })
 
   // Fase E1-b (04/09/2026): medição do E1 achou 10 dos 10 primeiros pedidos como

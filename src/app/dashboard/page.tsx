@@ -5,10 +5,13 @@ import { format, isAfter, addDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
   Factory, AlertTriangle, Clock, ClipboardCheck,
-  PlusCircle, ArrowRight, TrendingUp, Users2, HandCoins
+  PlusCircle, ArrowRight, TrendingUp, Users2, HandCoins, Search
 } from 'lucide-react'
 import { getPedidos, getClientes, pedidosStats } from '@/lib/store'
-import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, totalPecas } from '@/lib/helpers'
+import {
+  STATUS_CONFIG, COMPLEXIDADE_CONFIG, totalPecas,
+  FILTROS_DASHBOARD, FiltroDashboard, pedidoCasaComBusca, ordenarPedidos,
+} from '@/lib/helpers'
 import { Pedido } from '@/types'
 import { excecaoPendente } from '@/lib/excecaoPagamento'
 import { useMembro } from '@/components/AuthProvider'
@@ -19,6 +22,8 @@ export default function DashboardPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [totalClientes, setTotalClientes] = useState(0)
   const [stats, setStats] = useState({ emProducao: 0, urgentes: 0, entregaEm7dias: 0, aguardandoProducao: 0 })
+  const [filtro, setFiltro] = useState<FiltroDashboard>('todos')
+  const [busca, setBusca] = useState('')
 
   useEffect(() => {
     (async () => {
@@ -38,6 +43,21 @@ export default function DashboardPage() {
   const aguardandoAprovacao = pedidos.filter(
     p => excecaoPendente(p) && !['entregue', 'cancelado'].includes(p.status),
   )
+
+  const filtrando = filtro !== 'todos' || busca.trim() !== ''
+
+  const visiveis = ordenarPedidos(
+    ativos.filter(p => {
+      const matchFiltro =
+        filtro === 'todos' ? true
+        : filtro === 'urgentes' ? p.tipo === 'urgente'
+        : p.status === filtro
+      return matchFiltro && pedidoCasaComBusca(p, busca)
+    }),
+    'entrega_asc',
+  )
+
+  const linhas = filtrando ? visiveis : visiveis.slice(0, 10)
 
   const CARDS = [
     { label: 'Em Produção', value: stats.emProducao, icon: Factory, color: 'text-marca-texto', bg: 'bg-marca-suave', border: 'border-marca-borda' },
@@ -142,12 +162,49 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {ativos.length === 0 ? (
-          <div className="py-16 text-center text-fraco">
-            <ClipboardCheck className="w-10 h-10 mx-auto mb-3 opacity-40" />
-            <p className="text-sm">Nenhum pedido ativo no momento.</p>
-            <Link href="/novo-pedido" className="text-marca-texto text-sm font-medium mt-2 inline-block hover:underline">Criar primeiro pedido →</Link>
+        <div className="bg-superficie-2 border-b border-borda px-6 py-3 flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fraco" />
+            <input
+              className="input pl-9"
+              placeholder="Buscar por cliente, empresa ou número..."
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+            />
           </div>
+          {FILTROS_DASHBOARD.map(f => (
+            <button key={f.value} onClick={() => setFiltro(f.value)}
+              className={clsx('px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors',
+                filtro === f.value
+                  ? 'bg-nice-500 text-white'
+                  : 'bg-superficie-3 text-suave hover:bg-superficie-3')}>
+              {f.label}
+            </button>
+          ))}
+          <span className="ml-auto text-xs text-fraco whitespace-nowrap">
+            {linhas.length} de {ativos.length} pedidos ativos
+          </span>
+        </div>
+
+        {linhas.length === 0 ? (
+          filtrando ? (
+            <div className="py-16 text-center text-fraco">
+              <Search className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm">Nenhum pedido ativo casa com esse filtro.</p>
+              <button
+                onClick={() => { setFiltro('todos'); setBusca('') }}
+                className="text-marca-texto text-sm font-medium mt-2 inline-block hover:underline"
+              >
+                Limpar filtro
+              </button>
+            </div>
+          ) : (
+            <div className="py-16 text-center text-fraco">
+              <ClipboardCheck className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm">Nenhum pedido ativo no momento.</p>
+              <Link href="/novo-pedido" className="text-marca-texto text-sm font-medium mt-2 inline-block hover:underline">Criar primeiro pedido →</Link>
+            </div>
+          )
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -162,7 +219,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-borda">
-                {ativos.slice(0, 10).map(p => {
+                {linhas.map(p => {
                   const sc = STATUS_CONFIG[p.status]
                   const vencendo = isAfter(addDays(new Date(), 7), new Date(p.dataEntrega))
                   return (
