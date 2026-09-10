@@ -8,6 +8,45 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase F — filtro de pesquisa e reforma visual do `/dashboard`
+
+Sessão de 10/09/2026, dois commits (`4f67eec`, `e140eed`), sem SQL. Spec completa em
+`docs/fase-f.md`.
+
+**Commit 1 — filtro.** `/dashboard` ganha busca por texto + chips de status na tabela
+"Pedidos Ativos" (igual `/pedidos`), com contador "`X` de `Y` pedidos ativos" e dois estados
+vazios distintos ("nenhum pedido ativo" vs. "nenhum pedido casa com esse filtro" + Limpar
+filtro). O limite de 10 linhas só vale em repouso — cai assim que há busca ou chip ativo. A
+tabela passa a ordenar por `entrega_asc` (antes herdava a ordem crua de `getPedidos()`,
+`data_entrada desc`, escondendo pedido antigo com entrega próxima fora das 10 linhas). O
+predicado de busca de `/pedidos` foi extraído para `pedidoCasaComBusca` (`helpers.ts`), e as
+duas telas agora chamam a mesma função. Duas funções novas compartilhadas: `prazoTexto`
+(prazo em dias, com `tom` de severidade) e `FILTROS_DASHBOARD`/`FiltroDashboard` (os 7 chips
+do dashboard — diferente do `FILTROS` de `/pedidos`, de propósito, porque o dashboard exclui
+`entregue`/`cancelado`). Também adiciona `.eslintrc.json` (`next/core-web-vitals`), que
+faltava no repo — `npm run lint` pedia configuração interativa antes de rodar.
+
+**Commit 2 — visual.** Quatro correções: "Total de Clientes" sai da grade de KPI e vira texto
+no cabeçalho; a grade de KPI vai de 5 para 4 colunas, com "Em produção" como cartão dominante
+e "Urgentes"/"Entrega em 7 dias" neutros quando zeram (em vez de vermelho/laranja permanente);
+as duas faixas de alerta (urgentes, aprovação pendente) viram uma linha cada, no lugar do
+bloco de 3 linhas que duplicava a tabela; coluna "Produção" nova na tabela, usando a mesma
+`resumoProgresso()` de `/producao`; coluna "Entrega" mostra prazo em dias (`prazoTexto`) com a
+data como segunda linha; rail vermelho de 3px na primeira célula de pedido urgente.
+
+`npx tsc --noEmit` e `npm run lint` limpos nos dois commits. Testado localmente com dados
+reais (Supabase, perfil recepcionista): os 9 cenários da seção 9 parte A e a maior parte da
+parte B do `docs/fase-f.md` foram confirmados na tela — busca, os 7 chips, ordenação
+`entrega_asc`, os dois estados vazios, "Limpar filtro", KPIs coloridos condicionalmente, as
+duas faixas (inclusive "Filtrar urgentes →" e os links `#numero`), barra de progresso
+vermelha/laranja/verde e o rail. **Não testado com dados reais:** cenário de zero urgentes
+(hoje há 1 urgente no banco), pedido com todas as etapas concluídas (barra 100%), pedido com
+etapa marcada "não se aplica", largura de tablet/celular (a ferramenta de browser desta sessão
+não conseguiu capturar screenshot em viewport redimensionado) e impressão da ficha A4 — esta
+última por inspeção de código: nenhuma mudança da fase tocou `/pedidos/[id]` ou o bloco
+`print:block` de lá. Teste em produção (seção 9 parte C) e reteste desses cenários ficam para
+o Pedro, depois do push.
+
 ### Fase E1-b — `/pedidos`: entregue/cancelado não sobem mais ao topo na ordem por entrega
 
 Sessão de 04/09/2026, seguindo o E1 abaixo. Decisão do Felipe, tomada ao vivo (o documento

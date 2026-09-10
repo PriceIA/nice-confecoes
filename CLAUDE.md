@@ -100,7 +100,7 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | Rota | Arquivo | O que faz |
 |---|---|---|
 | `/` | `src/app/page.tsx` | Server component; redireciona para `/dashboard` |
-| `/dashboard` | `src/app/dashboard/page.tsx` | 5 cards de KPI (`pedidosStats`), pedidos ativos, lista de urgentes, e a fila de liberações de "pagar na retirada" esperando o gestor |
+| `/dashboard` | `src/app/dashboard/page.tsx` | 4 cards de KPI (`pedidosStats`; "Em produção" é o cartão dominante, "Urgentes"/"Entrega em 7 dias" só coloridos quando `> 0`), tabela "Pedidos Ativos" com busca + chips de status (`FILTROS_DASHBOARD`) e colunas de progresso (`resumoProgresso`) e prazo em dias (`prazoTexto`), faixa de urgentes (1 linha, botão "Filtrar urgentes") e faixa de liberações de "pagar na retirada" esperando o gestor (1 linha) |
 | `/pedidos` | `src/app/pedidos/page.tsx` | Lista, busca (cliente/empresa/número), filtro por status, excluir |
 | `/pedidos/[id]` | `src/app/pedidos/[id]/page.tsx` | Detalhe e edição ampla, progresso por setor, parcelas, layout de impressão A4 (bloco `print:block` em `:681`) |
 | `/novo-pedido` | `src/app/novo-pedido/page.tsx` | Cadastro: cliente com autocomplete, seletor da tabela de preço do pedido, peças (com "outra peça" digitável e cadastrável), tamanhos (com tamanho livre), personalizações, parcelas, arte em imagem/PDF, vetorização |
@@ -163,7 +163,15 @@ Código compartilhado:
   pronto — `nao_se_aplica` fora do numerador E do denominador) e **`ordenarPedidos`**
   (as 6 ordens, sem mutar o array, data ausente sempre no fim, empate por `numero`).
   **Não escreva uma segunda conta de "% pronto"** — a barra de progresso e o filtro
-  "quase prontos" precisam concordar sempre
+  "quase prontos" precisam concordar sempre. Desde a Fase F (10/09/2026), `helpers.ts`
+  também tem **`pedidoCasaComBusca`** (o predicado de busca por cliente/empresa/número,
+  compartilhado por `/pedidos` e `/dashboard` — não escreva uma terceira cópia inline) e
+  **`prazoTexto`** (prazo de entrega em dias, com `tom` de severidade — usado pela tabela e
+  pela faixa de urgentes do `/dashboard`; `differenceInCalendarDays`, nunca
+  `differenceInDays`, para não contar em blocos de 24h). A tabela de `/dashboard` ordena por
+  **`entrega_asc` fixo**, sem seletor e sem `localStorage` — é proposital (Fase F), não
+  esqueça disso por "consertar" de volta para a ordem crua de `getPedidos()`
+  (`data_entrada desc`)
 - `src/lib/etapas.ts` — o catálogo de etapas (`etapas_producao`) e, mais importante, a
   RESOLUÇÃO de nome e ordem: `rotuloEtapa` (catálogo → `SETOR_LABELS` → a própria chave) e
   `etapasDoPedido` (ordem do pedido → do catálogo → canônica). `ETAPAS_PADRAO` é **semente**,
