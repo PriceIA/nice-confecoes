@@ -16,6 +16,23 @@ mesmo dia.
 - **Deploy:** nice-confecoes.vercel.app
 - **Não existe:** testes, camada de API (exceto um route handler de keep-alive)
 
+### Não existe ambiente de teste — `npm run dev` é produção
+
+`.env.local` aponta `NEXT_PUBLIC_SUPABASE_URL` para `vgghjzhzkcljalvizidy.supabase.co` — **o
+mesmo projeto Supabase que a Vercel usa**. Não há staging, não há banco de desenvolvimento,
+não há seed local. Conferido em 10/09/2026.
+
+A consequência é séria e vale para toda sessão:
+
+- Rodar `npm run dev` e clicar na tela **lê e escreve o banco real do Pedro.**
+- Teste que só navega, busca, filtra e ordena é inofensivo — foi o caso da Fase F.
+- Teste que **cria, edita ou apaga** pedido, cliente ou preço faz isso **de verdade**, e o
+  Pedro vê no mesmo dia. Não invente dado de teste pela interface: use registro que já
+  existe, ou peça um ao dono.
+- Vale igual para `/producao` e para o Kanban — marcar setor num pedido real muda o pedido
+  real, e ainda grava o seu nome em `atualizadoPor`.
+- Não existe "desfazer". A única reversão é outra edição manual.
+
 ## Identidade visual
 
 Todo módulo novo segue este padrão — não invente componentes ou cores fora dele.
@@ -616,6 +633,8 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
 - Commits no formato `tipo: descrição` — `feat:`, `fix:`, `docs:`.
 - Registre no `CHANGELOG.md` o que foi feito antes de encerrar a sessão.
 - Não faça push sem o dono conferir.
+- **Não crie dado de teste pela interface.** O banco do `npm run dev` é o de
+  produção — ver "Não existe ambiente de teste" na Visão geral.
 
 ## Estado de segurança atual
 
