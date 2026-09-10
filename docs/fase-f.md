@@ -101,8 +101,163 @@ Nenhum apareceu. Nenhuma migration, query ou seed foi necessária ou sugerida.
    `/pedidos` e o `.eslintrc.json`)
 2. `e140eed` — `feat: reforma visual do /dashboard — KPIs por estado, progresso e prazo em
    dias`
+3. `7c85984` — `docs: registra a Fase F no CHANGELOG e CLAUDE.md`
+4. `12a38a1` — `docs: registra que não existe ambiente de teste — dev aponta para produção`
+   (escrita fora desta sessão, no `CLAUDE.md`; commitada separada por pedido do Felipe, para
+   não ficar misturada no commit de fix abaixo)
+5. este commit — `fix: truncamento das faixas de alerta e contagem de urgentes vencidos`
+   (os três ajustes da seção seguinte)
 
 **Push ainda não feito** — aguardando o Pedro conferir, conforme a seção 8/12 pede.
+
+---
+
+## Ajustes pendentes — fazer ANTES do push
+
+Escrito pelo Cowork em 10/09/2026, depois de conferir o código entregue contra a spec.
+
+**O resultado da conferência: a implementação bate com a spec em tudo que foi verificado** —
+`pedidoCasaComBusca` e `prazoTexto` em `helpers.ts` com a assinatura pedida e usadas nos dois
+lados, `/pedidos` de fato refatorado (import na linha 7, chamada na linha 56), a derivação
+`filtrando`/`visiveis`/`linhas`, `ordenarPedidos(..., 'entrega_asc')`, os 7 chips, o contador,
+os dois estados vazios, os 4 KPIs com cor condicional, a precedência de cor da barra,
+`r.total === 0 → '—'`, o rail em todas as linhas e a limpeza dos imports. O `.eslintrc.json`
+foi uma decisão correta e está bem justificada no registro.
+
+São três ajustes pequenos. **Nenhum deles é um erro de execução da spec** — dois são coisas
+que a spec pediu errado, um é um caso que o teste não conseguiu alcançar. Um commit só,
+antes do push.
+
+### 1. `min-w-0` nas duas faixas de alerta — bug real em tela estreita
+
+`dashboard/page.tsx`, linhas 147 e 170: o `<span className="text-sm text-suave truncate">`
+das duas faixas é um item de flex sem `min-w-0`.
+
+`truncate` aplica `white-space: nowrap`, e item de flex tem `min-width: auto` por padrão — ou
+seja, ele **se recusa a encolher abaixo do texto inteiro**. O resultado não é o texto cortado
+com reticências: é a linha estourando e empurrando o botão "Filtrar urgentes →" para fora do
+cartão. É o gotcha clássico do `truncate` em flex.
+
+Isso **não apareceu no teste** porque é exatamente o cenário que a ferramenta de navegador não
+conseguiu capturar (o timeout no redimensionamento, registrado acima). Em desktop largo nunca
+aparece.
+
+Correção, nos dois spans:
+
+```tsx
+<span className="text-sm text-suave truncate min-w-0">
+```
+
+Confira o resultado estreitando a janela do navegador **manualmente**, sem screenshot
+automatizado — arrastar a borda até ~400px de largura basta. As duas faixas têm que cortar o
+texto com reticências e manter o botão dentro do cartão.
+
+### 2. "já venceu" está contando pedido que entrega HOJE — erro da spec
+
+A spec (seção 7.1) mandou calcular `urgentesVencidos` com
+`prazoTexto(p.dataEntrega).tom === 'atrasado'`, e deixou uma nota dizendo que isso era
+intencional. **A nota estava errada.** `prazoTexto` agrupa `dias < 0` e `dias === 0` no mesmo
+tom `atrasado` — o que está certo para a COR, mas o rótulo do cartão diz "1 já venceu", e um
+pedido que entrega hoje às 17h não venceu. A tela afirma uma coisa falsa.
+
+Separe a cor da contagem. `prazoTexto` passa a devolver também os dias:
+
+```ts
+export function prazoTexto(dataEntrega: string | null | undefined): {
+  texto: string
+  tom: TomPrazo
+  data: string | null
+  /** Dias de calendário até a entrega; negativo = atrasado. `null` sem data. */
+  dias: number | null
+}
+```
+
+Devolva `dias: null` nos dois returns de `sem_data` e `dias` em todos os outros. Nenhum
+chamador existente quebra — é campo novo.
+
+No dashboard:
+
+```tsx
+const urgentesVencidos = urgentes.filter(p => {
+  const { dias } = prazoTexto(p.dataEntrega)
+  return dias !== null && dias < 0
+}).length
+```
+
+O tom `atrasado` continua incluindo "entrega hoje" — a barra e o texto vermelhos para entrega
+hoje estão corretos e não mudam. Só a contagem do rótulo aperta.
+
+Apague também o comentário de duas linhas acima de `urgentesVencidos` que explica o
+comportamento antigo ("`venceu` e `entrega hoje` caem os dois no tom `atrasado` — e isso está
+certo aqui"), senão fica um comentário afirmando o contrário do código.
+
+### 3. A barra de filtro aparece num sistema sem nenhum pedido
+
+Quando `ativos.length === 0` e não há filtro, a tela mostra a busca e os 7 chips em cima de
+"Nenhum pedido ativo no momento. Criar primeiro pedido →". Filtrar o nada.
+
+Envolva a faixa da barra em `{(filtrando || ativos.length > 0) && ( ... )}`. Assim ela some
+só no sistema vazio de verdade, e continua aparecendo quando o filtro é que zerou a lista —
+que é o caso em que o "Limpar filtro" precisa estar acessível.
+
+Baixa prioridade: hoje há ~31 pedidos ativos e isso nunca vai acontecer em produção. Faça se
+for barato; se complicar, deixe registrado e pule.
+
+### 4. Corrigir o próprio registro
+
+A seção "Commits" acima lista dois hashes, mas foram três — falta o `7c85984` (docs). Ele foi
+criado depois que essa seção foi escrita. Acrescente-o, e acrescente o hash do commit destes
+ajustes quando terminar.
+
+**Feito** — seção "Commits" atualizada com os hashes `7c85984` e `12a38a1`, e uma entrada para
+este commit (sem o próprio hash, que só existe depois de commitado — confira em `git log -1`).
+
+### Verificação dos ajustes 1 e 2
+
+O ajuste 1 continuou impossível de ver por screenshot automatizado — mesmo limitação já
+registrada (timeout do CDP ao redimensionar a janela). Em vez de insistir no screenshot,
+verifiquei por JavaScript direto no DOM, via console do navegador (`javascript_tool`), sem
+tocar em nenhum dado:
+
+- Confirmei `getComputedStyle(span).minWidth === '0px'` no `<span>` das duas faixas (a classe
+  `min-w-0` está aplicada e surtindo efeito).
+- Reduzi `max-width` do card pai para `380px` temporariamente (só `style` no DOM em memória,
+  desfeito no mesmo comando, nada salvo em lugar nenhum) e confirmei: o `<span>` encolheu para
+  80px de largura com 153px de conteúdo (`scrollWidth > clientWidth`, ou seja, o texto agora
+  trunca em vez de estourar) e o botão "Filtrar urgentes →" continuou com a borda direita
+  dentro do card (`buttonStillInside: true`). Esse é exatamente o bug que o ajuste 1 descreve,
+  confirmado revertido.
+
+O ajuste 2 não teve como ser diferenciado do comportamento antigo com dado real: hoje o único
+pedido urgente ativo entrega em 3 dias, não hoje, então `urgentesVencidos` dava `0` nos dois
+formatos (antigo e novo) — o cenário que distingue os dois (`dias === 0`) segue sem pedido real
+para testar, igual o resto da lista de "zero urgentes"/"100% completo"/"não se aplica" que já
+estava sem cobertura. `npx tsc --noEmit` confirma que a nova assinatura de `prazoTexto`
+(campo `dias`) não quebrou nenhum chamador existente.
+
+### Ordem
+
+1. `git pull` (dois PCs).
+2. Ajustes 1, 2 e 3.
+3. `npx tsc --noEmit` + `npm run lint` limpos.
+4. Teste manual do ajuste 1 (janela estreita, sem automação) e do ajuste 2 (o cartão Urgentes
+   não pode dizer "já venceu" se o único urgente entrega hoje).
+5. Commit único: `fix: truncamento das faixas de alerta e contagem de urgentes vencidos`
+6. Atualizar a seção "Commits" deste arquivo (ajuste 4) e o `CHANGELOG.md`.
+7. **Aí sim**, Pedro confere e o push sai com os quatro commits juntos.
+
+### Depois do push — dois pontos para o Felipe, não para o Code
+
+- **Os quatro cenários que ficaram sem cobertura local** (zero urgentes, pedido 100% concluído,
+  pedido com etapa "não se aplica", largura de celular) viram a Parte C da seção 9. Os três
+  primeiros aparecem sozinhos conforme a fábrica roda; o de celular vale abrir no telefone no
+  primeiro dia.
+- **Confirmar se o `npm run dev` local aponta para o mesmo Supabase de produção.** O registro
+  acima diz que os testes rodaram "contra dados reais do Supabase", e o contexto do projeto
+  descreve **um** projeto Supabase, plano free, sem ambiente de staging. Se for isso mesmo,
+  "teste local" neste repo significa **ler e escrever o banco de produção** — inofensivo para
+  os testes desta fase, que só leram, mas é uma armadilha séria no dia em que um teste criar
+  ou apagar pedido. Vale uma linha no `CLAUDE.md` dizendo isso em voz alta.
 
 ---
 

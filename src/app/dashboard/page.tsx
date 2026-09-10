@@ -63,9 +63,10 @@ export default function DashboardPage() {
     .filter(p => p.status === 'em_producao')
     .reduce((acc, p) => acc + totalPecas(p), 0)
 
-  // "venceu" e "entrega hoje" caem os dois no tom `atrasado` (prazoTexto) — e
-  // isso está certo aqui: entrega hoje que ainda não saiu é assunto de hoje.
-  const urgentesVencidos = urgentes.filter(p => prazoTexto(p.dataEntrega).tom === 'atrasado').length
+  const urgentesVencidos = urgentes.filter(p => {
+    const { dias } = prazoTexto(p.dataEntrega)
+    return dias !== null && dias < 0
+  }).length
 
   const urgentesResumo = ordenarPedidos(urgentes, 'entrega_asc').slice(0, 2)
 
@@ -144,7 +145,7 @@ export default function DashboardPage() {
             <span className="text-sm font-semibold text-red-700 whitespace-nowrap">
               {urgentes.length === 1 ? '1 pedido urgente' : `${urgentes.length} pedidos urgentes`}
             </span>
-            <span className="text-sm text-suave truncate">
+            <span className="text-sm text-suave truncate min-w-0">
               {urgentesResumo.map((p, i) => (
                 <span key={p.id}>
                   {i > 0 && ', '}
@@ -167,7 +168,7 @@ export default function DashboardPage() {
                 ? '1 pedido aguardando sua aprovação'
                 : `${aguardandoAprovacao.length} pedidos aguardando sua aprovação`}
             </span>
-            <span className="text-sm text-suave truncate">
+            <span className="text-sm text-suave truncate min-w-0">
               {aguardandoAprovacao.slice(0, 2).map((p, i) => (
                 <span key={p.id}>
                   {i > 0 && ', '}
@@ -192,29 +193,31 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        <div className="bg-superficie-2 border-b border-borda px-6 py-3 flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fraco" />
-            <input
-              className="input pl-9"
-              placeholder="Buscar por cliente, empresa ou número..."
-              value={busca}
-              onChange={e => setBusca(e.target.value)}
-            />
+        {(filtrando || ativos.length > 0) && (
+          <div className="bg-superficie-2 border-b border-borda px-6 py-3 flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fraco" />
+              <input
+                className="input pl-9"
+                placeholder="Buscar por cliente, empresa ou número..."
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+              />
+            </div>
+            {FILTROS_DASHBOARD.map(f => (
+              <button key={f.value} onClick={() => setFiltro(f.value)}
+                className={clsx('px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors',
+                  filtro === f.value
+                    ? 'bg-nice-500 text-white'
+                    : 'bg-superficie-3 text-suave hover:bg-superficie-3')}>
+                {f.label}
+              </button>
+            ))}
+            <span className="ml-auto text-xs text-fraco whitespace-nowrap">
+              {linhas.length} de {ativos.length} pedidos ativos
+            </span>
           </div>
-          {FILTROS_DASHBOARD.map(f => (
-            <button key={f.value} onClick={() => setFiltro(f.value)}
-              className={clsx('px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors',
-                filtro === f.value
-                  ? 'bg-nice-500 text-white'
-                  : 'bg-superficie-3 text-suave hover:bg-superficie-3')}>
-              {f.label}
-            </button>
-          ))}
-          <span className="ml-auto text-xs text-fraco whitespace-nowrap">
-            {linhas.length} de {ativos.length} pedidos ativos
-          </span>
-        </div>
+        )}
 
         {linhas.length === 0 ? (
           filtrando ? (

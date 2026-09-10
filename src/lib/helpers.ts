@@ -209,22 +209,24 @@ export function prazoTexto(dataEntrega: string | null | undefined): {
   texto: string
   tom: TomPrazo
   data: string | null
+  /** Dias de calendário até a entrega; negativo = atrasado. `null` sem data. */
+  dias: number | null
 } {
-  if (!dataEntrega) return { texto: 'sem data', tom: 'sem_data', data: null }
+  if (!dataEntrega) return { texto: 'sem data', tom: 'sem_data', data: null, dias: null }
   const d = new Date(dataEntrega)
-  if (Number.isNaN(d.getTime())) return { texto: 'sem data', tom: 'sem_data', data: null }
+  if (Number.isNaN(d.getTime())) return { texto: 'sem data', tom: 'sem_data', data: null, dias: null }
 
   const dias = differenceInCalendarDays(d, new Date())
   const data = format(d, 'dd/MM/yyyy')
 
   if (dias < 0) {
     const n = Math.abs(dias)
-    return { texto: `atrasado ${n} ${n === 1 ? 'dia' : 'dias'}`, tom: 'atrasado', data }
+    return { texto: `atrasado ${n} ${n === 1 ? 'dia' : 'dias'}`, tom: 'atrasado', data, dias }
   }
-  if (dias === 0) return { texto: 'entrega hoje', tom: 'atrasado', data }
-  if (dias === 1) return { texto: 'amanhã', tom: 'proximo', data }
-  if (dias <= 7) return { texto: `em ${dias} dias`, tom: 'proximo', data }
-  return { texto: `em ${dias} dias`, tom: 'normal', data }
+  if (dias === 0) return { texto: 'entrega hoje', tom: 'atrasado', data, dias }
+  if (dias === 1) return { texto: 'amanhã', tom: 'proximo', data, dias }
+  if (dias <= 7) return { texto: `em ${dias} dias`, tom: 'proximo', data, dias }
+  return { texto: `em ${dias} dias`, tom: 'normal', data, dias }
 }
 
 // ---------------------------------------------------------------------------

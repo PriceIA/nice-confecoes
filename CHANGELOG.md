@@ -47,6 +47,28 @@ não conseguiu capturar screenshot em viewport redimensionado) e impressão da f
 `print:block` de lá. Teste em produção (seção 9 parte C) e reteste desses cenários ficam para
 o Pedro, depois do push.
 
+**Ajustes pré-push (revisão do Cowork), commit único antes do push.** Três correções em
+`src/app/dashboard/page.tsx`/`src/lib/helpers.ts`, achadas na conferência do código contra a
+spec:
+
+- **`min-w-0`** nas duas faixas de alerta (`<span className="text-sm text-suave truncate">`):
+  sem isso, item de flex não encolhe abaixo do conteúdo, e o `truncate` nunca entra em ação —
+  em tela estreita o texto do resumo estourava o card e empurrava o botão "Filtrar urgentes →"
+  para fora. Verificado por medição direta no DOM (`getComputedStyle`/`scrollWidth`), já que a
+  automação de browser desta sessão não consegue capturar screenshot em viewport estreito.
+- **`prazoTexto` ganha o campo `dias`** (dias de calendário até a entrega, `null` sem data), e
+  `urgentesVencidos` no dashboard passa a contar só `dias < 0` — antes contava também
+  `dias === 0` (entrega hoje), porque reaproveitava o `tom === 'atrasado'` de `prazoTexto`
+  (que agrupa os dois de propósito, para efeito de COR). A cor/tom não mudou; só a contagem do
+  rótulo "N já venceu" parou de incluir pedido que entrega hoje e ainda não venceu.
+- A **barra de busca+chips** do `/dashboard` só aparece quando `filtrando || ativos.length >
+  0` — antes aparecia mesmo com zero pedidos ativos no sistema, oferecendo filtro sobre uma
+  lista vazia de verdade (diferente do caso "filtro zerou a lista", em que ela precisa
+  continuar visível para o "Limpar filtro" funcionar).
+
+`npx tsc --noEmit` e `npm run lint` limpos. Detalhe completo, inclusive a verificação por DOM
+do ajuste 1, em `docs/fase-f.md` → "Ajustes pendentes — fazer ANTES do push".
+
 ### Fase E1-b — `/pedidos`: entregue/cancelado não sobem mais ao topo na ordem por entrega
 
 Sessão de 04/09/2026, seguindo o E1 abaixo. Decisão do Felipe, tomada ao vivo (o documento
