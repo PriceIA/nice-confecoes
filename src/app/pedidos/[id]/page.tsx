@@ -876,7 +876,7 @@ export default function DetalhePedidoPage() {
                     </p>
                   )}
                   {pedido.excecaoPagamento.decisaoObservacao && (
-                    <p className="text-xs text-suave italic">"{pedido.excecaoPagamento.decisaoObservacao}"</p>
+                    <p className="text-xs text-suave italic">&quot;{pedido.excecaoPagamento.decisaoObservacao}&quot;</p>
                   )}
                 </div>
               )}
