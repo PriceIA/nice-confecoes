@@ -3,6 +3,12 @@
 Documento escrito em **04/09/2026** pelo Cowork (Claude), a partir de três pedidos do Felipe.
 Um dos três foi descartado depois da conferência — ver seção "Item descartado".
 
+> **Estado da fase em 05/09/2026** — E1 **fechado** (commit `40c0361`). E1-b **fechado**
+> (commit `33998da`). **E2: a parte de banco está FEITA e conferida** (ver "Resultado no
+> banco" na seção do E2) — faltam só os **dois testes de login**, que dependem do Felipe ou
+> do Pedro, e o fechamento documental pelo Code. `main` está 2 commits à frente de
+> `origin/main`, aguardando o Pedro conferir.
+
 ---
 
 ## Como este documento funciona — leia antes de executar
@@ -26,6 +32,21 @@ Regras do ciclo:
   migration; `tsc`/`build` prova código; tela recarregada prova gravação.
 - **Se este documento estiver errado, o código ganha.** Encontrou divergência? Corrija o texto
   no registro, com a linha do arquivo, em vez de seguir uma instrução errada.
+- **Este documento nunca promete uma seção que não existe.** Regra aprendida na marra em
+  04/09: o E1 dizia "o Cowork escreve o E1-b depois", o Code chegou nele e não achou nada, e
+  ficou bloqueado. Quando um passo pode se desdobrar, as saídas possíveis vêm **escritas
+  aqui desde já**, com a recomendação — o que falta é só a escolha, e ela cabe numa linha.
+- **O Cowork relê este arquivo imediatamente antes de escrever nele.** Em 04/09 uma escrita
+  do Cowork sobrescreveu o registro do E1 com uma versão anterior do arquivo; o Code
+  reconstituiu a partir do commit `40c0361`, mas foi trabalho jogado fora. O commit no git é
+  a rede de segurança — **feche cada passo com commit antes de devolver a bola**, exatamente
+  como já vinha sendo feito.
+- **Teste que exige login.** O Claude Code **não digita senha**, nem com autorização — isso
+  não se contorna. Então: se houver sessão ativa com acesso suficiente e o teste **não
+  depender do perfil** (ordenação, por exemplo), use essa sessão e registre com qual perfil
+  testou. Se o teste **depende do perfil** — é o caso inteiro do E2 —, quem loga é o Felipe ou
+  o Pedro, e o Code registra o resultado **marcado como relato deles**, nunca como observação
+  própria.
 
 ---
 
@@ -135,6 +156,47 @@ com a decisão do Felipe. Se forem 0, 1 ou 2, o passo está bom como está.
 - Commit `fix: /pedidos abre ordenada por entrega mais próxima` (ou `feat:`, se preferir).
 - **Sem push antes do Pedro conferir**, como sempre.
 - `CHANGELOG.md` atualizado.
+
+---
+
+## Passo E1-b — encerrados fora do topo — **FEITO em 04/09/2026**
+
+A medição obrigatória do E1 deu o pior caso possível: **10 de 10** dos primeiros pedidos eram
+`entregue`/`cancelado`, com entregas de junho a agosto. Ordenar por entrega crescente sem
+tratar isso deixou a tela pior do que era — o oposto do que foi pedido.
+
+**Decisão do Felipe (04/09): "concluídos por último".** Nada é escondido e nada some da busca;
+pedido encerrado continua na lista, só que no fim. As duas alternativas foram descartadas por
+ele: mudar o filtro de status padrão (esconde pedido, e quem busca um antigo acha que sumiu) e
+aceitar como está (não resolve nada).
+
+**O que ficou implementado** (`src/app/pedidos/page.tsx`, só este arquivo): quando a ordem
+escolhida é `entrega_asc` ou `entrega_desc`, a lista recortada é partida em dois grupos —
+ativos e `entregue`/`cancelado` — cada um ordenado pela **mesma** `ordenarPedidos` com a
+**mesma** ordem, e concatenado `[...ativos, ...encerrados]`. Nas ordens por **entrada** nada
+muda. `ordenarPedidos` e `ORDENS_DATA` (`helpers.ts`, compartilhados com `/producao`)
+continuam intocados.
+
+**A partição só nas ordens por entrega foi decisão do Code, não deste documento** — e fica
+mantida. A razão dele é boa: "entrega mais próxima" responde *o que eu preciso entregar*, e
+pedido encerrado ali é ruído; "mais recentes primeiro" responde *o que entrou*, e um pedido que
+entrou ontem e já foi entregue continua sendo, legitimamente, recente. Duas perguntas
+diferentes, duas ordens diferentes.
+
+**Duas coisas que ficaram de fora — não são bug, são escopo:**
+
+1. `finalizado` **não** é encerrado, e não desce. Produção acabou, entrega não: é exatamente o
+   pedido que a fila de `/entregas` está esperando. O código está certo nisso; só o texto do
+   registro chama o segundo grupo de "finalizados", que é um nome infeliz para
+   `entregue`/`cancelado`. **Se alguém for mexer nesse trecho um dia, chame de `encerrados`** —
+   `finalizado` é um status de verdade, e confundir os dois esconde a fila de entrega.
+2. O subtítulo da tela continua dizendo só `N pedido(s) cadastrado(s)`, sem avisar que os
+   encerrados foram para o fim. Uma lista que se reordena sozinha sem dizer nada é como alguém
+   conclui que um pedido sumiu. **Não é bloqueante e não foi pedido** — fica anotado como
+   melhoria barata (uma linha), se o Felipe quiser.
+
+Resultado do reteste, com os mesmos dados: **0 de 10** encerrados no topo, contra 10/10 antes.
+Commit `33998da`. Detalhe completo no registro, no fim deste arquivo.
 
 ---
 
@@ -258,6 +320,58 @@ select e.nome, e.perfil, u.email, u.email_confirmed_at is not null as confirmado
 
 Tem que voltar **2 linhas**, com `perfil` `corte` e `gestor`, e `confirmado = true` nas duas.
 
+### Resultado no banco — **FEITO e CONFERIDO em 05/09/2026**
+
+Executado pelo Felipe no SQL Editor, com print de cada etapa. O que se sabe agora, com o
+resultado na mão:
+
+**E2-a (auditoria).** `equipe.id` tem `gen_random_uuid()` no default — o insert padrão serviu
+sem ajuste. **Descoberta que não estava documentada:** a tabela `equipe` tem duas colunas a
+mais do que o `CLAUDE.md` registra — **`ativo`** (`boolean`, default `true`) e **`created_at`**
+(default `now()`). O schema no `CLAUDE.md` está incompleto e precisa ser corrigido no
+fechamento desta fase.
+
+> **Tarefa para o Code, junto do fechamento:** rode um `grep -rn "ativo" src/` e confira se
+> alguma consulta a `equipe` filtra por essa coluna (`middleware.ts`, `AuthProvider.tsx`,
+> `kanban.ts`). Se filtrar, pessoa com `ativo = false` some do sistema **sem erro nenhum** —
+> é o mesmo modo de falha de sempre, e vale estar escrito no `CLAUDE.md` antes de alguém
+> descobrir na marra. Se não filtrar, a coluna existe e não é usada: registre isso também,
+> porque coluna órfã já é dívida conhecida deste repo.
+
+**E2-b (painel).** Os dois usuários foram criados em Authentication → Users, com **Auto
+Confirm User** marcado:
+
+| Pessoa | UID em `auth.users` |
+|---|---|
+| Marquinhos | `7a2fd0d6-1612-440c-9728-b8a4ab727eee` |
+| Nice | `a0b5ae5b-3a14-470a-b3a7-d68924d40330` |
+
+**E2-c (insert).** O insert por e-mail deste documento **não foi o que rodou**. Motivo
+registrado porque é instrutivo: ele foi executado antes de os usuários existirem, achou zero
+linhas em `auth.users` e gravou nada — e o SQL Editor respondeu `Success. No rows returned`,
+exatamente igual a um insert bem-sucedido. **`Success. No rows returned` não prova gravação;
+só o `select` de conferência prova.** Depois de criar os usuários, o insert foi refeito **por
+UID**, com `where not exists` para continuar idempotente.
+
+**E2-d (conferência).** Voltou 2 linhas:
+
+| nome | perfil | ativo | email | confirmado |
+|---|---|---|---|---|
+| Marquinhos | `corte` | true | `marquinho@niceconfec.app` | true |
+| Nice | `gestor` | true | `nice@niceconfec.app` | true |
+
+#### ⚠️ O usuário do Marquinhos é `marquinho`, **sem o "s"**
+
+O e-mail criado no painel foi `marquinho@niceconfec.app`. Como a tela de login monta
+`usuario@niceconfec.app` a partir do que a pessoa digita, **ele entra digitando `marquinho`**.
+Digitar `marquinhos` devolve credencial inválida sem dizer por quê — e é exatamente o tipo de
+detalhe que faz alguém concluir "o sistema não deixa eu entrar".
+
+**Decisão: fica como está.** Renomear o e-mail no painel pode derrubar a confirmação e criar
+um problema maior que o benefício. O `nome` na tela continua **Marquinhos** (é o que está em
+`equipe`); só o login é sem "s". **Escreva os dois na tabela de equipe do `CLAUDE.md`: nome
+Marquinhos, usuário `marquinho`.**
+
 ### Teste do E2 — com gente logada, não com ausência de erro vermelho
 
 **Marquinhos (`corte`) — primeira vez que este perfil é usado:**
@@ -287,7 +401,10 @@ Tem que voltar **2 linhas**, com `perfil` `corte` e `gestor`, e `confirmado = tr
 
 - **`CLAUDE.md`: atualizar a tabela de equipe** — passa de 7 para 9 pessoas com login, e
   `corte` deixa de ser "sem ninguém". Essa tabela já ficou desatualizada por duas semanas uma
-  vez; não deixe de novo.
+  vez; não deixe de novo. Registre o usuário do Marquinhos como **`marquinho`**, sem "s".
+- **`CLAUDE.md`: corrigir o schema de `equipe`** — faltam as colunas `ativo` (default `true`)
+  e `created_at` (default `now()`), confirmadas na auditoria de 05/09. E responda no registro
+  se algum código filtra por `ativo`.
 - `CHANGELOG.md` com o que foi feito, incluindo o SQL rodado (é mudança de dado em produção,
   mesmo sem migration).
 - Commit só de documentação (`docs:`), sem código — não dispara deploy novo.
@@ -297,8 +414,10 @@ Tem que voltar **2 linhas**, com `perfil` `corte` e `gestor`, e `confirmado = tr
 ## Ordem de execução
 
 ```
-E1  /pedidos abre por entrega mais próxima   → código, 1 arquivo, sem SQL.  FAZER PRIMEIRO
-E2  dois logins novos                        → sem código; painel + SQL do Pedro; Code testa
+E1   /pedidos abre por entrega mais próxima  → FECHADO 04/09. Commit 40c0361
+E1-b encerrados fora do topo da lista        → FECHADO 04/09. Commit 33998da (0/10, era 10/10)
+E2   dois logins novos                       → PASSO ATUAL. Sem código; painel + SQL do
+                                              Pedro; o Code prepara, confere e registra
 ```
 
 E1 antes de E2 porque E1 não depende de ninguém: o Code faz, testa, commita e acabou. O E2 fica
