@@ -69,6 +69,62 @@ spec:
 `npx tsc --noEmit` e `npm run lint` limpos. Detalhe completo, inclusive a verificação por DOM
 do ajuste 1, em `docs/fase-f.md` → "Ajustes pendentes — fazer ANTES do push".
 
+### Corrigido — build de produção quebrado pelo `.eslintrc.json` da Fase F
+
+O `.eslintrc.json` adicionado no commit `4f67eec` (Fase F, para destravar `npm run lint`) teve
+um efeito colateral não previsto: `next build` também roda lint, e sem config nenhuma antes
+esse passo nunca travava a build. Com o config presente, o deploy de produção do push de
+10/09/2026 (commit `459da20`, `dpl_7wRAKYTJsjELEeR1p1cnyz23sRSw`) **falhou** por causa de um
+erro `react/no-unescaped-entities` **pré-existente** (aspas literais em JSX) em
+`src/app/pedidos/[id]/page.tsx:879` — código de antes desta sessão, que nunca tinha impedido
+build nenhuma até agora. Corrigido trocando as aspas por `&quot;` (commit `82b2967`). Deploy
+seguinte confirmado `● Ready` em produção (`dpl_3cDdycHYbu9hQCcuPiosxJ9QUM3f`). Produção ficou
+servindo a versão anterior (sem Fase E/F) por cerca de 3 minutos entre o deploy que falhou e o
+que corrigiu — nenhuma ação manual foi necessária além do push do fix.
+
+### Fase E — fechamento do E2 (dois logins novos)
+
+Fechamento documental em 10/09/2026, do trabalho de banco feito pelo Felipe em 05/09/2026.
+Spec e registro completos em `docs/fase-e.md`. Só docs — sem código.
+
+**O que foi feito no banco (por fora desta sessão, pelo Felipe, no SQL Editor):**
+
+```sql
+-- E2-b: usuários criados no painel Authentication → Users, Auto Confirm marcado
+--   marquinho@niceconfec.app  (não "marquinhos" — sem o "s")
+--   nice@niceconfec.app
+
+-- E2-c: ligação com equipe, por UID (o insert por e-mail original rodou antes dos
+-- usuários existirem e gravou zero linhas em silêncio — refeito depois, por UID)
+insert into public.equipe (nome, perfil, auth_user_id)
+select 'Marquinhos', 'corte', u.id
+  from auth.users u
+ where u.email = 'marquinho@niceconfec.app'
+   and not exists (select 1 from public.equipe e where e.auth_user_id = u.id);
+
+insert into public.equipe (nome, perfil, auth_user_id)
+select 'Nice', 'gestor', u.id
+  from auth.users u
+ where u.email = 'nice@niceconfec.app'
+   and not exists (select 1 from public.equipe e where e.auth_user_id = u.id);
+```
+
+Conferido com `select` (E2-d): 2 linhas, `corte`/`gestor`, `confirmado = true` nas duas —
+`equipe` vai de 7 para 9 pessoas cadastradas. `corte` deixa de ser um perfil sem ninguém;
+`designer` e `acabamento` continuam vazios.
+
+**Descoberta da auditoria (E2-a), não documentada até agora:** `equipe` tem duas colunas a
+mais do que o `CLAUDE.md` registrava — `ativo` (`boolean`, default `true`) e `created_at`
+(default `now()`). Conferido com `grep -rn "ativo" src/`: **nenhum código do repo filtra por
+essa coluna** — nem `middleware.ts`, nem `AuthProvider.tsx`, nem `kanban.ts`. Na prática,
+**marcar `ativo = false` não tira acesso de ninguém**: a pessoa continua logando e continua
+aparecendo no seletor "Pessoas específicas" do Kanban. Registrado no `CLAUDE.md` para não
+virar uma suposição errada no dia em que alguém tentar desativar alguém por ali.
+
+**Pendente, não testado nesta sessão:** os dois testes de login (Marquinhos como `corte`,
+Nice como `gestor`) descritos em `docs/fase-e.md` → "Teste do E2" — dependem do Felipe ou do
+Pedro entrarem de verdade, e não foram executados. Sem resultado inventado aqui.
+
 ### Fase E1-b — `/pedidos`: entregue/cancelado não sobem mais ao topo na ordem por entrega
 
 Sessão de 04/09/2026, seguindo o E1 abaixo. Decisão do Felipe, tomada ao vivo (o documento

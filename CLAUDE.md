@@ -426,17 +426,29 @@ Tabela de usuários do sistema. **Criada e populada manualmente pelo dono** — 
 cadastro, e nenhuma migration deste repo a cria.
 
 ```
-id · nome · perfil · auth_user_id → auth.users(id)
+id · nome · perfil · auth_user_id → auth.users(id) · ativo boolean default true
+                                   · created_at default now()
 check (perfil in ('gestor', 'recepcionista', 'designer', 'corte', 'costureira',
                   'estamparia_serigrafia', 'estamparia_sublimacao', 'acabamento'))
 ```
+
+`ativo` e `created_at` foram confirmadas na auditoria de 05/09/2026 (Fase E, passo E2-a) —
+não estavam documentadas aqui antes disso. **`ativo` é uma coluna órfã: nenhum código do
+repo filtra por ela** (conferido com `grep -rn "ativo" src/` em `middleware.ts`,
+`AuthProvider.tsx` e `kanban.ts` — nenhum lê essa coluna). Na prática isso significa que
+**marcar `ativo = false` NÃO tira o acesso de ninguém**: a pessoa continua logando
+normalmente e continua aparecendo no seletor "Pessoas específicas" do Kanban (Fase D2.2).
+Se algum dia alguém precisar desativar acesso de verdade, hoje o único jeito é apagar/mudar
+o `auth_user_id`, não mexer em `ativo` — e essa distinção precisa ficar em algum lugar visível
+antes que alguém confie na coluna errada.
 
 São **8 perfis**. Dois administrativos (`gestor`, `recepcionista`) com acesso total, e seis
 de chão de fábrica que compartilham o mesmo objeto `LEITURA_PRODUCAO` em `permissoes.ts`:
 leem `/pedidos`, operam `/producao`, leem `/quadros`, e nada além disso.
 
 **Quem está cadastrado hoje** — resultado real da auditoria de 29/08/2026
-(`014_fase_d_auditoria.sql`, item 5; era pendência aberta desde 14/08/2026):
+(`014_fase_d_auditoria.sql`, item 5; era pendência aberta desde 14/08/2026), mais os dois
+logins da Fase E2 (criados e conferidos no banco em 05/09/2026):
 
 | Nome | Perfil | Status |
 |---|---|---|
@@ -447,12 +459,20 @@ leem `/pedidos`, operam `/producao`, leem `/quadros`, e nada além disso.
 | Kezia | costureira | cadastrado |
 | Regina | costureira | cadastrado |
 | Vera | costureira | cadastrado |
+| Marquinhos | corte | cadastrado no banco — **teste de login ainda pendente** |
+| Nice | gestor | cadastrado no banco — **teste de login ainda pendente** |
 
-`corte`, `designer` e `acabamento` continuam **sem ninguém cadastrado** — os três perfis
-existem na matriz de permissões e no CHECK da tabela, mas nenhum usuário real loga com eles
-hoje. Relevante para qualquer feature que dependa de "gente de verdade" nesses perfis (ex.:
+`designer` e `acabamento` continuam **sem ninguém cadastrado** — os dois perfis existem na
+matriz de permissões e no CHECK da tabela, mas nenhum usuário real loga com eles hoje.
+Relevante para qualquer feature que dependa de "gente de verdade" nesses perfis (ex.:
 visibilidade por pessoa no Kanban, Fase D2.2) — o seletor mostra o perfil, mas não há quem
 escolher ali.
+
+**O usuário de login do Marquinhos é `marquinho`, sem o "s".** O e-mail cadastrado no painel
+foi `marquinho@niceconfec.app` (a tela de login monta `usuario@niceconfec.app` a partir do
+que a pessoa digita) — ficou assim de propósito, porque renomear o e-mail no painel do
+Supabase arrisca derrubar a confirmação da conta. O `nome` em `equipe` continua
+**Marquinhos**; só o usuário de login é que não tem o "s" no fim.
 
 `auth_user_id` liga a linha ao usuário do Supabase Auth. É por ele que o middleware
 (`src/middleware.ts`) e o layout raiz descobrem nome e perfil de quem está logado. Usuário
@@ -635,6 +655,12 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
 - Não faça push sem o dono conferir.
 - **Não crie dado de teste pela interface.** O banco do `npm run dev` é o de
   produção — ver "Não existe ambiente de teste" na Visão geral.
+- **`npm run build` antes de qualquer push, não só `tsc`.** Desde 10/09/2026 existe
+  `.eslintrc.json` no repo, e `next build` roda o ESLint: **erro de lint agora derruba o
+  deploy na Vercel.** Antes da config, o lint nunca bloqueava nada. Foi assim que o push
+  `459da20` falhou por um erro que já estava no código havia semanas
+  (`react/no-unescaped-entities` em `pedidos/[id]/page.tsx:879`). `tsc --noEmit` limpo NÃO é
+  suficiente.
 
 ## Estado de segurança atual
 
