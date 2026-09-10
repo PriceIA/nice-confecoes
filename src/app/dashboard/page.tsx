@@ -1,15 +1,15 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { format, isAfter, addDays } from 'date-fns'
+import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
-  Factory, AlertTriangle, Clock, ClipboardCheck,
-  PlusCircle, ArrowRight, TrendingUp, Users2, HandCoins, Search
+  Factory, AlertTriangle, ClipboardCheck,
+  PlusCircle, ArrowRight, TrendingUp, HandCoins, Search
 } from 'lucide-react'
 import { getPedidos, getClientes, pedidosStats } from '@/lib/store'
 import {
-  STATUS_CONFIG, COMPLEXIDADE_CONFIG, totalPecas,
+  STATUS_CONFIG, totalPecas, resumoProgresso, prazoTexto,
   FILTROS_DASHBOARD, FiltroDashboard, pedidoCasaComBusca, ordenarPedidos,
 } from '@/lib/helpers'
 import { Pedido } from '@/types'
@@ -59,13 +59,15 @@ export default function DashboardPage() {
 
   const linhas = filtrando ? visiveis : visiveis.slice(0, 10)
 
-  const CARDS = [
-    { label: 'Em Produção', value: stats.emProducao, icon: Factory, color: 'text-marca-texto', bg: 'bg-marca-suave', border: 'border-marca-borda' },
-    { label: 'Urgentes', value: stats.urgentes, icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' },
-    { label: 'Entrega em 7 dias', value: stats.entregaEm7dias, icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' },
-    { label: 'Aguardando Produção', value: stats.aguardandoProducao, icon: ClipboardCheck, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
-    { label: 'Total de Clientes', value: totalClientes, icon: Users2, color: 'text-purple-500', bg: 'bg-purple-50', border: 'border-purple-200' },
-  ]
+  const pecasEmProducao = pedidos
+    .filter(p => p.status === 'em_producao')
+    .reduce((acc, p) => acc + totalPecas(p), 0)
+
+  // "venceu" e "entrega hoje" caem os dois no tom `atrasado` (prazoTexto) — e
+  // isso está certo aqui: entrega hoje que ainda não saiu é assunto de hoje.
+  const urgentesVencidos = urgentes.filter(p => prazoTexto(p.dataEntrega).tom === 'atrasado').length
+
+  const urgentesResumo = ordenarPedidos(urgentes, 'entrega_asc').slice(0, 2)
 
   return (
     <div className="space-y-8">
@@ -75,6 +77,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-titulo">Dashboard</h1>
           <p className="text-sm text-suave mt-0.5">
             {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+            <span className="text-fraco"> · {totalClientes} clientes na base</span>
           </p>
         </div>
         <Link href="/novo-pedido" className="btn-primary">
@@ -83,72 +86,99 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
-        {CARDS.map(({ label, value, icon: Icon, color, bg, border }) => (
-          <div key={label} className={clsx('card flex items-center gap-4 border', border)}>
-            <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center shrink-0', bg)}>
-              <Icon className={clsx('w-6 h-6', color)} />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-titulo">{value}</div>
-              <div className="text-xs text-suave font-medium">{label}</div>
-            </div>
+      {/* KPI Cards — cor só quando o valor pede atenção. "Em produção" é o
+          cartão dominante (a pergunta que o Pedro faz todo dia); Urgentes e
+          Entrega em 7 dias ficam neutros quando zeram, para não treinar o
+          olho a ignorar vermelho/laranja. */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="card bg-marca-suave border-marca-borda">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-marca-texto">Em produção</span>
+            <Factory className="w-4 h-4 text-marca-texto" />
           </div>
-        ))}
+          <div className="text-4xl font-bold leading-none text-marca-texto mt-2">{stats.emProducao}</div>
+          <div className="text-xs text-marca-texto mt-1">{pecasEmProducao} peças na fábrica</div>
+        </div>
+
+        <div className={clsx('card', stats.urgentes > 0 ? 'border-red-200' : 'border-borda')}>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-suave">Urgentes</span>
+            {stats.urgentes > 0 && <span className="w-2 h-2 rounded-full bg-red-500" />}
+          </div>
+          <div className={clsx('text-3xl font-bold leading-none mt-2', stats.urgentes > 0 ? 'text-red-700' : 'text-titulo')}>
+            {stats.urgentes}
+          </div>
+          {urgentesVencidos > 0 && (
+            <div className="text-xs text-red-700 mt-1">
+              {urgentesVencidos === 1 ? '1 já venceu' : `${urgentesVencidos} já venceram`}
+            </div>
+          )}
+        </div>
+
+        <div className={clsx('card', stats.entregaEm7dias > 0 ? 'border-orange-200' : 'border-borda')}>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-suave">Entrega em 7 dias</span>
+            {stats.entregaEm7dias > 0 && <span className="w-2 h-2 rounded-full bg-orange-500" />}
+          </div>
+          <div className={clsx('text-3xl font-bold leading-none mt-2', stats.entregaEm7dias > 0 ? 'text-orange-700' : 'text-titulo')}>
+            {stats.entregaEm7dias}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-suave">Aguardando Produção</span>
+            <ClipboardCheck className="w-4 h-4 text-fraco" />
+          </div>
+          <div className="text-3xl font-bold text-titulo mt-2">{stats.aguardandoProducao}</div>
+        </div>
       </div>
 
-      {/* Alertas urgentes */}
-      {urgentes.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2 text-red-600 font-semibold text-sm">
-            <AlertTriangle className="w-4 h-4" />
-            Pedidos Urgentes — atenção necessária
+      {/* As duas faixas de alerta, uma linha cada — a lista de 3 linhas de
+          urgentes saiu daqui porque a tabela "Pedidos Ativos" logo abaixo já
+          mostra todos. */}
+      <div className="space-y-2.5">
+        {urgentes.length > 0 && (
+          <div className="flex items-center gap-3 rounded-xl border px-4 py-3 bg-red-50 border-red-200">
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            <span className="text-sm font-semibold text-red-700 whitespace-nowrap">
+              {urgentes.length === 1 ? '1 pedido urgente' : `${urgentes.length} pedidos urgentes`}
+            </span>
+            <span className="text-sm text-suave truncate">
+              {urgentesResumo.map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 && ', '}
+                  <Link href={`/pedidos/${p.id}`} className="hover:underline">#{p.numero}</Link>
+                  {' '}{prazoTexto(p.dataEntrega).texto}
+                </span>
+              ))}
+            </span>
+            <button onClick={() => setFiltro('urgentes')} className="ml-auto text-xs font-semibold text-red-700 whitespace-nowrap">
+              Filtrar urgentes →
+            </button>
           </div>
-          {urgentes.map(p => (
-            <Link key={p.id} href={`/pedidos/${p.id}`}
-              className="flex items-center justify-between bg-superficie border border-red-100 rounded-xl px-4 py-3 hover:border-red-300 transition-colors">
-              <div>
-                <span className="font-semibold text-titulo text-sm">#{p.numero}</span>
-                <span className="text-suave text-sm ml-2">{p.cliente.nome}</span>
-                {p.cliente.empresa && <span className="text-fraco text-xs ml-1">— {p.cliente.empresa}</span>}
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-red-600 font-medium">Entrega: {format(new Date(p.dataEntrega), 'dd/MM/yyyy')}</span>
-                <ArrowRight className="w-4 h-4 text-fraco" />
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+        )}
 
-      {/* Liberações de "pagar na retirada" esperando decisão do gestor. */}
-      {permissoes.aprovarExcecaoPagamento && aguardandoAprovacao.length > 0 && (
-        <div className="card border-2 border-yellow-300 bg-yellow-50 space-y-3">
-          <h2 className="font-semibold text-yellow-800 flex items-center gap-2">
-            <HandCoins className="w-4 h-4 text-yellow-600" />
-            {aguardandoAprovacao.length === 1
-              ? '1 pedido aguardando sua aprovação para pagar na retirada'
-              : `${aguardandoAprovacao.length} pedidos aguardando sua aprovação para pagar na retirada`}
-          </h2>
-          <div className="space-y-2">
-            {aguardandoAprovacao.map(p => (
-              <Link key={p.id} href={`/pedidos/${p.id}`}
-                className="flex items-center justify-between gap-3 bg-superficie border border-yellow-200 rounded-xl px-4 py-3 hover:border-yellow-400 transition-colors">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-conteudo">
-                    #{p.numero} — {p.cliente.empresa || p.cliente.nome}
-                  </p>
-                  <p className="text-xs text-suave truncate">
-                    {p.excecaoPagamento?.solicitadoPor}: {p.excecaoPagamento?.motivo}
-                  </p>
-                </div>
-                <ArrowRight className="w-4 h-4 text-yellow-600 shrink-0" />
-              </Link>
-            ))}
+        {permissoes.aprovarExcecaoPagamento && aguardandoAprovacao.length > 0 && (
+          <div className="flex items-center gap-3 rounded-xl border px-4 py-3 bg-yellow-50 border-yellow-200">
+            <HandCoins className="w-4 h-4 text-yellow-600 shrink-0" />
+            <span className="text-sm font-semibold text-yellow-800 whitespace-nowrap">
+              {aguardandoAprovacao.length === 1
+                ? '1 pedido aguardando sua aprovação'
+                : `${aguardandoAprovacao.length} pedidos aguardando sua aprovação`}
+            </span>
+            <span className="text-sm text-suave truncate">
+              {aguardandoAprovacao.slice(0, 2).map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 && ', '}
+                  <Link href={`/pedidos/${p.id}`} className="hover:underline">#{p.numero}</Link>
+                  {' '}— {p.excecaoPagamento?.solicitadoPor}
+                </span>
+              ))}
+            </span>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Tabela de pedidos ativos */}
       <div className="card p-0 overflow-hidden">
@@ -214,6 +244,7 @@ export default function DashboardPage() {
                   <th className="text-left px-6 py-3 font-semibold">Cliente</th>
                   <th className="text-left px-6 py-3 font-semibold">Peças</th>
                   <th className="text-left px-6 py-3 font-semibold">Status</th>
+                  <th className="text-left px-6 py-3 font-semibold">Produção</th>
                   <th className="text-left px-6 py-3 font-semibold">Entrega</th>
                   <th className="px-6 py-3"></th>
                 </tr>
@@ -221,10 +252,15 @@ export default function DashboardPage() {
               <tbody className="divide-y divide-borda">
                 {linhas.map(p => {
                   const sc = STATUS_CONFIG[p.status]
-                  const vencendo = isAfter(addDays(new Date(), 7), new Date(p.dataEntrega))
+                  const r = resumoProgresso(p.progresso)
+                  const prazo = prazoTexto(p.dataEntrega)
+                  const corBarra =
+                    prazo.tom === 'atrasado' ? 'bg-red-500'
+                    : prazo.tom === 'proximo' && r.pct < 70 ? 'bg-orange-500'
+                    : 'bg-nice-400'
                   return (
                     <tr key={p.id} className="hover:bg-superficie-2 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className={clsx('px-6 py-4 border-l-[3px]', p.tipo === 'urgente' ? 'border-red-500' : 'border-transparent')}>
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-marca-texto">#{p.numero}</span>
                           {p.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600">urgente</span>}
@@ -239,9 +275,26 @@ export default function DashboardPage() {
                         <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={clsx('text-sm font-medium', vencendo && p.status !== 'finalizado' ? 'text-orange-500' : 'text-suave')}>
-                          {format(new Date(p.dataEntrega), 'dd/MM/yyyy')}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-[76px] h-1.5 rounded-full bg-superficie-3 overflow-hidden shrink-0">
+                            {r.total > 0 && <div className={clsx('h-full rounded-full', corBarra)} style={{ width: `${r.pct}%` }} />}
+                          </div>
+                          <span className="text-xs text-suave tabular-nums">
+                            {r.total === 0 ? '—' : `${r.concluidos}/${r.total}`}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className={clsx('text-sm font-semibold',
+                          prazo.tom === 'atrasado' ? 'text-red-700'
+                          : prazo.tom === 'proximo' ? 'text-orange-700'
+                          : prazo.tom === 'normal' ? 'text-conteudo'
+                          : 'text-fraco')}>
+                          {prazo.texto}
+                        </div>
+                        {prazo.tom !== 'sem_data' && (
+                          <div className="text-xs text-fraco tabular-nums">{prazo.data}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <Link href={`/pedidos/${p.id}`} className="text-marca-texto hover:text-marca-texto font-medium text-xs flex items-center gap-1">
