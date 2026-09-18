@@ -218,6 +218,7 @@ export default function ConfiguracoesPage() {
                 </span>
               ) : (
                 <button type="button" disabled={etapasSemente || ocupado}
+                  aria-label={`Excluir etapa ${e.rotulo}`}
                   onClick={() => {
                     if (!confirm(`Excluir "${e.rotulo}" do catálogo?\n\nPedidos que já usam esta etapa continuam com ela.`)) return
                     comGravacao('excluir a etapa', () => removerEtapa(e.chave))
@@ -279,6 +280,7 @@ export default function ConfiguracoesPage() {
                     className="flex items-center gap-1.5 bg-superficie-3 text-conteudo text-xs font-medium px-3 py-1.5 rounded-xl">
                     {tipo}
                     <button type="button" onClick={() => removeTipo(categoria, tipo)}
+                      aria-label={`Remover tipo ${tipo}`}
                       className="text-fraco hover:text-red-500 transition-colors">
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -324,6 +326,7 @@ export default function ConfiguracoesPage() {
               className="flex items-center gap-1.5 bg-marca-suave text-marca-texto text-xs font-medium px-3 py-1.5 rounded-xl border border-marca-borda">
               {p.label}
               <button type="button" onClick={() => removePersonalizacao(p.value)}
+                aria-label={`Remover personalização ${p.label}`}
                 className="text-nice-400 hover:text-red-500 transition-colors">
                 <Trash2 className="w-3 h-3" />
               </button>

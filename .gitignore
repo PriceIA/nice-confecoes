@@ -32,3 +32,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# skills de design (impeccable, ui-ux-pro-max, taste-skill e cia.)
+# 394 arquivos, 12,4 MB, incluindo bases de fontes e icones de varios MB e a
+# pasta synced/ com skills pessoais da conta. Ficam no disco e continuam sendo
+# lidas pelo Claude Code e pelo Cowork; so nao vao para o Git.
+.claude/skills/

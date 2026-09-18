@@ -74,6 +74,7 @@ export default function FotoUpload({ pecaId, fotos, onChange }: Props) {
               type="button"
               onClick={() => remover(url)}
               className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow"
+              aria-label="Remover arquivo"
               title="Remover arquivo"
             >
               <X className="w-3 h-3" />
@@ -82,6 +83,7 @@ export default function FotoUpload({ pecaId, fotos, onChange }: Props) {
               type="button"
               onClick={() => abrir(url)}
               className="absolute bottom-1 right-1 w-5 h-5 bg-black/50 text-white rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label={ehPdf(url) ? 'Abrir PDF em outra aba' : 'Ampliar imagem'}
               title={ehPdf(url) ? 'Abrir PDF em outra aba' : 'Ampliar'}
             >
               {ehPdf(url) ? <ExternalLink className="w-3 h-3" /> : <ZoomIn className="w-3 h-3" />}
@@ -97,6 +99,7 @@ export default function FotoUpload({ pecaId, fotos, onChange }: Props) {
             'w-20 h-20 border-2 border-dashed border-borda rounded-xl flex flex-col items-center justify-center gap-1 hover:border-nice-400 hover:bg-marca-suave transition-colors',
             uploading && 'opacity-50 cursor-wait'
           )}
+          aria-label="Adicionar imagem ou PDF"
           title="Adicionar imagem ou PDF"
         >
           {uploading ? (
@@ -129,6 +132,7 @@ export default function FotoUpload({ pecaId, fotos, onChange }: Props) {
           <button
             className="absolute top-4 right-4 text-white hover:text-fraco"
             onClick={() => setLightbox(null)}
+            aria-label="Fechar imagem ampliada"
           >
             <X className="w-7 h-7" />
           </button>

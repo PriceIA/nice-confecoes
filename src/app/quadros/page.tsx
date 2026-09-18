@@ -184,14 +184,17 @@ export default function QuadrosPage() {
                 {podeEditar && (
                   <div className="flex items-center gap-1 px-3 py-2 border-t border-borda bg-superficie-2">
                     <button onClick={() => abrirEdicao(q)} title="Renomear"
+                      aria-label={`Renomear quadro ${q.titulo}`}
                       className="p-2 rounded-lg text-fraco hover:text-marca-texto hover:bg-superficie">
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button onClick={() => alternarArquivo(q)} title={q.arquivado ? 'Desarquivar' : 'Arquivar'}
+                      aria-label={`${q.arquivado ? 'Desarquivar' : 'Arquivar'} quadro ${q.titulo}`}
                       className="p-2 rounded-lg text-fraco hover:text-marca-texto hover:bg-superficie">
                       {q.arquivado ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                     </button>
                     <button onClick={() => setConfirmarExclusao(q)} title="Excluir"
+                      aria-label={`Excluir quadro ${q.titulo}`}
                       className="p-2 rounded-lg text-fraco hover:text-red-600 hover:bg-superficie ml-auto">
                       <Trash2 className="w-4 h-4" />
                     </button>

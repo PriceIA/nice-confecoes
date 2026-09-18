@@ -200,11 +200,11 @@ export default function ClientesPage() {
                 {!editandoCliente && (
                   <button onClick={iniciarEdicaoCliente}
                     className="p-2 rounded-xl hover:bg-marca-suave text-marca-texto transition-colors"
-                    title="Editar cliente">
+                    aria-label="Editar cliente" title="Editar cliente">
                     <Pencil className="w-4 h-4" />
                   </button>
                 )}
-                <button onClick={fecharDrawer} className="text-fraco hover:text-suave p-1">
+                <button onClick={fecharDrawer} aria-label="Fechar" className="text-fraco hover:text-suave p-1">
                   <X className="w-5 h-5" />
                 </button>
               </div>

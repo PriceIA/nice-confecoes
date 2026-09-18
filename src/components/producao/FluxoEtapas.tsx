@@ -9,6 +9,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { CheckCircle2, Circle, GripVertical, Loader2, MinusCircle, Plus, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
 import Modal from '@/components/kanban/Modal'
+import Dica from '@/components/Dica'
 import { atualizarPedido } from '@/lib/store'
 import { aplicarOrdem, criarEtapa, etapasDisponiveis, etapasDoPedido } from '@/lib/etapas'
 import { autorSetorTexto } from '@/lib/helpers'
@@ -55,6 +56,15 @@ type Props = {
 }
 
 const CICLO: StatusSetor[] = ['pendente', 'em_andamento', 'concluido']
+
+// Só para o aria-label do clique de status — não é o SETOR_LABELS (esse é o
+// nome da etapa), é o nome do STATUS dela.
+const STATUS_TEXTO: Record<StatusSetor, string> = {
+  pendente: 'pendente',
+  em_andamento: 'em andamento',
+  concluido: 'concluído',
+  nao_se_aplica: 'não se aplica',
+}
 
 function iconeStatus(s: StatusSetor) {
   if (s === 'concluido') return <CheckCircle2 className="w-4 h-4 text-nice-500" />
@@ -107,40 +117,66 @@ function CardEtapa({
     >
       <div className="flex items-start gap-1.5">
         {arrastavel && (
+          <Dica texto="Arraste para mudar a ordem das etapas deste pedido" className="print:hidden">
+            <button
+              type="button"
+              {...attributes}
+              {...listeners}
+              aria-label={`Reordenar etapa ${rotulo}`}
+              className="cursor-grab active:cursor-grabbing text-fraco hover:text-conteudo touch-none -ml-1 mt-px"
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </button>
+          </Dica>
+        )}
+
+        {podeEditarStatus ? (
+          <Dica
+            texto={status === 'nao_se_aplica'
+              ? 'Marcado como não aplicável — clique para voltar a pendente'
+              : 'Clique para avançar: pendente → em andamento → concluído'}
+            className="flex-1 min-w-0"
+          >
+            <button
+              type="button"
+              onClick={onCiclar}
+              aria-label={`Etapa ${rotulo}: ${STATUS_TEXTO[status]}. Clique para avançar.`}
+              className="flex-1 text-left min-w-0 w-full"
+            >
+              <span className="flex items-center gap-2">
+                {iconeStatus(status)}
+                <span className="truncate">{rotulo}</span>
+              </span>
+            </button>
+          </Dica>
+        ) : (
           <button
             type="button"
-            {...attributes}
-            {...listeners}
-            title="Arrastar para mudar a ordem"
-            aria-label={`Mover ${rotulo}`}
-            className="cursor-grab active:cursor-grabbing text-fraco hover:text-conteudo touch-none -ml-1 mt-px print:hidden"
+            disabled
+            aria-label={`Etapa ${rotulo}: ${STATUS_TEXTO[status]}`}
+            className="flex-1 text-left min-w-0 disabled:cursor-default"
           >
-            <GripVertical className="w-3.5 h-3.5" />
+            <span className="flex items-center gap-2">
+              {iconeStatus(status)}
+              <span className="truncate">{rotulo}</span>
+            </span>
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={podeEditarStatus ? onCiclar : undefined}
-          disabled={!podeEditarStatus}
-          className="flex-1 text-left min-w-0 disabled:cursor-default"
-        >
-          <span className="flex items-center gap-2">
-            {iconeStatus(status)}
-            <span className="truncate">{rotulo}</span>
-          </span>
-        </button>
-
         {podeMarcarNaoSeAplica && status !== 'nao_se_aplica' && (
-          <button
-            type="button"
-            onClick={onNaoSeAplica}
-            title="Marcar como não aplicável a este pedido"
-            aria-label={`Marcar ${rotulo} como não aplicável`}
-            className="text-fraco hover:text-red-600 transition-colors shrink-0 print:hidden"
+          <Dica
+            texto="Este pedido não passa por esta etapa. Não apaga nada — clique de novo para desfazer."
+            className="shrink-0 print:hidden"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+            <button
+              type="button"
+              onClick={onNaoSeAplica}
+              aria-label={`Marcar ${rotulo} como não aplicável`}
+              className="text-fraco hover:text-red-600 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </Dica>
         )}
       </div>
 

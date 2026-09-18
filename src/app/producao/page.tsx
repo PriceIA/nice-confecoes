@@ -12,6 +12,7 @@ import { EntradaProgresso, EtapaProducao, Pedido, Progresso } from '@/types'
 import { ArrowRight, Search } from 'lucide-react'
 import ModalProntoParaEnvio from '@/components/producao/ModalProntoParaEnvio'
 import FluxoEtapas from '@/components/producao/FluxoEtapas'
+import Dica from '@/components/Dica'
 import clsx from 'clsx'
 
 
@@ -147,6 +148,7 @@ export default function ProducaoPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fraco" />
               <input
+                aria-label="Buscar por número, cliente ou empresa"
                 className="input pl-9"
                 placeholder="Buscar por número, cliente ou empresa..."
                 value={busca}
@@ -156,6 +158,7 @@ export default function ProducaoPage() {
             <div className="flex flex-wrap gap-2">
               {RECORTES.map(r => (
                 <button key={r.value} type="button" onClick={() => guardarPrefs({ recorte: r.value })}
+                  aria-pressed={recorte === r.value}
                   className={clsx('px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors',
                     recorte === r.value
                       ? 'bg-nice-500 text-white'
@@ -164,7 +167,7 @@ export default function ProducaoPage() {
                 </button>
               ))}
             </div>
-            <select className="input lg:w-60" value={ordem}
+            <select aria-label="Ordenar pedidos" className="input lg:w-60" value={ordem}
               onChange={e => guardarPrefs({ ordem: e.target.value as OrdemPedidos })}>
               {ORDENS_PRODUCAO.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -220,7 +223,14 @@ export default function ProducaoPage() {
                     <span>{concluidos} de {aplicaveis} setores concluídos</span>
                     <span className="font-medium text-marca-texto">{progPct}%</span>
                   </div>
-                  <div className="w-full bg-superficie-3 rounded-full h-2">
+                  <div
+                    role="progressbar"
+                    aria-valuenow={progPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`Progresso do pedido #${pedido.numero}`}
+                    className="w-full bg-superficie-3 rounded-full h-2"
+                  >
                     <div className="bg-nice-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progPct}%` }} />
                   </div>
                 </div>
@@ -239,10 +249,12 @@ export default function ProducaoPage() {
                 />
 
                 {podeLiberarEnvio && (
-                  <button type="button" onClick={() => setModalPedidoId(pedido.id)}
-                    className="text-marca-texto text-xs font-medium hover:underline">
-                    Pronto para envio?
-                  </button>
+                  <Dica texto="Confere as etapas que ficaram pendentes antes de liberar">
+                    <button type="button" onClick={() => setModalPedidoId(pedido.id)}
+                      className="text-marca-texto text-xs font-medium hover:underline">
+                      Pronto para envio?
+                    </button>
+                  </Dica>
                 )}
               </div>
             )

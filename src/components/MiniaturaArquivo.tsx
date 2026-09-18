@@ -31,6 +31,7 @@ export default function MiniaturaArquivo({ url, indice, onClick, className }: Pr
         className={clsx(base, 'bg-superficie-2 flex flex-col items-center justify-center gap-0.5 px-1 text-center')}
         onClick={onClick}
         title={nomeVisivel(url)}
+        aria-label={onClick ? `Abrir ${nomeVisivel(url)}` : undefined}
       >
         <FileText className="w-6 h-6 text-marca-texto" />
         <span className="text-[9px] font-semibold text-suave leading-none">PDF</span>

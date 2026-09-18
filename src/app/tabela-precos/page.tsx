@@ -332,11 +332,13 @@ export default function TabelaPrecosPage() {
             <div className="flex items-center gap-1">
               <button onClick={() => abrir({ tipo: 'nova-peca', grupo: grupo.grupo })}
                 className="text-white/80 hover:text-white text-xs flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-white/10"
+                aria-label={`Adicionar peça em ${grupo.grupo}`}
                 title={`Adicionar peça em ${grupo.grupo}`}>
                 <Plus className="w-3.5 h-3.5" /> Peça
               </button>
               <button onClick={() => excluirGrupo(grupo.grupo)}
                 className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10"
+                aria-label={`Remover o grupo ${grupo.grupo}`}
                 title={`Remover o grupo ${grupo.grupo}`}>
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -373,7 +375,8 @@ export default function TabelaPrecosPage() {
                     })}
                     <td className="px-2 text-center">
                       <button onClick={() => excluirPeca(grupo.grupo, prod)}
-                        className="text-fraco hover:text-red-600 p-1" title={`Remover ${prod}`}>
+                        className="text-fraco hover:text-red-600 p-1"
+                        aria-label={`Remover ${prod}`} title={`Remover ${prod}`}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </td>

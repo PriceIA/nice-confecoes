@@ -98,6 +98,7 @@ export default function PedidosPage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fraco" />
             <input
+              aria-label="Buscar por cliente, empresa ou número"
               className="input pl-9"
               placeholder="Buscar por cliente, empresa ou número..."
               value={busca}
@@ -107,6 +108,7 @@ export default function PedidosPage() {
           <div className="flex flex-wrap gap-2">
             {FILTROS.map(f => (
               <button key={f.value} onClick={() => setFiltro(f.value)}
+                aria-pressed={filtro === f.value}
                 className={clsx('px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors',
                   filtro === f.value
                     ? 'bg-nice-500 text-white'
@@ -115,7 +117,7 @@ export default function PedidosPage() {
               </button>
             ))}
           </div>
-          <select className="input sm:w-56 print:hidden" value={ordem}
+          <select aria-label="Ordenar pedidos" className="input sm:w-56 print:hidden" value={ordem}
             onChange={e => mudarOrdem(e.target.value as OrdemPedidos)}>
             {ORDENS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -172,7 +174,10 @@ export default function PedidosPage() {
                             Ver <ArrowRight className="w-3 h-3" />
                           </Link>
                           {permissoes.excluirPedido && (
-                            <button onClick={() => handleDeletar(p.id)} className="text-red-400 hover:text-red-600 transition-colors">
+                            <button onClick={() => handleDeletar(p.id)}
+                              aria-label={`Excluir pedido #${p.numero}`}
+                              title={`Excluir pedido #${p.numero}`}
+                              className="text-red-400 hover:text-red-600 transition-colors">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           )}

@@ -276,6 +276,7 @@ export default function TerceirizadasPage() {
                     </div>
                   </div>
                   <button onClick={() => setModalPrestador(p)} title="Editar prestador"
+                    aria-label={`Editar prestador ${p.nome}`}
                     className="text-fraco hover:text-marca-texto transition-colors shrink-0">
                     <Pencil className="w-4 h-4" />
                   </button>
@@ -333,11 +334,13 @@ export default function TerceirizadasPage() {
                             </button>
                           )}
                           <button onClick={() => abrirEdicao(t)} title="Editar lançamento"
+                            aria-label={`Editar lançamento de ${t.nome}`}
                             className="text-fraco hover:text-marca-texto transition-colors">
                             <Pencil className="w-4 h-4" />
                           </button>
                           {permissoes.excluirTerceirizada && (
                             <button onClick={() => handleExcluir(t)} title="Excluir lançamento"
+                              aria-label={`Excluir lançamento de ${t.nome}`}
                               className="text-red-400 hover:text-red-600 transition-colors">
                               <Trash2 className="w-4 h-4" />
                             </button>
