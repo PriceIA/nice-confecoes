@@ -178,7 +178,14 @@ body {
     @apply rounded-2xl border p-6;
     background-color: var(--superficie);
     border-color: var(--borda);
-    box-shadow: var(--sombra);
+  }
+  /* Ghost card (Fase G2.1): a classe declarava borda E sombra. A sombra some
+     no escuro e sob luz de galpão, então a borda é que carrega a separação
+     do fundo nos dois casos — a sombra fica só para modal/dropdown
+     (--sombra-media/--sombra-forte), que são elevação de verdade. */
+  .card:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 2px;
   }
   .btn-primary {
     @apply text-white font-medium px-4 py-2 rounded-xl transition-colors duration-150 flex items-center gap-2;
@@ -186,6 +193,15 @@ body {
   }
   .btn-primary:hover {
     background-color: var(--marca-hover);
+  }
+  .btn-primary:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 2px;
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--marca);
   }
   .btn-secondary {
     @apply font-medium px-4 py-2 rounded-xl border transition-colors duration-150 flex items-center gap-2;
@@ -195,6 +211,15 @@ body {
   }
   .btn-secondary:hover {
     background-color: var(--superficie-2);
+  }
+  .btn-secondary:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 2px;
+  }
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--superficie);
   }
   /* Ação destrutiva (excluir). Precisa ser fundo SÓLIDO com texto branco, e por
      isso não pode usar bg-red-600: no tema escuro aquela escala vira tom claro,
@@ -206,6 +231,15 @@ body {
   .btn-perigo:hover {
     background-color: var(--perigo-hover);
   }
+  .btn-perigo:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 2px;
+  }
+  .btn-perigo:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--perigo);
+  }
   .btn-ghost {
     @apply font-medium px-3 py-2 rounded-xl transition-colors duration-150 flex items-center gap-2;
     color: var(--marca-texto);
@@ -213,8 +247,27 @@ body {
   .btn-ghost:hover {
     background-color: var(--marca-suave);
   }
+  .btn-ghost:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 2px;
+  }
+  .btn-ghost:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: transparent;
+  }
+  /* :active dos quatro .btn-* — feedback de clique. Fora do
+     prefers-reduced-motion: no-preference, o botão não se desloca nem 1px. */
+  @media (prefers-reduced-motion: no-preference) {
+    .btn-primary:active,
+    .btn-secondary:active,
+    .btn-ghost:active,
+    .btn-perigo:active {
+      transform: translateY(1px);
+    }
+  }
   .input {
-    @apply w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-nice-400 focus:border-transparent transition-all;
+    @apply w-full border rounded-xl px-3 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nice-400 focus-visible:border-transparent transition-all;
     background-color: var(--superficie);
     border-color: var(--borda-forte);
     color: var(--texto);
@@ -240,6 +293,16 @@ body {
   }
   .sidebar-link {
     @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150;
+  }
+  /* Anel de foco da sidebar: NÃO pode ser var(--marca)/var(--marca-borda) —
+     a sidebar é verde escura (bg-nice-800) nos dois temas, então um anel na
+     cor da marca fica quase invisível ali, e var(--marca-borda) muda no
+     escuro enquanto a sidebar não muda. #b4e0ab é o nice-200 do
+     tailwind.config.ts, literal de propósito: a paleta nice-* é fixa nos
+     dois temas, então precisa ficar fixa aqui também. */
+  .sidebar-link:focus-visible {
+    outline: 2px solid #b4e0ab;
+    outline-offset: 2px;
   }
 }
 
