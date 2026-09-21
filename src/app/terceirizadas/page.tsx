@@ -2,9 +2,9 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { PlusCircle, CheckCircle2, Clock, Truck, Pencil, Trash2, AlertTriangle, Users } from 'lucide-react'
-import { getTerceirizadas, criarTerceirizada, atualizarTerceirizada, deletarTerceirizada, getPedidos } from '@/lib/store'
+import { getTerceirizadas, criarTerceirizada, atualizarTerceirizada, deletarTerceirizada, getPedidosLista } from '@/lib/store'
 import { getPrestadores, getServicos } from '@/lib/prestadores'
-import { Terceirizada, Pedido, Prestador, PrestadorServico } from '@/types'
+import { Terceirizada, PedidoLista, Prestador, PrestadorServico } from '@/types'
 import { useMembro } from '@/components/AuthProvider'
 import { classificarErro, sufixoCodigo } from '@/lib/erros'
 import { useSkeletonDelay } from '@/lib/hooks'
@@ -68,7 +68,7 @@ function descreverFalhaCarregar(err: unknown): string {
 export default function TerceirizadasPage() {
   const { permissoes } = useMembro()
   const [lista, setLista] = useState<Terceirizada[]>([])
-  const [pedidos, setPedidos] = useState<Pedido[]>([])
+  const [pedidos, setPedidos] = useState<PedidoLista[]>([])
   const [prestadores, setPrestadores] = useState<Prestador[]>([])
   const [servicos, setServicos] = useState<PrestadorServico[]>([])
   const [modal, setModal] = useState(false)
@@ -85,11 +85,14 @@ export default function TerceirizadasPage() {
 
   const carregar = async () => {
     try {
+      // Fase G4, item 1: só precisa de id + número + cliente pro seletor de
+      // pedido do lançamento — getPedidosLista() já exclui vetorizacao,
+      // observacoes e o resto do cliente, e o filtro de status vai na query.
       const [lista, pedidosData, prestadoresData, servicosData] = await Promise.all([
-        getTerceirizadas(), getPedidos(), getPrestadores(), getServicos(),
+        getTerceirizadas(), getPedidosLista({ statusExcluir: ['entregue', 'cancelado'] }), getPrestadores(), getServicos(),
       ])
       setLista(lista)
-      setPedidos(pedidosData.filter(p => !['entregue', 'cancelado'].includes(p.status)))
+      setPedidos(pedidosData)
       setPrestadores(prestadoresData)
       setServicos(servicosData)
     } catch (err) {

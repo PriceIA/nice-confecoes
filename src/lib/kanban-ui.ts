@@ -138,7 +138,10 @@ export function badgePrazo(prazo: string | null, concluido = false): BadgePrazo 
  * concluídos OU marcados como não aplicáveis a ele (Fase C0) — é o mesmo
  * critério que libera /entregas, ver CLAUDE.md regra 9.
  */
-export function pedidoConcluido(pedido: Pedido): boolean {
+// Pick<Pedido, 'progresso'> (Fase G4), não Pedido inteiro: /entregas passa um
+// PedidoLista (getPedidosLista), que só tem os campos que a lista usa. Pedido
+// continua satisfazendo isso sem mudar nenhum outro chamador.
+export function pedidoConcluido(pedido: Pick<Pedido, 'progresso'>): boolean {
   const setores = Object.values(pedido.progresso ?? {})
   return setores.length > 0 && setores.every(s => s.status === 'concluido' || s.status === 'nao_se_aplica')
 }

@@ -182,8 +182,12 @@ export function ordenarPedidos<T extends Pick<Pedido, 'numero' | 'dataEntrada' |
  * O predicado de busca de pedido, compartilhado por /pedidos e /dashboard.
  * Procura em nome do cliente, empresa e número do pedido. Busca vazia casa com tudo.
  */
+// Estrutural, não Pick<Pedido, ...> (Fase G4): `cliente` de PedidoLista
+// (getPedidosLista) tem só 3 campos, não os 7 de Pedido['cliente'] — Pick
+// exigiria o formato completo. Pedido continua satisfazendo isto sem mudar
+// nenhum chamador existente.
 export function pedidoCasaComBusca(
-  pedido: Pick<Pedido, 'numero' | 'cliente'>,
+  pedido: { numero: string; cliente: { nome: string; empresa?: string } },
   busca: string,
 ): boolean {
   const q = busca.trim().toLowerCase()

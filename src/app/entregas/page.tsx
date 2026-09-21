@@ -2,10 +2,10 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, PackageCheck, ArrowRight } from 'lucide-react'
-import { getPedidos, atualizarPedido } from '@/lib/store'
+import { getPedidosLista, atualizarPedido } from '@/lib/store'
 import { pedidoConcluido, badgePrazo } from '@/lib/kanban-ui'
 import { totalPecas } from '@/lib/helpers'
-import { Pedido } from '@/types'
+import { PedidoLista } from '@/types'
 import { useMembro } from '@/components/AuthProvider'
 import { classificarErro, sufixoCodigo } from '@/lib/erros'
 import { useSkeletonDelay } from '@/lib/hooks'
@@ -38,7 +38,7 @@ function descreverFalhaCarregar(err: unknown): string {
  */
 export default function EntregasPage() {
   const { permissoes } = useMembro()
-  const [pedidos, setPedidos] = useState<Pedido[]>([])
+  const [pedidos, setPedidos] = useState<PedidoLista[]>([])
   const [loading, setLoading] = useState(true)
   const [marcando, setMarcando] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
@@ -47,7 +47,11 @@ export default function EntregasPage() {
   const carregar = async () => {
     setErro(null)
     try {
-      setPedidos(await getPedidos())
+      // Fase G4, item 2: pedidos entregue/cancelado nunca aparecem aqui —
+      // excluí-los na própria query corta o payload antes de baixar; o
+      // critério real (pedidoConcluido, todos os setores concluídos ou não
+      // aplicáveis) continua no cliente, porque depende do JSONB de progresso.
+      setPedidos(await getPedidosLista({ statusExcluir: ['entregue', 'cancelado'] }))
     } catch (err) {
       setErro(descreverFalhaCarregar(err))
     } finally {
@@ -57,11 +61,13 @@ export default function EntregasPage() {
 
   useEffect(() => { carregar() }, [])
 
+  // entregue/cancelado já saem na própria query (carregar) — aqui só falta o
+  // critério que depende do JSONB de progresso, que a query não expressa.
   const prontos = pedidos
-    .filter(p => p.status !== 'entregue' && p.status !== 'cancelado' && pedidoConcluido(p))
+    .filter(pedidoConcluido)
     .sort((a, b) => new Date(a.dataEntrega).getTime() - new Date(b.dataEntrega).getTime())
 
-  async function marcarEntregue(pedido: Pedido) {
+  async function marcarEntregue(pedido: PedidoLista) {
     if (!confirm(`Marcar o pedido #${pedido.numero} (${pedido.cliente.nome}) como entregue?`)) return
     setErro(null)
     setMarcando(pedido.id)

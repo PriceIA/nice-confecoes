@@ -3,9 +3,9 @@ import { memo, startTransition, useCallback, useEffect, useMemo, useState } from
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { AlertTriangle, PlusCircle, Search, ArrowRight, Trash2 } from 'lucide-react'
-import { getPedidos, deletarPedido } from '@/lib/store'
+import { getPedidosLista, deletarPedido } from '@/lib/store'
 import { ORDENS_DATA, OrdemPedidos, STATUS_CONFIG, ordenarPedidos, pedidoCasaComBusca, totalPecas } from '@/lib/helpers'
-import { Pedido, StatusPedido } from '@/types'
+import { PedidoLista, StatusPedido } from '@/types'
 import { useMembro } from '@/components/AuthProvider'
 import { classificarErro, sufixoCodigo } from '@/lib/erros'
 import { useSkeletonDelay } from '@/lib/hooks'
@@ -43,7 +43,7 @@ const ORDEM_CHAVE = 'nice-ordem-pedidos'
 const ORDENS = ORDENS_DATA
 
 type LinhaPedidoProps = {
-  pedido: Pedido
+  pedido: PedidoLista
   podeExcluir: boolean
   onExcluir: (id: string) => void
 }
@@ -95,7 +95,7 @@ const LinhaPedido = memo(function LinhaPedido({ pedido: p, podeExcluir, onExclui
 
 export default function PedidosPage() {
   const { permissoes } = useMembro()
-  const [pedidos, setPedidos] = useState<Pedido[]>([])
+  const [pedidos, setPedidos] = useState<PedidoLista[]>([])
   const [filtro, setFiltro] = useState<StatusPedido | 'todos'>('todos')
   // `busca` é o valor do input (urgente — precisa acompanhar a digitação sem
   // atraso). `buscaAplicada` é quem entra no useMemo de filtro/ordenação, e
@@ -119,7 +119,9 @@ export default function PedidosPage() {
   const carregar = useCallback(async () => {
     setErro(null)
     try {
-      setPedidos(await getPedidos())
+      // Fase G4, item 4: a tela que mais se beneficia — sem vetorizacao,
+      // observacoes e o cliente reduzido a nome/empresa/telefone.
+      setPedidos(await getPedidosLista())
     } catch (err) {
       setErro(descreverFalhaCarregar(err))
     } finally {

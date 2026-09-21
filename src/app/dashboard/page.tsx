@@ -7,7 +7,7 @@ import {
   Factory, AlertTriangle, ClipboardCheck,
   PlusCircle, ArrowRight, TrendingUp, HandCoins, Search
 } from 'lucide-react'
-import { getPedidos, getClientes, pedidosStats } from '@/lib/store'
+import { getPedidos, getTotalClientes, pedidosStats } from '@/lib/store'
 import {
   STATUS_CONFIG, totalPecas, resumoProgresso, prazoTexto,
   FILTROS_DASHBOARD, FiltroDashboard, pedidoCasaComBusca, ordenarPedidos,
@@ -49,10 +49,13 @@ export default function DashboardPage() {
     (async () => {
       setErro(null)
       try {
-        const [data, clientes] = await Promise.all([getPedidos(), getClientes()])
+        // Fase G4, item 3: só usávamos clientes.length — baixar as linhas
+        // todas pra isso era desperdício puro. getTotalClientes() pede a
+        // contagem ao Postgres (count: 'exact', head: true) sem trazer nada.
+        const [data, total] = await Promise.all([getPedidos(), getTotalClientes()])
         setPedidos(data)
         setStats(pedidosStats(data))
-        setTotalClientes(clientes.length)
+        setTotalClientes(total)
       } catch (err) {
         setErro(descreverFalhaCarregar(err))
       } finally {
