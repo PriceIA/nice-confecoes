@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { AlertTriangle, PlusCircle, Search, ArrowRight, Trash2 } from 'lucide-react'
@@ -42,11 +42,67 @@ const ORDEM_CHAVE = 'nice-ordem-pedidos'
 // Duas cópias divergem no dia em que alguém corrigir só uma.
 const ORDENS = ORDENS_DATA
 
+type LinhaPedidoProps = {
+  pedido: Pedido
+  podeExcluir: boolean
+  onExcluir: (id: string) => void
+}
+
+// React.memo (Fase G3): numa lista de dezenas de pedidos, sem isso toda tecla
+// da busca re-renderiza cada linha, mesmo as que não mudaram. Só funciona
+// porque `onExcluir` chega estável (useCallback no pai) — callback novo a
+// cada render furaria o memo (mesma armadilha do FluxoEtapas.tsx).
+const LinhaPedido = memo(function LinhaPedido({ pedido: p, podeExcluir, onExcluir }: LinhaPedidoProps) {
+  const sc = STATUS_CONFIG[p.status]
+  return (
+    <tr className="hover:bg-superficie-2 transition-colors">
+      <td className="px-6 py-4 font-semibold text-marca-texto num">#{p.numero}</td>
+      <td className="px-6 py-4">
+        <div className="font-medium text-conteudo">{p.cliente.nome}</div>
+        {p.cliente.empresa && <div className="text-xs text-fraco">{p.cliente.empresa}</div>}
+      </td>
+      <td className="px-6 py-4 text-sm text-suave">{p.consultor || <span className="text-fraco">—</span>}</td>
+      <td className="px-6 py-4">
+        {p.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600">urgente</span>}
+        {p.tipo === 'grande_volume' && <span className="badge bg-purple-100 text-purple-600">grande vol.</span>}
+        {p.tipo === 'normal' && <span className="text-fraco text-xs">normal</span>}
+      </td>
+      <td className="px-6 py-4 text-suave num">{totalPecas(p)} un.</td>
+      <td className="px-6 py-4">
+        <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
+      </td>
+      <td className="px-6 py-4 text-suave num">{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</td>
+      <td className="px-6 py-4 text-suave font-medium num">{format(new Date(p.dataEntrega), 'dd/MM/yyyy')}</td>
+      <td className="px-6 py-4">
+        <div className="flex items-center gap-2">
+          <Link href={`/pedidos/${p.id}`}
+            className="text-suave hover:text-marca-texto focus-visible:text-marca-texto font-medium text-xs flex items-center gap-1 rounded-lg px-1 -mx-1 py-1 -my-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nice-400">
+            Ver <ArrowRight className="w-3 h-3" />
+          </Link>
+          {podeExcluir && (
+            <button onClick={() => onExcluir(p.id)}
+              aria-label={`Excluir pedido #${p.numero}`}
+              title={`Excluir pedido #${p.numero}`}
+              className="btn-icone text-red-400 hover:text-red-600">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
+})
+
 export default function PedidosPage() {
   const { permissoes } = useMembro()
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [filtro, setFiltro] = useState<StatusPedido | 'todos'>('todos')
+  // `busca` é o valor do input (urgente — precisa acompanhar a digitação sem
+  // atraso). `buscaAplicada` é quem entra no useMemo de filtro/ordenação, e
+  // chega via startTransition (Fase G3): o React trata essa atualização como
+  // não urgente e não trava a digitação numa lista de dezenas de pedidos.
   const [busca, setBusca] = useState('')
+  const [buscaAplicada, setBuscaAplicada] = useState('')
   // Padrão = "entrega mais próxima" (Fase E1, 04/09/2026), igual /producao — as duas
   // telas abrem na mesma lógica agora. entrega_asc é crescente: data mais antiga primeiro.
   // Quem já escolheu uma ordem alguma vez tem valor salvo em ORDEM_CHAVE e o useEffect
@@ -56,7 +112,11 @@ export default function PedidosPage() {
   const [erro, setErro] = useState<string | null>(null)
   const mostrarSkeleton = useSkeletonDelay(carregando)
 
-  const carregar = async () => {
+  // useCallback (Fase G3): identidade estável entre renders. `handleDeletar`
+  // usa `carregar` internamente, então os dois precisam ser estáveis juntos —
+  // é o que permite <LinhaPedido> memoizado não re-renderizar por nada além
+  // de mudança real nos próprios dados.
+  const carregar = useCallback(async () => {
     setErro(null)
     try {
       setPedidos(await getPedidos())
@@ -65,9 +125,9 @@ export default function PedidosPage() {
     } finally {
       setCarregando(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { carregar() }, [])
+  useEffect(() => { carregar() }, [carregar])
 
   useEffect(() => {
     const salva = localStorage.getItem(ORDEM_CHAVE)
@@ -79,31 +139,37 @@ export default function PedidosPage() {
     localStorage.setItem(ORDEM_CHAVE, valor)
   }
 
-  const candidatos = pedidos.filter(p => {
-    const matchStatus = filtro === 'todos' || p.status === filtro
-    return matchStatus && pedidoCasaComBusca(p, busca)
-  })
+  // useMemo (Fase G3): sem isso, filtro + ordenação rodavam de novo em TODO
+  // render — inclusive um render que não mudou pedidos/filtro/busca/ordem
+  // nenhum (ex: abrir o modal de outra coisa). Deps primitivas, não o array
+  // `pedidos` mudando de referência sem motivo.
+  const filtrados = useMemo(() => {
+    const candidatos = pedidos.filter(p => {
+      const matchStatus = filtro === 'todos' || p.status === filtro
+      return matchStatus && pedidoCasaComBusca(p, buscaAplicada)
+    })
 
-  // Fase E1-b (04/09/2026): medição do E1 achou 10 dos 10 primeiros pedidos como
-  // entregue/cancelado quando ordenado por entrega_asc com o filtro "Todos" — pedidos já
-  // encerrados há meses empurravam os que realmente estão por vir para baixo da lista.
-  // Só nas ordens por ENTREGA (as únicas onde "mais antigo" pode significar "já acabou, não
-  // importa mais"), pedidos entregue/cancelado vão sempre para o fim, mantendo a ordenação
-  // normal dentro de cada grupo. Não mexe em ordenarPedidos/ORDENS_DATA (helpers.ts, também
-  // usado por /producao) nem no comportamento das ordens por entrada — só reorganiza aqui.
-  const filtrados = (ordem === 'entrega_asc' || ordem === 'entrega_desc')
-    ? [
-        ...ordenarPedidos(candidatos.filter(p => p.status !== 'entregue' && p.status !== 'cancelado'), ordem),
-        ...ordenarPedidos(candidatos.filter(p => p.status === 'entregue' || p.status === 'cancelado'), ordem),
-      ]
-    : ordenarPedidos(candidatos, ordem)
+    // Fase E1-b (04/09/2026): medição do E1 achou 10 dos 10 primeiros pedidos como
+    // entregue/cancelado quando ordenado por entrega_asc com o filtro "Todos" — pedidos já
+    // encerrados há meses empurravam os que realmente estão por vir para baixo da lista.
+    // Só nas ordens por ENTREGA (as únicas onde "mais antigo" pode significar "já acabou, não
+    // importa mais"), pedidos entregue/cancelado vão sempre para o fim, mantendo a ordenação
+    // normal dentro de cada grupo. Não mexe em ordenarPedidos/ORDENS_DATA (helpers.ts, também
+    // usado por /producao) nem no comportamento das ordens por entrada — só reorganiza aqui.
+    return (ordem === 'entrega_asc' || ordem === 'entrega_desc')
+      ? [
+          ...ordenarPedidos(candidatos.filter(p => p.status !== 'entregue' && p.status !== 'cancelado'), ordem),
+          ...ordenarPedidos(candidatos.filter(p => p.status === 'entregue' || p.status === 'cancelado'), ordem),
+        ]
+      : ordenarPedidos(candidatos, ordem)
+  }, [pedidos, filtro, buscaAplicada, ordem])
 
-  async function handleDeletar(id: string) {
+  const handleDeletar = useCallback(async (id: string) => {
     if (confirm('Deseja excluir este pedido?')) {
       await deletarPedido(id)
       carregar()
     }
-  }
+  }, [carregar])
 
   return (
     <div className="space-y-6">
@@ -130,7 +196,10 @@ export default function PedidosPage() {
               className="input pl-9"
               placeholder="Buscar por cliente, empresa ou número..."
               value={busca}
-              onChange={e => setBusca(e.target.value)}
+              onChange={e => {
+                setBusca(e.target.value)
+                startTransition(() => setBuscaAplicada(e.target.value))
+              }}
             />
           </div>
           <div className="flex flex-wrap gap-2">
@@ -209,7 +278,7 @@ export default function PedidosPage() {
             <div className="py-20 text-center text-fraco space-y-3">
               <p className="text-sm">Nenhum pedido corresponde à busca ou ao filtro.</p>
               <button type="button" className="btn-secondary mx-auto"
-                onClick={() => { setBusca(''); setFiltro('todos') }}>
+                onClick={() => { setBusca(''); setBuscaAplicada(''); setFiltro('todos') }}>
                 Limpar filtros
               </button>
             </div>
@@ -231,46 +300,9 @@ export default function PedidosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-borda">
-                {filtrados.map(p => {
-                  const sc = STATUS_CONFIG[p.status]
-                  return (
-                    <tr key={p.id} className="hover:bg-superficie-2 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-marca-texto num">#{p.numero}</td>
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-conteudo">{p.cliente.nome}</div>
-                        {p.cliente.empresa && <div className="text-xs text-fraco">{p.cliente.empresa}</div>}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-suave">{p.consultor || <span className="text-fraco">—</span>}</td>
-                      <td className="px-6 py-4">
-                        {p.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600">urgente</span>}
-                        {p.tipo === 'grande_volume' && <span className="badge bg-purple-100 text-purple-600">grande vol.</span>}
-                        {p.tipo === 'normal' && <span className="text-fraco text-xs">normal</span>}
-                      </td>
-                      <td className="px-6 py-4 text-suave num">{totalPecas(p)} un.</td>
-                      <td className="px-6 py-4">
-                        <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
-                      </td>
-                      <td className="px-6 py-4 text-suave num">{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</td>
-                      <td className="px-6 py-4 text-suave font-medium num">{format(new Date(p.dataEntrega), 'dd/MM/yyyy')}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <Link href={`/pedidos/${p.id}`}
-                            className="text-suave hover:text-marca-texto focus-visible:text-marca-texto font-medium text-xs flex items-center gap-1 rounded-lg px-1 -mx-1 py-1 -my-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nice-400">
-                            Ver <ArrowRight className="w-3 h-3" />
-                          </Link>
-                          {permissoes.excluirPedido && (
-                            <button onClick={() => handleDeletar(p.id)}
-                              aria-label={`Excluir pedido #${p.numero}`}
-                              title={`Excluir pedido #${p.numero}`}
-                              className="btn-icone text-red-400 hover:text-red-600">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {filtrados.map(p => (
+                  <LinhaPedido key={p.id} pedido={p} podeExcluir={permissoes.excluirPedido} onExcluir={handleDeletar} />
+                ))}
               </tbody>
             </table>
           </div>

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { getPedidos } from '@/lib/store'
 import { carregarEtapas } from '@/lib/etapas'
@@ -78,11 +78,104 @@ function casaRecorte(pedido: Pedido, recorte: Recorte): boolean {
   }
 }
 
+type CardPedidoProducaoProps = {
+  pedido: Pedido
+  etapas: EtapaProducao[]
+  catalogoSemente: boolean
+  podeEditarStatus: boolean
+  podeEditarFluxo: boolean
+  nomeMembro?: string
+  onGravado: () => void | Promise<void>
+  onAbrirModal: (id: string) => void
+}
+
+// React.memo (Fase G3): o card de maior ganho da fase, porque cada um monta
+// um <FluxoEtapas> com dnd-kit. Só funciona porque `onGravado` e `onAbrirModal`
+// chegam com identidade estável (useCallback/setState no pai) — um callback
+// novo por render furaria o memo sem dar erro nenhum, só sem efeito.
+const CardPedidoProducao = memo(function CardPedidoProducao({
+  pedido, etapas, catalogoSemente, podeEditarStatus, podeEditarFluxo, nomeMembro, onGravado, onAbrirModal,
+}: CardPedidoProducaoProps) {
+  const sc = STATUS_CONFIG[pedido.status]
+  // Mesma conta que o filtro "quase prontos" usa (helpers.ts):
+  // setor "não se aplica" sai do numerador E do denominador.
+  const { total: aplicaveis, concluidos, pct: progPct } = resumoProgresso(pedido.progresso)
+  // "Segunda porta": quem pulou o modal ao concluir o acabamento
+  // precisa de um jeito de reabri-lo — senão sobra ciclar o setor
+  // três vezes só pra ver a pergunta de novo.
+  const podeLiberarEnvio = pedido.progresso.acabamento?.status === 'concluido' &&
+    setoresPendentesEnvio(pedido.progresso).length > 0
+
+  return (
+    <div className="card space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-marca-texto num">#{pedido.numero}</span>
+              <span className="font-medium text-conteudo text-sm">{pedido.cliente.nome}</span>
+              {pedido.cliente.empresa && <span className="text-fraco text-xs">— {pedido.cliente.empresa}</span>}
+              {pedido.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600 text-xs">urgente</span>}
+            </div>
+          </div>
+        </div>
+        <Link href={`/pedidos/${pedido.id}`} className="text-marca-texto hover:text-marca-texto text-xs font-medium flex items-center gap-1">
+          Detalhe <ArrowRight className="w-3 h-3" />
+        </Link>
+      </div>
+
+      {/* Barra de progresso */}
+      <div>
+        <div className="flex justify-between text-xs text-fraco mb-1.5">
+          <span>{concluidos} de {aplicaveis} setores concluídos</span>
+          <span className="font-medium text-marca-texto num">{progPct}%</span>
+        </div>
+        <div
+          role="progressbar"
+          aria-valuenow={progPct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`Progresso do pedido #${pedido.numero}`}
+          className="w-full bg-superficie-3 rounded-full h-2"
+        >
+          <div className="bg-nice-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progPct}%` }} />
+        </div>
+      </div>
+
+      {/* Etapas do pedido — ordem, status, lixeira e adicionar */}
+      <FluxoEtapas
+        pedidoId={pedido.id}
+        progresso={pedido.progresso}
+        etapas={etapas}
+        catalogoSemente={catalogoSemente}
+        podeEditarStatus={podeEditarStatus}
+        podeEditarFluxo={podeEditarFluxo}
+        nomeMembro={nomeMembro}
+        onGravado={onGravado}
+        onAcabamentoConcluido={() => onAbrirModal(pedido.id)}
+      />
+
+      {podeLiberarEnvio && (
+        <Dica texto="Confere as etapas que ficaram pendentes antes de liberar">
+          <button type="button" onClick={() => onAbrirModal(pedido.id)}
+            className="text-marca-texto text-xs font-medium hover:underline">
+            Pronto para envio?
+          </button>
+        </Dica>
+      )}
+    </div>
+  )
+})
+
 export default function ProducaoPage() {
   const { membro, permissoes } = useMembro()
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [modalPedidoId, setModalPedidoId] = useState<string | null>(null)
+  // Mesmo padrão de /pedidos e /dashboard (Fase G3): `busca` acompanha o
+  // input sem atraso, `buscaAplicada` é quem entra no useMemo e chega via
+  // startTransition.
   const [busca, setBusca] = useState('')
+  const [buscaAplicada, setBuscaAplicada] = useState('')
   const [recorte, setRecorte] = useState<Recorte>('todos')
   const [ordem, setOrdem] = useState<OrdemPedidos>('entrega_asc')
   const [etapas, setEtapas] = useState<EtapaProducao[]>([])
@@ -91,7 +184,11 @@ export default function ProducaoPage() {
   const [erro, setErro] = useState<string | null>(null)
   const mostrarSkeleton = useSkeletonDelay(carregando)
 
-  const carregar = async () => {
+  // useCallback (Fase G3): FluxoEtapas recebe isto como `onGravado` — sem
+  // identidade estável, o React.memo do CardPedidoProducao não segura nada
+  // (é a armadilha que a spec da fase nomeia: callback novo por render fura
+  // o memo em silêncio, sem erro nenhum).
+  const carregar = useCallback(async () => {
     setErro(null)
     try {
       // Catálogo e pedidos em paralelo: sem o catálogo a tela não sabe o nome
@@ -108,9 +205,9 @@ export default function ProducaoPage() {
     } finally {
       setCarregando(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { carregar() }, [])
+  useEffect(() => { carregar() }, [carregar])
 
   // A busca NÃO é guardada de propósito: uma busca salva esconderia pedidos
   // logo ao abrir a tela, e a pessoa acharia que sumiram.
@@ -138,9 +235,13 @@ export default function ProducaoPage() {
     }
   }
 
-  const visiveis = ordenarPedidos(
+  // useMemo (Fase G3): filtro + recorte + ordenação rodavam de novo em todo
+  // render. `casaRecorte` chama `resumoProgresso` uma vez por pedido — sem o
+  // memo, isso acontecia a cada tecla da busca, mesmo pra pedido que a busca
+  // nem tocou.
+  const visiveis = useMemo(() => ordenarPedidos(
     pedidos.filter(p => {
-      const q = busca.trim().toLowerCase()
+      const q = buscaAplicada.trim().toLowerCase()
       const casaBusca = !q
         || p.numero.toLowerCase().includes(q)
         || p.cliente.nome.toLowerCase().includes(q)
@@ -148,7 +249,7 @@ export default function ProducaoPage() {
       return casaBusca && casaRecorte(p, recorte)
     }),
     ordem,
-  )
+  ), [pedidos, buscaAplicada, recorte, ordem])
 
   const filtrando = visiveis.length !== pedidos.length
 
@@ -185,7 +286,10 @@ export default function ProducaoPage() {
                 className="input pl-9"
                 placeholder="Buscar por número, cliente ou empresa..."
                 value={busca}
-                onChange={e => setBusca(e.target.value)}
+                onChange={e => {
+                  setBusca(e.target.value)
+                  startTransition(() => setBuscaAplicada(e.target.value))
+                }}
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -244,82 +348,25 @@ export default function ProducaoPage() {
         <div className="card py-20 text-center text-fraco space-y-3">
           <p className="text-sm">Nenhum pedido corresponde ao filtro.</p>
           <button type="button" className="btn-secondary mx-auto"
-            onClick={() => { setBusca(''); guardarPrefs({ recorte: 'todos' }) }}>
+            onClick={() => { setBusca(''); setBuscaAplicada(''); guardarPrefs({ recorte: 'todos' }) }}>
             Limpar filtros
           </button>
         </div>
       ) : (
         <div className="space-y-4">
-          {visiveis.map(pedido => {
-            const sc = STATUS_CONFIG[pedido.status]
-            // Mesma conta que o filtro "quase prontos" usa (helpers.ts):
-            // setor "não se aplica" sai do numerador E do denominador.
-            const { total: aplicaveis, concluidos, pct: progPct } = resumoProgresso(pedido.progresso)
-            // "Segunda porta": quem pulou o modal ao concluir o acabamento
-            // precisa de um jeito de reabri-lo — senão sobra ciclar o setor
-            // três vezes só pra ver a pergunta de novo.
-            const podeLiberarEnvio = pedido.progresso.acabamento?.status === 'concluido' &&
-              setoresPendentesEnvio(pedido.progresso).length > 0
-            return (
-              <div key={pedido.id} className="card space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-marca-texto num">#{pedido.numero}</span>
-                        <span className="font-medium text-conteudo text-sm">{pedido.cliente.nome}</span>
-                        {pedido.cliente.empresa && <span className="text-fraco text-xs">— {pedido.cliente.empresa}</span>}
-                        {pedido.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600 text-xs">urgente</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <Link href={`/pedidos/${pedido.id}`} className="text-marca-texto hover:text-marca-texto text-xs font-medium flex items-center gap-1">
-                    Detalhe <ArrowRight className="w-3 h-3" />
-                  </Link>
-                </div>
-
-                {/* Barra de progresso */}
-                <div>
-                  <div className="flex justify-between text-xs text-fraco mb-1.5">
-                    <span>{concluidos} de {aplicaveis} setores concluídos</span>
-                    <span className="font-medium text-marca-texto num">{progPct}%</span>
-                  </div>
-                  <div
-                    role="progressbar"
-                    aria-valuenow={progPct}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={`Progresso do pedido #${pedido.numero}`}
-                    className="w-full bg-superficie-3 rounded-full h-2"
-                  >
-                    <div className="bg-nice-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progPct}%` }} />
-                  </div>
-                </div>
-
-                {/* Etapas do pedido — ordem, status, lixeira e adicionar */}
-                <FluxoEtapas
-                  pedidoId={pedido.id}
-                  progresso={pedido.progresso}
-                  etapas={etapas}
-                  catalogoSemente={catalogoSemente}
-                  podeEditarStatus={permissoes.editarProducao}
-                  podeEditarFluxo={permissoes.editarFluxoProducao}
-                  nomeMembro={membro?.nome}
-                  onGravado={carregar}
-                  onAcabamentoConcluido={() => setModalPedidoId(pedido.id)}
-                />
-
-                {podeLiberarEnvio && (
-                  <Dica texto="Confere as etapas que ficaram pendentes antes de liberar">
-                    <button type="button" onClick={() => setModalPedidoId(pedido.id)}
-                      className="text-marca-texto text-xs font-medium hover:underline">
-                      Pronto para envio?
-                    </button>
-                  </Dica>
-                )}
-              </div>
-            )
-          })}
+          {visiveis.map(pedido => (
+            <CardPedidoProducao
+              key={pedido.id}
+              pedido={pedido}
+              etapas={etapas}
+              catalogoSemente={catalogoSemente}
+              podeEditarStatus={permissoes.editarProducao}
+              podeEditarFluxo={permissoes.editarFluxoProducao}
+              nomeMembro={membro?.nome}
+              onGravado={carregar}
+              onAbrirModal={setModalPedidoId}
+            />
+          ))}
         </div>
       )}
 

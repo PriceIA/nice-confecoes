@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { startTransition, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -37,7 +37,10 @@ export default function DashboardPage() {
   const [totalClientes, setTotalClientes] = useState(0)
   const [stats, setStats] = useState({ emProducao: 0, urgentes: 0, entregaEm7dias: 0, aguardandoProducao: 0 })
   const [filtro, setFiltro] = useState<FiltroDashboard>('todos')
+  // Mesmo padrão de /pedidos (Fase G3): `busca` acompanha o input sem atraso,
+  // `buscaAplicada` é quem entra no useMemo e chega via startTransition.
   const [busca, setBusca] = useState('')
+  const [buscaAplicada, setBuscaAplicada] = useState('')
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const mostrarSkeleton = useSkeletonDelay(carregando)
@@ -58,39 +61,49 @@ export default function DashboardPage() {
     })()
   }, [])
 
-  const ativos = pedidos.filter(p => !['entregue', 'cancelado'].includes(p.status))
-  const urgentes = pedidos.filter(p => p.tipo === 'urgente' && !['entregue', 'cancelado'].includes(p.status))
+  // useMemo (Fase G3): estas seis derivações rodavam de novo em todo render —
+  // inclusive um render disparado por algo que não muda pedidos/filtro/busca
+  // nenhum. Deps primitivas onde possível.
+  const ativos = useMemo(
+    () => pedidos.filter(p => !['entregue', 'cancelado'].includes(p.status)),
+    [pedidos],
+  )
+  const urgentes = useMemo(
+    () => pedidos.filter(p => p.tipo === 'urgente' && !['entregue', 'cancelado'].includes(p.status)),
+    [pedidos],
+  )
 
   // A "notificação" do gestor. Não é push nem e-mail: é a lista aparecendo no
   // lugar em que ele já entra todo dia. Enquanto o pedido estiver aqui, ele
   // está PARADO — não avança para produção sem a decisão.
-  const aguardandoAprovacao = pedidos.filter(
-    p => excecaoPendente(p) && !['entregue', 'cancelado'].includes(p.status),
+  const aguardandoAprovacao = useMemo(
+    () => pedidos.filter(p => excecaoPendente(p) && !['entregue', 'cancelado'].includes(p.status)),
+    [pedidos],
   )
 
   const filtrando = filtro !== 'todos' || busca.trim() !== ''
 
-  const visiveis = ordenarPedidos(
+  const visiveis = useMemo(() => ordenarPedidos(
     ativos.filter(p => {
       const matchFiltro =
         filtro === 'todos' ? true
         : filtro === 'urgentes' ? p.tipo === 'urgente'
         : p.status === filtro
-      return matchFiltro && pedidoCasaComBusca(p, busca)
+      return matchFiltro && pedidoCasaComBusca(p, buscaAplicada)
     }),
     'entrega_asc',
-  )
+  ), [ativos, filtro, buscaAplicada])
 
   const linhas = filtrando ? visiveis : visiveis.slice(0, 10)
 
-  const pecasEmProducao = pedidos
+  const pecasEmProducao = useMemo(() => pedidos
     .filter(p => p.status === 'em_producao')
-    .reduce((acc, p) => acc + totalPecas(p), 0)
+    .reduce((acc, p) => acc + totalPecas(p), 0), [pedidos])
 
-  const urgentesVencidos = urgentes.filter(p => {
+  const urgentesVencidos = useMemo(() => urgentes.filter(p => {
     const { dias } = prazoTexto(p.dataEntrega)
     return dias !== null && dias < 0
-  }).length
+  }).length, [urgentes])
 
   const urgentesResumo = ordenarPedidos(urgentes, 'entrega_asc').slice(0, 2)
 
@@ -232,7 +245,10 @@ export default function DashboardPage() {
                 className="input pl-9"
                 placeholder="Buscar por cliente, empresa ou número..."
                 value={busca}
-                onChange={e => setBusca(e.target.value)}
+                onChange={e => {
+                  setBusca(e.target.value)
+                  startTransition(() => setBuscaAplicada(e.target.value))
+                }}
               />
             </div>
             {FILTROS_DASHBOARD.map(f => (
@@ -286,7 +302,7 @@ export default function DashboardPage() {
               <Search className="w-10 h-10 mx-auto mb-3 opacity-40" />
               <p className="text-sm">Nenhum pedido ativo casa com esse filtro.</p>
               <button
-                onClick={() => { setFiltro('todos'); setBusca('') }}
+                onClick={() => { setFiltro('todos'); setBusca(''); setBuscaAplicada('') }}
                 className="text-marca-texto text-sm font-medium mt-2 inline-block hover:underline"
               >
                 Limpar filtro
