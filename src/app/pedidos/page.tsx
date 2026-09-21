@@ -151,7 +151,7 @@ export default function PedidosPage() {
                   const sc = STATUS_CONFIG[p.status]
                   return (
                     <tr key={p.id} className="hover:bg-superficie-2 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-marca-texto">#{p.numero}</td>
+                      <td className="px-6 py-4 font-semibold text-marca-texto num">#{p.numero}</td>
                       <td className="px-6 py-4">
                         <div className="font-medium text-conteudo">{p.cliente.nome}</div>
                         {p.cliente.empresa && <div className="text-xs text-fraco">{p.cliente.empresa}</div>}
@@ -162,12 +162,12 @@ export default function PedidosPage() {
                         {p.tipo === 'grande_volume' && <span className="badge bg-purple-100 text-purple-600">grande vol.</span>}
                         {p.tipo === 'normal' && <span className="text-fraco text-xs">normal</span>}
                       </td>
-                      <td className="px-6 py-4 text-suave">{totalPecas(p)} un.</td>
+                      <td className="px-6 py-4 text-suave num">{totalPecas(p)} un.</td>
                       <td className="px-6 py-4">
                         <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
                       </td>
-                      <td className="px-6 py-4 text-suave">{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</td>
-                      <td className="px-6 py-4 text-suave font-medium">{format(new Date(p.dataEntrega), 'dd/MM/yyyy')}</td>
+                      <td className="px-6 py-4 text-suave num">{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</td>
+                      <td className="px-6 py-4 text-suave font-medium num">{format(new Date(p.dataEntrega), 'dd/MM/yyyy')}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <Link href={`/pedidos/${p.id}`}

@@ -217,7 +217,7 @@ export default function TerceirizadasPage() {
             <Clock className="w-5 h-5 text-orange-500" />
           </div>
           <div>
-            <div className="text-xl font-bold text-titulo">R$ {totalAPagar.toFixed(2)}</div>
+            <div className="text-xl font-bold text-titulo num">R$ {totalAPagar.toFixed(2)}</div>
             <div className="text-xs text-fraco">A pagar</div>
           </div>
         </div>
@@ -226,7 +226,7 @@ export default function TerceirizadasPage() {
             <Truck className="w-5 h-5 text-blue-500" />
           </div>
           <div>
-            <div className="text-xl font-bold text-titulo">{lista.filter(t => t.status === 'enviado').length}</div>
+            <div className="text-xl font-bold text-titulo num">{lista.filter(t => t.status === 'enviado').length}</div>
             <div className="text-xs text-fraco">Aguardando retorno</div>
           </div>
         </div>
@@ -235,7 +235,7 @@ export default function TerceirizadasPage() {
             <CheckCircle2 className="w-5 h-5 text-nice-500" />
           </div>
           <div>
-            <div className="text-xl font-bold text-titulo">{lista.filter(t => t.status === 'retornado').length}</div>
+            <div className="text-xl font-bold text-titulo num">{lista.filter(t => t.status === 'retornado').length}</div>
             <div className="text-xs text-fraco">Retornados</div>
           </div>
         </div>
@@ -314,11 +314,11 @@ export default function TerceirizadasPage() {
                     <tr key={t.id} className="hover:bg-superficie-2">
                       <td className="px-6 py-4 font-medium text-conteudo">{t.nome}</td>
                       <td className="px-6 py-4"><span className={clsx('badge', tc.bg, tc.color)}>{tc.label}</span></td>
-                      <td className="px-6 py-4 text-suave">{t.numeroPedido ? `#${t.numeroPedido}` : '—'}</td>
-                      <td className="px-6 py-4 text-suave">{format(new Date(t.dataEnvio), 'dd/MM/yyyy')}</td>
+                      <td className="px-6 py-4 text-suave num">{t.numeroPedido ? `#${t.numeroPedido}` : '—'}</td>
+                      <td className="px-6 py-4 text-suave num">{format(new Date(t.dataEnvio), 'dd/MM/yyyy')}</td>
                       <td className="px-6 py-4">
-                        <div className="font-medium text-conteudo">R$ {t.valorCombinado.toFixed(2)}</div>
-                        {t.valorPago > 0 && <div className="text-xs text-green-600">Pago: R$ {t.valorPago.toFixed(2)}</div>}
+                        <div className="font-medium text-conteudo num">R$ {t.valorCombinado.toFixed(2)}</div>
+                        {t.valorPago > 0 && <div className="text-xs text-green-600 num">Pago: R$ {t.valorPago.toFixed(2)}</div>}
                       </td>
                       <td className="px-6 py-4">
                         <span className={clsx('badge', sc.bg, sc.color, 'gap-1')}>

@@ -42,8 +42,11 @@ Todo módulo novo segue este padrão — não invente componentes ou cores fora 
 - **Cards:** brancos, `rounded-2xl`, borda `gray-100`, sombra leve. Fundo da página `#f4f6f4`.
 - **Fonte:** Inter.
 - **Classes utilitárias** em `src/app/globals.css` — use estas em vez de escrever Tailwind solto:
-  `.card`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-perigo`, `.input`, `.label`,
-  `.badge`, `.sidebar-link`
+  `.card`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-perigo`, `.btn-icone`,
+  `.input`, `.label`, `.badge`, `.sidebar-link`, `.num`. `.btn-icone` é o padrão pra botão
+  só-de-ícone (alvo de toque, hover, foco — a cor fica com quem usa). `.num` é
+  `tabular-nums`, pra dígito de tabela/lista não dançar (número de pedido, data, valor,
+  percentual).
 - **Cores: ver a seção "Tema claro/escuro" abaixo.** Nunca escreva `bg-white` ou
   `text-gray-500` numa tela — o sistema tem tema escuro e cor literal não reage a ele.
 - **Responsivo:** sidebar fixa a partir de `md:`; no mobile vira topbar + drawer

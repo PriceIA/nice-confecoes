@@ -942,14 +942,14 @@ export default function DetalhePedidoPage() {
                           {p.descricao || `Parcela ${i + 1}`}
                         </p>
                         {p.dataPrevista && (
-                          <p className="text-xs text-fraco">
+                          <p className="text-xs text-fraco num">
                             Previsto: {format(new Date(p.dataPrevista + 'T00:00:00'), 'dd/MM/yyyy')}
                             {p.dataPagamento && ` · Pago: ${format(new Date(p.dataPagamento + 'T00:00:00'), 'dd/MM/yyyy')}`}
                           </p>
                         )}
                       </div>
                     </div>
-                    <span className={clsx('font-semibold', p.pago ? 'text-green-700' : 'text-conteudo')}>
+                    <span className={clsx('font-semibold num', p.pago ? 'text-green-700' : 'text-conteudo')}>
                       R$ {(p.valor || 0).toFixed(2)}
                     </span>
                   </div>
@@ -958,16 +958,16 @@ export default function DetalhePedidoPage() {
               <div className="border-t pt-3 space-y-1.5 text-sm">
                 <div className="flex justify-between">
                   <span className="text-suave">Total</span>
-                  <span className="font-semibold text-marca-texto">R$ {totalParcelas.toFixed(2)}</span>
+                  <span className="font-semibold text-marca-texto num">R$ {totalParcelas.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-suave">Pago</span>
-                  <span className="font-medium text-green-600">R$ {totalPago.toFixed(2)}</span>
+                  <span className="font-medium text-green-600 num">R$ {totalPago.toFixed(2)}</span>
                 </div>
                 {saldo > 0 && (
                   <div className="flex justify-between border-t pt-2">
                     <span className="text-suave">Saldo restante</span>
-                    <span className="font-semibold text-orange-600">R$ {saldo.toFixed(2)}</span>
+                    <span className="font-semibold text-orange-600 num">R$ {saldo.toFixed(2)}</span>
                   </div>
                 )}
               </div>
@@ -1045,7 +1045,7 @@ export default function DetalhePedidoPage() {
               )}
               <div className="flex justify-between">
                 <span className="text-fraco">Entrega</span>
-                <span className="font-medium">{format(new Date(pedido.dataEntrega), 'dd/MM/yyyy')}</span>
+                <span className="font-medium num">{format(new Date(pedido.dataEntrega), 'dd/MM/yyyy')}</span>
               </div>
               {/* De qual lista de preços os valores saíram. Pedido anterior às
                   múltiplas tabelas não registrou nenhuma — e a tela diz isso
@@ -1061,27 +1061,27 @@ export default function DetalhePedidoPage() {
               {permissoes.verFinanceiro && pedido.vetorizacao?.necessaria && (
                 <div className="flex justify-between">
                   <span className="text-fraco">Vetorização</span>
-                  <span className="font-medium text-marca-texto">R$ {pedido.vetorizacao.valor.toFixed(2)}</span>
+                  <span className="font-medium text-marca-texto num">R$ {pedido.vetorizacao.valor.toFixed(2)}</span>
                 </div>
               )}
               {permissoes.verFinanceiro && pedido.parcelas.length === 0 && (
                 <>
                   <div className="flex justify-between">
                     <span className="text-fraco">Total</span>
-                    <span className="font-semibold text-marca-texto">
+                    <span className="font-semibold text-marca-texto num">
                       {pedido.valorTotal > 0 ? `R$ ${pedido.valorTotal.toFixed(2)}` : '—'}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-fraco">Pago</span>
-                    <span className="font-medium text-green-600">
+                    <span className="font-medium text-green-600 num">
                       {pedido.valorPago > 0 ? `R$ ${pedido.valorPago.toFixed(2)}` : '—'}
                     </span>
                   </div>
                   {pedido.valorTotal > 0 && pedido.valorPago < pedido.valorTotal && (
                     <div className="flex justify-between border-t pt-2">
                       <span className="text-fraco">Restante</span>
-                      <span className="font-semibold text-orange-600">R$ {(pedido.valorTotal - pedido.valorPago).toFixed(2)}</span>
+                      <span className="font-semibold text-orange-600 num">R$ {(pedido.valorTotal - pedido.valorPago).toFixed(2)}</span>
                     </div>
                   )}
                 </>

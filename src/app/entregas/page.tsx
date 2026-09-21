@@ -94,12 +94,12 @@ export default function EntregasPage() {
                   const prazo = badgePrazo(p.dataEntrega)
                   return (
                     <tr key={p.id} className="hover:bg-superficie-2 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-marca-texto">#{p.numero}</td>
+                      <td className="px-6 py-4 font-semibold text-marca-texto num">#{p.numero}</td>
                       <td className="px-6 py-4">
                         <div className="font-medium text-conteudo">{p.cliente.nome}</div>
                         {p.cliente.empresa && <div className="text-xs text-fraco">{p.cliente.empresa}</div>}
                       </td>
-                      <td className="px-6 py-4 text-suave">{totalPecas(p)} un.</td>
+                      <td className="px-6 py-4 text-suave num">{totalPecas(p)} un.</td>
                       <td className="px-6 py-4">
                         {prazo && (
                           <span className={clsx('badge', prazo.classes)} title={prazo.titulo}>{prazo.texto}</span>

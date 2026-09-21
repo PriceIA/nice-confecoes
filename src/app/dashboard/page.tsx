@@ -265,7 +265,7 @@ export default function DashboardPage() {
                     <tr key={p.id} className="hover:bg-superficie-2 transition-colors">
                       <td className={clsx('px-6 py-4 border-l-[3px]', p.tipo === 'urgente' ? 'border-red-500' : 'border-transparent')}>
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-marca-texto">#{p.numero}</span>
+                          <span className="font-semibold text-marca-texto num">#{p.numero}</span>
                           {p.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600">urgente</span>}
                         </div>
                       </td>
@@ -273,7 +273,7 @@ export default function DashboardPage() {
                         <div className="font-medium text-conteudo">{p.cliente.nome}</div>
                         {p.cliente.empresa && <div className="text-xs text-fraco">{p.cliente.empresa}</div>}
                       </td>
-                      <td className="px-6 py-4 text-suave">{totalPecas(p)} un.</td>
+                      <td className="px-6 py-4 text-suave num">{totalPecas(p)} un.</td>
                       <td className="px-6 py-4">
                         <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
                       </td>
@@ -282,7 +282,7 @@ export default function DashboardPage() {
                           <div className="w-[76px] h-1.5 rounded-full bg-superficie-3 overflow-hidden shrink-0">
                             {r.total > 0 && <div className={clsx('h-full rounded-full', corBarra)} style={{ width: `${r.pct}%` }} />}
                           </div>
-                          <span className="text-xs text-suave tabular-nums">
+                          <span className="text-xs text-suave num">
                             {r.total === 0 ? '—' : `${r.concluidos}/${r.total}`}
                           </span>
                         </div>
@@ -296,7 +296,7 @@ export default function DashboardPage() {
                           {prazo.texto}
                         </div>
                         {prazo.tom !== 'sem_data' && (
-                          <div className="text-xs text-fraco tabular-nums">{prazo.data}</div>
+                          <div className="text-xs text-fraco num">{prazo.data}</div>
                         )}
                       </td>
                       <td className="px-6 py-4">

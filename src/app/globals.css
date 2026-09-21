@@ -20,6 +20,10 @@
    alvo de toque mínimo e o hover/foco — a cor do ícone continua por conta de
    quem usa (ex: text-fraco hover:text-red-600).
 
+   .num (Fase G2.3): dígitos tabulares — número de pedido, data, valor em R$,
+   quantidade, percentual. Aplique nas células de tabela e nos números que se
+   repetem em lista/card, para os dígitos alinharem na vertical.
+
    NÃO use bg-white, text-gray-500, border-gray-100 e afins: cor literal não
    reage ao tema e vira texto invisível no escuro. As classes utilitárias mais
    abaixo (.card, .btn-*, .input, .label) já consomem as variáveis, então na
@@ -30,10 +34,20 @@
    `dark:` ao lado, e ficam centralizadas em src/lib/helpers.ts (STATUS_CONFIG,
    COMPLEXIDADE_CONFIG) e src/lib/kanban-ui.ts (badgePrazo, CORES_LISTA).
 
-   Contraste: os tons de texto do tema escuro foram escolhidos para passar
-   WCAG AA (>= 4.5:1) sobre --superficie. O sistema é usado o dia inteiro numa
-   fábrica; legibilidade vem antes de estética. Ao mexer nos valores, refaça a
-   conta — o mais apertado é --texto-fraco, hoje em ~6.2:1.
+   Contraste: os tons de texto foram escolhidos para passar WCAG AA (>= 4.5:1).
+   O sistema é usado o dia inteiro numa fábrica; legibilidade vem antes de
+   estética. Ao mexer nos valores, refaça a conta.
+
+   --texto-fraco é o mais apertado, e o número muda com o fundo (medido na
+   Fase G2.3, 19/09/2026 — a afirmação anterior aqui, "~6,2:1", não distinguia
+   o fundo e estava errada):
+
+     claro  — sobre --superficie 4,83:1 ✅, --superficie-2 4,63:1 ✅, --superficie-3 4,39:1 ❌
+     escuro — sobre --superficie 6,30:1 ✅, --superficie-2 5,63:1 ✅, --superficie-3 4,89:1 ✅
+
+   O caso que reprova (claro, sobre --superficie-3) é corrigido pontualmente
+   onde aparece — troque para text-suave naquele elemento — em vez de escurecer
+   a variável para todo mundo. Ver FluxoEtapas.tsx, o chip "não se aplica".
    ========================================================================== */
 
 :root {
@@ -177,6 +191,15 @@ body {
   color: var(--texto);
 }
 
+/* Fase G2.3: a seleção de texto do navegador é azul por padrão nos dois
+   temas — não reage ao verde da marca. Tematizada com as mesmas variáveis
+   de sempre, então já sai certa na impressão (bloco @media print embaixo
+   redefine as variáveis, não esta regra). */
+::selection {
+  background-color: var(--marca-suave);
+  color: var(--texto);
+}
+
 @layer components {
   .card {
     @apply rounded-2xl border p-6;
@@ -307,6 +330,13 @@ body {
   .sidebar-link:focus-visible {
     outline: 2px solid #b4e0ab;
     outline-offset: 2px;
+  }
+  /* Dígitos de largura fixa (Fase G2.3): número de pedido, datas, valores em
+     R$, quantidades e percentual de progresso. Sem isso, cada render pode
+     mudar a largura do dígito e a coluna "dança" — usar aqui em vez de
+     espalhar `tabular-nums` solto pelas telas. */
+  .num {
+    font-variant-numeric: tabular-nums;
   }
   /* Botão só-de-ícone (Fase G2.2). WCAG 2.2 AA pede 24×24 CSS px de alvo —
      p-2 sobre um ícone de 16px chega a 32×32. A cor (default e hover) fica

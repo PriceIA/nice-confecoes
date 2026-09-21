@@ -66,7 +66,7 @@ export default function RelatoriosPage() {
               <Icon className={clsx('w-6 h-6', color)} />
             </div>
             <div>
-              <div className="text-xl font-bold text-titulo">{value}</div>
+              <div className="text-xl font-bold text-titulo num">{value}</div>
               <div className="text-xs text-suave">{label}</div>
             </div>
           </div>
@@ -85,7 +85,7 @@ export default function RelatoriosPage() {
                     <span className={clsx('badge', config.bg, config.color)}>{complexidade}</span>
                     <span className="text-suave text-xs">{config.label.split('—')[1]?.trim()}</span>
                   </div>
-                  <span className="font-semibold text-conteudo">{qtd} un.</span>
+                  <span className="font-semibold text-conteudo num">{qtd} un.</span>
                 </div>
                 <div className="w-full bg-superficie-3 rounded-full h-2">
                   <div className={clsx('h-2 rounded-full transition-all',
@@ -99,7 +99,7 @@ export default function RelatoriosPage() {
             ))}
           </div>
           <div className="border-t pt-3 text-sm text-suave">
-            Total: <span className="font-semibold text-marca-texto">{totalUnidades} peças</span>
+            Total: <span className="font-semibold text-marca-texto num">{totalUnidades} peças</span>
           </div>
         </div>
 
@@ -115,12 +115,12 @@ export default function RelatoriosPage() {
                 return (
                   <div key={p.id} className="flex items-center justify-between py-2 border-b border-borda last:border-0">
                     <div>
-                      <span className="font-semibold text-marca-texto text-sm">#{p.numero}</span>
+                      <span className="font-semibold text-marca-texto text-sm num">#{p.numero}</span>
                       <span className="text-suave text-sm ml-2">{p.cliente.nome}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
-                      <span className="text-xs text-fraco">{format(new Date(p.dataEntrega), 'dd/MM')}</span>
+                      <span className="text-xs text-fraco num">{format(new Date(p.dataEntrega), 'dd/MM')}</span>
                     </div>
                   </div>
                 )
@@ -154,11 +154,11 @@ export default function RelatoriosPage() {
                   const sc = STATUS_CONFIG[p.status]
                   return (
                     <tr key={p.id}>
-                      <td className="px-6 py-3 font-semibold text-marca-texto">#{p.numero}</td>
+                      <td className="px-6 py-3 font-semibold text-marca-texto num">#{p.numero}</td>
                       <td className="px-6 py-3 text-conteudo">{p.cliente.nome}</td>
-                      <td className="px-6 py-3 text-suave">{totalPecas(p)} un.</td>
+                      <td className="px-6 py-3 text-suave num">{totalPecas(p)} un.</td>
                       <td className="px-6 py-3"><span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span></td>
-                      <td className="px-6 py-3 font-medium text-conteudo">{p.valorTotal > 0 ? `R$ ${p.valorTotal.toFixed(2)}` : '—'}</td>
+                      <td className="px-6 py-3 font-medium text-conteudo num">{p.valorTotal > 0 ? `R$ ${p.valorTotal.toFixed(2)}` : '—'}</td>
                     </tr>
                   )
                 })}

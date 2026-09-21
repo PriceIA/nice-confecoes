@@ -76,7 +76,9 @@ function iconeStatus(s: StatusSetor) {
 function classesCard(status: StatusSetor) {
   if (status === 'concluido') return 'bg-marca-suave border-marca-borda text-marca-texto'
   if (status === 'em_andamento') return 'bg-orange-50 border-orange-200 text-orange-600'
-  if (status === 'nao_se_aplica') return 'bg-superficie-3 border-borda text-fraco'
+  // text-suave, não text-fraco: sobre bg-superficie-3 no tema claro, text-fraco
+  // dá 4,39:1 e reprova AA (Fase G2.3, ver globals.css). text-suave dá 6,87:1.
+  if (status === 'nao_se_aplica') return 'bg-superficie-3 border-borda text-suave'
   return 'bg-superficie-2 border-borda text-fraco'
 }
 

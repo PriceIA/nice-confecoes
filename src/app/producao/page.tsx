@@ -205,7 +205,7 @@ export default function ProducaoPage() {
                   <div className="flex items-center gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-marca-texto">#{pedido.numero}</span>
+                        <span className="font-bold text-marca-texto num">#{pedido.numero}</span>
                         <span className="font-medium text-conteudo text-sm">{pedido.cliente.nome}</span>
                         {pedido.cliente.empresa && <span className="text-fraco text-xs">— {pedido.cliente.empresa}</span>}
                         {pedido.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600 text-xs">urgente</span>}
@@ -221,7 +221,7 @@ export default function ProducaoPage() {
                 <div>
                   <div className="flex justify-between text-xs text-fraco mb-1.5">
                     <span>{concluidos} de {aplicaveis} setores concluídos</span>
-                    <span className="font-medium text-marca-texto">{progPct}%</span>
+                    <span className="font-medium text-marca-texto num">{progPct}%</span>
                   </div>
                   <div
                     role="progressbar"
