@@ -6,7 +6,9 @@ import { getTerceirizadas, criarTerceirizada, atualizarTerceirizada, deletarTerc
 import { getPrestadores, getServicos } from '@/lib/prestadores'
 import { Terceirizada, Pedido, Prestador, PrestadorServico } from '@/types'
 import { useMembro } from '@/components/AuthProvider'
-import { classificarErro } from '@/lib/erros'
+import { classificarErro, sufixoCodigo } from '@/lib/erros'
+import { useSkeletonDelay } from '@/lib/hooks'
+import EsqueletoBarra from '@/components/EsqueletoBarra'
 import PrestadorModal from '@/components/terceirizadas/PrestadorModal'
 import clsx from 'clsx'
 
@@ -50,6 +52,19 @@ function descreverFalha(err: unknown, acao: string): string {
   }
 }
 
+/** Mesmo padrão de /pedidos, /dashboard, /entregas, /producao e /clientes — mas
+ * para o carregamento inicial, não pra uma gravação (por isso não termina em
+ * "Nada foi salvo", como `descreverFalha` acima). */
+function descreverFalhaCarregar(err: unknown): string {
+  const f = classificarErro(err)
+  const motivo =
+    f.tipo === 'offline' ? 'Sem conexão com a internet' :
+    f.tipo === 'rede' ? 'Servidor inacessível' :
+    f.tipo === 'permissao' ? 'Seu perfil não tem permissão para ver as terceirizadas' :
+    `Falha${sufixoCodigo(f)}: ${f.message || 'erro desconhecido'}`
+  return `${motivo}, não deu para carregar as terceirizadas.`
+}
+
 export default function TerceirizadasPage() {
   const { permissoes } = useMembro()
   const [lista, setLista] = useState<Terceirizada[]>([])
@@ -62,18 +77,26 @@ export default function TerceirizadasPage() {
   const [form, setForm] = useState<Omit<Terceirizada, 'id'>>(VAZIO)
   const [erro, setErro] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
+  const [carregando, setCarregando] = useState(true)
+  const mostrarSkeleton = useSkeletonDelay(carregando)
 
   /** null = "Novo prestador"; um Prestador = editando aquele. `undefined` = modal fechado. */
   const [modalPrestador, setModalPrestador] = useState<Prestador | null | undefined>(undefined)
 
   const carregar = async () => {
-    const [lista, pedidosData, prestadoresData, servicosData] = await Promise.all([
-      getTerceirizadas(), getPedidos(), getPrestadores(), getServicos(),
-    ])
-    setLista(lista)
-    setPedidos(pedidosData.filter(p => !['entregue', 'cancelado'].includes(p.status)))
-    setPrestadores(prestadoresData)
-    setServicos(servicosData)
+    try {
+      const [lista, pedidosData, prestadoresData, servicosData] = await Promise.all([
+        getTerceirizadas(), getPedidos(), getPrestadores(), getServicos(),
+      ])
+      setLista(lista)
+      setPedidos(pedidosData.filter(p => !['entregue', 'cancelado'].includes(p.status)))
+      setPrestadores(prestadoresData)
+      setServicos(servicosData)
+    } catch (err) {
+      setErro(descreverFalhaCarregar(err))
+    } finally {
+      setCarregando(false)
+    }
   }
 
   useEffect(() => { carregar() }, [])
@@ -288,8 +311,38 @@ export default function TerceirizadasPage() {
       </div>
 
       {/* Lista */}
-      <div className="card p-0 overflow-hidden">
-        {lista.length === 0 ? (
+      <div className="card p-0 overflow-hidden" aria-busy={carregando}>
+        {mostrarSkeleton && <span role="status" className="sr-only">Carregando terceirizadas</span>}
+        {mostrarSkeleton ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-superficie-2 text-xs text-suave uppercase tracking-wide">
+                  <th className="text-left px-6 py-3 font-semibold">Prestadora</th>
+                  <th className="text-left px-6 py-3 font-semibold">Tipo</th>
+                  <th className="text-left px-6 py-3 font-semibold">Pedido</th>
+                  <th className="text-left px-6 py-3 font-semibold">Envio</th>
+                  <th className="text-left px-6 py-3 font-semibold">Valor</th>
+                  <th className="text-left px-6 py-3 font-semibold">Status</th>
+                  <th className="px-6 py-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-borda">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-24" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-16" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-12" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-20" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-16" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-16" /></td>
+                    <td className="px-6 py-4" />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : carregando ? null : lista.length === 0 ? (
           <div className="py-20 text-center text-fraco text-sm">Nenhum registro de terceirizada.</div>
         ) : (
           <div className="overflow-x-auto">

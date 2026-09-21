@@ -173,7 +173,15 @@ Código compartilhado:
   os nomes do `CATALOGO`). Consumido só por `/tabela-precos`; ver "Preço: uma fonte só" abaixo
 - `src/lib/erros.ts` — `classificarErro`: traduz erro do Supabase em `TipoFalha`
   (`offline`/`rede`/`conflito`/`permissao`/`validacao`). Cada tela escreve o próprio texto,
-  porque a consequência muda — usada por `/tabela-precos` e pelo Kanban
+  porque a consequência muda — usada por `/tabela-precos`, pelo Kanban e, desde a Fase G2.4,
+  pelo carregamento inicial de `/pedidos`, `/dashboard`, `/producao`, `/entregas`, `/clientes`
+  e `/terceirizadas` (a mesma função `descreverFalhaCarregar`, copiada em cada arquivo, não
+  compartilhada — igual ao padrão de `descreverFalha` que já existia em `terceirizadas`)
+- `src/lib/hooks.ts` — `useSkeletonDelay` (Fase G2.4): só liga o skeleton se o carregamento
+  ainda estiver rolando depois de ~200ms, pra não piscar num carregamento quase instantâneo.
+  Usado pelas mesmas seis telas de lista acima
+- `src/components/EsqueletoBarra.tsx` — o bloco cinza pulsando dos skeletons (Fase G2.4);
+  cada tela monta a forma (linha de tabela, card) por conta própria com este bloco
 - `src/components/kanban/` — `QuadroBoard`, `ColunaLista`, `CartaoKanban`, `PainelCartao`,
   `Modal`, `BannerErro`, `CriarCartaoDoPedido`. O `Modal` deixou de ser exclusivo do Kanban:
   `/tabela-precos` e `/pedidos/[id]` também o usam

@@ -2,11 +2,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { Users2, X, ArrowRight, Phone, Mail, Search, Pencil, Save, MapPin, FileText, User } from 'lucide-react'
+import { AlertTriangle, Users2, X, ArrowRight, Phone, Mail, Search, Pencil, Save, MapPin, FileText, User } from 'lucide-react'
 import { getClientes, getPedidos, pedidosDoCliente, atualizarCliente } from '@/lib/store'
 import { STATUS_CONFIG } from '@/lib/helpers'
 import { Cliente, Pedido } from '@/types'
+import { classificarErro, sufixoCodigo } from '@/lib/erros'
+import { useSkeletonDelay } from '@/lib/hooks'
+import EsqueletoBarra from '@/components/EsqueletoBarra'
 import clsx from 'clsx'
+
+/** Mesmo padrão de /pedidos, /dashboard, /entregas e /producao. */
+function descreverFalhaCarregar(err: unknown): string {
+  const f = classificarErro(err)
+  const motivo =
+    f.tipo === 'offline' ? 'Sem conexão com a internet' :
+    f.tipo === 'rede' ? 'Servidor inacessível' :
+    f.tipo === 'permissao' ? 'Seu perfil não tem permissão para ver os clientes' :
+    `Falha${sufixoCodigo(f)}: ${f.message || 'erro desconhecido'}`
+  return `${motivo}, não deu para carregar os clientes.`
+}
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -18,12 +32,21 @@ export default function ClientesPage() {
     nome: '', empresa: '', telefone: '', email: '', responsavel: '', endereco: '', documento: '',
   })
   const [salvandoCliente, setSalvandoCliente] = useState(false)
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const mostrarSkeleton = useSkeletonDelay(carregando)
 
   useEffect(() => {
     (async () => {
-      const [cli, ped] = await Promise.all([getClientes(), getPedidos()])
-      setClientes(cli)
-      setPedidos(ped)
+      try {
+        const [cli, ped] = await Promise.all([getClientes(), getPedidos()])
+        setClientes(cli)
+        setPedidos(ped)
+      } catch (err) {
+        setErro(descreverFalhaCarregar(err))
+      } finally {
+        setCarregando(false)
+      }
     })()
   }, [])
 
@@ -90,8 +113,17 @@ export default function ClientesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-titulo">Clientes</h1>
-        <p className="text-sm text-suave mt-0.5">{clientes.length} cliente(s) cadastrado(s)</p>
+        <p className="text-sm text-suave mt-0.5">
+          {carregando ? 'Carregando...' : `${clientes.length} cliente(s) cadastrado(s)`}
+        </p>
       </div>
+
+      {erro && (
+        <div className="flex items-center gap-2 rounded-xl bg-red-100 text-red-700 px-4 py-3 text-sm font-medium">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{erro}</span>
+        </div>
+      )}
 
       {/* Busca */}
       <div className="card py-4">
@@ -106,7 +138,26 @@ export default function ClientesPage() {
         </div>
       </div>
 
-      {clientesFiltrados.length === 0 ? (
+      {mostrarSkeleton && <span role="status" className="sr-only">Carregando clientes</span>}
+      {mostrarSkeleton ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="card space-y-3">
+              <div className="flex items-center gap-3">
+                <EsqueletoBarra className="w-10 h-10 rounded-xl shrink-0" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <EsqueletoBarra className="h-4 w-2/3" />
+                  <EsqueletoBarra className="h-3 w-1/2" />
+                </div>
+              </div>
+              <div className="border-t border-borda pt-3 grid grid-cols-2 gap-2">
+                <EsqueletoBarra className="h-6 w-12" />
+                <EsqueletoBarra className="h-6 w-16" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : carregando ? null : clientesFiltrados.length === 0 ? (
         <div className="card py-20 text-center text-fraco">
           <Users2 className="w-10 h-10 mx-auto mb-3 opacity-40" />
           <p className="text-sm">{busca ? 'Nenhum cliente encontrado para essa busca.' : 'Nenhum cliente cadastrado ainda.'}</p>

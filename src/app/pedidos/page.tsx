@@ -2,12 +2,28 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { PlusCircle, Search, ArrowRight, Trash2 } from 'lucide-react'
+import { AlertTriangle, PlusCircle, Search, ArrowRight, Trash2 } from 'lucide-react'
 import { getPedidos, deletarPedido } from '@/lib/store'
 import { ORDENS_DATA, OrdemPedidos, STATUS_CONFIG, ordenarPedidos, pedidoCasaComBusca, totalPecas } from '@/lib/helpers'
 import { Pedido, StatusPedido } from '@/types'
 import { useMembro } from '@/components/AuthProvider'
+import { classificarErro, sufixoCodigo } from '@/lib/erros'
+import { useSkeletonDelay } from '@/lib/hooks'
+import EsqueletoBarra from '@/components/EsqueletoBarra'
 import clsx from 'clsx'
+
+/** Igual ao padrão de FluxoEtapas.tsx e terceirizadas/page.tsx: classificarErro
+ * só classifica, cada tela escreve a consequência — aqui é sempre "a lista
+ * pode estar incompleta ou desatualizada". */
+function descreverFalhaCarregar(err: unknown): string {
+  const f = classificarErro(err)
+  const motivo =
+    f.tipo === 'offline' ? 'Sem conexão com a internet' :
+    f.tipo === 'rede' ? 'Servidor inacessível' :
+    f.tipo === 'permissao' ? 'Seu perfil não tem permissão para ver os pedidos' :
+    `Falha${sufixoCodigo(f)}: ${f.message || 'erro desconhecido'}`
+  return `${motivo}, não deu para carregar os pedidos. A lista abaixo pode estar incompleta.`
+}
 
 const FILTROS: { value: StatusPedido | 'todos'; label: string }[] = [
   { value: 'todos', label: 'Todos' },
@@ -36,8 +52,20 @@ export default function PedidosPage() {
   // Quem já escolheu uma ordem alguma vez tem valor salvo em ORDEM_CHAVE e o useEffect
   // abaixo sobrescreve este padrão; só quem nunca mexeu no seletor sente a mudança.
   const [ordem, setOrdem] = useState<OrdemPedidos>('entrega_asc')
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const mostrarSkeleton = useSkeletonDelay(carregando)
 
-  const carregar = async () => setPedidos(await getPedidos())
+  const carregar = async () => {
+    setErro(null)
+    try {
+      setPedidos(await getPedidos())
+    } catch (err) {
+      setErro(descreverFalhaCarregar(err))
+    } finally {
+      setCarregando(false)
+    }
+  }
 
   useEffect(() => { carregar() }, [])
 
@@ -124,12 +152,68 @@ export default function PedidosPage() {
         </div>
       </div>
 
+      {erro && (
+        <div className="flex items-center gap-2 rounded-xl bg-red-100 text-red-700 px-4 py-3 text-sm font-medium">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{erro}</span>
+        </div>
+      )}
+
       {/* Tabela */}
-      <div className="card p-0 overflow-hidden">
-        {filtrados.length === 0 ? (
-          <div className="py-20 text-center text-fraco">
-            <p className="text-sm">Nenhum pedido encontrado.</p>
+      <div className="card p-0 overflow-hidden" aria-busy={carregando}>
+        {mostrarSkeleton && <span role="status" className="sr-only">Carregando pedidos</span>}
+        {mostrarSkeleton ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-superficie-2 text-xs text-suave uppercase tracking-wide">
+                  <th className="text-left px-6 py-3 font-semibold">Nº</th>
+                  <th className="text-left px-6 py-3 font-semibold">Cliente</th>
+                  <th className="text-left px-6 py-3 font-semibold">Consultor</th>
+                  <th className="text-left px-6 py-3 font-semibold">Tipo</th>
+                  <th className="text-left px-6 py-3 font-semibold">Peças</th>
+                  <th className="text-left px-6 py-3 font-semibold">Status</th>
+                  <th className="text-left px-6 py-3 font-semibold">Entrada</th>
+                  <th className="text-left px-6 py-3 font-semibold">Entrega</th>
+                  <th className="px-6 py-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-borda">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-14" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-32" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-20" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-16" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-10" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-20" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-20" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-20" /></td>
+                    <td className="px-6 py-4" />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        ) : carregando ? null : filtrados.length === 0 ? (
+          pedidos.length === 0 ? (
+            <div className="py-20 text-center text-fraco">
+              <p className="text-sm">Nenhum pedido cadastrado ainda.</p>
+              {permissoes.criarPedido && (
+                <Link href="/novo-pedido" className="text-marca-texto text-sm font-medium mt-2 inline-block hover:underline">
+                  Criar primeiro pedido →
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="py-20 text-center text-fraco space-y-3">
+              <p className="text-sm">Nenhum pedido corresponde à busca ou ao filtro.</p>
+              <button type="button" className="btn-secondary mx-auto"
+                onClick={() => { setBusca(''); setFiltro('todos') }}>
+                Limpar filtros
+              </button>
+            </div>
+          )
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

@@ -9,11 +9,25 @@ import {
 } from '@/lib/helpers'
 import { useMembro } from '@/components/AuthProvider'
 import { EntradaProgresso, EtapaProducao, Pedido, Progresso } from '@/types'
-import { ArrowRight, Search } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Search } from 'lucide-react'
 import ModalProntoParaEnvio from '@/components/producao/ModalProntoParaEnvio'
 import FluxoEtapas from '@/components/producao/FluxoEtapas'
 import Dica from '@/components/Dica'
+import { classificarErro, sufixoCodigo } from '@/lib/erros'
+import { useSkeletonDelay } from '@/lib/hooks'
+import EsqueletoBarra from '@/components/EsqueletoBarra'
 import clsx from 'clsx'
+
+/** Mesmo padrão de /pedidos, /dashboard e /entregas. */
+function descreverFalhaCarregar(err: unknown): string {
+  const f = classificarErro(err)
+  const motivo =
+    f.tipo === 'offline' ? 'Sem conexão com a internet' :
+    f.tipo === 'rede' ? 'Servidor inacessível' :
+    f.tipo === 'permissao' ? 'Seu perfil não tem permissão para ver a produção' :
+    `Falha${sufixoCodigo(f)}: ${f.message || 'erro desconhecido'}`
+  return `${motivo}, não deu para carregar a produção.`
+}
 
 
 /** Setores (fora acabamento) ainda pendentes/em andamento — mesmo cálculo usado pra decidir se o modal "Pronto para envio?" tem o que perguntar. */
@@ -73,17 +87,27 @@ export default function ProducaoPage() {
   const [ordem, setOrdem] = useState<OrdemPedidos>('entrega_asc')
   const [etapas, setEtapas] = useState<EtapaProducao[]>([])
   const [catalogoSemente, setCatalogoSemente] = useState(true)
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const mostrarSkeleton = useSkeletonDelay(carregando)
 
   const carregar = async () => {
-    // Catálogo e pedidos em paralelo: sem o catálogo a tela não sabe o nome
-    // das etapas, então não adianta desenhar um antes do outro.
-    const [data, catalogo] = await Promise.all([
-      getPedidos(),
-      carregarEtapas(),
-    ])
-    setPedidos(data.filter(p => ['aprovado', 'em_producao'].includes(p.status)))
-    setEtapas(catalogo.etapas)
-    setCatalogoSemente(catalogo.semente)
+    setErro(null)
+    try {
+      // Catálogo e pedidos em paralelo: sem o catálogo a tela não sabe o nome
+      // das etapas, então não adianta desenhar um antes do outro.
+      const [data, catalogo] = await Promise.all([
+        getPedidos(),
+        carregarEtapas(),
+      ])
+      setPedidos(data.filter(p => ['aprovado', 'em_producao'].includes(p.status)))
+      setEtapas(catalogo.etapas)
+      setCatalogoSemente(catalogo.semente)
+    } catch (err) {
+      setErro(descreverFalhaCarregar(err))
+    } finally {
+      setCarregando(false)
+    }
   }
 
   useEffect(() => { carregar() }, [])
@@ -135,11 +159,20 @@ export default function ProducaoPage() {
       <div>
         <h1 className="text-2xl font-bold text-titulo">Produção</h1>
         <p className="text-sm text-suave mt-0.5">
-          {filtrando
-            ? `mostrando ${visiveis.length} de ${pedidos.length} pedido(s) em andamento`
-            : `${pedidos.length} pedido(s) em andamento`}
+          {carregando
+            ? 'Carregando...'
+            : filtrando
+              ? `mostrando ${visiveis.length} de ${pedidos.length} pedido(s) em andamento`
+              : `${pedidos.length} pedido(s) em andamento`}
         </p>
       </div>
+
+      {erro && (
+        <div className="flex items-center gap-2 rounded-xl bg-red-100 text-red-700 px-4 py-3 text-sm font-medium print:hidden">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{erro}</span>
+        </div>
+      )}
 
       {/* Filtros — print:hidden como todo controle de navegação */}
       {pedidos.length > 0 && (
@@ -175,9 +208,37 @@ export default function ProducaoPage() {
         </div>
       )}
 
-      {pedidos.length === 0 ? (
+      {mostrarSkeleton && <span role="status" className="sr-only">Carregando produção</span>}
+      {mostrarSkeleton ? (
+        <div className="space-y-4" aria-busy="true">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="card space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <EsqueletoBarra className="h-4 w-16" />
+                  <EsqueletoBarra className="h-4 w-32" />
+                </div>
+                <EsqueletoBarra className="h-3 w-16" />
+              </div>
+              <div>
+                <div className="flex justify-between mb-1.5">
+                  <EsqueletoBarra className="h-3 w-36" />
+                  <EsqueletoBarra className="h-3 w-8" />
+                </div>
+                <EsqueletoBarra className="h-2 w-full" />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {Array.from({ length: 8 }).map((_, j) => (
+                  <EsqueletoBarra key={j} className="h-9 w-full" />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : carregando ? null : pedidos.length === 0 ? (
         <div className="card py-20 text-center text-fraco">
           <p className="text-sm">Nenhum pedido em produção no momento.</p>
+          <p className="text-xs mt-1">Pedidos aparecem aqui quando o pagamento é registrado ou a liberação é aprovada.</p>
         </div>
       ) : visiveis.length === 0 ? (
         <div className="card py-20 text-center text-fraco space-y-3">

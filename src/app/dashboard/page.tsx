@@ -15,7 +15,21 @@ import {
 import { Pedido } from '@/types'
 import { excecaoPendente } from '@/lib/excecaoPagamento'
 import { useMembro } from '@/components/AuthProvider'
+import { classificarErro, sufixoCodigo } from '@/lib/erros'
+import { useSkeletonDelay } from '@/lib/hooks'
+import EsqueletoBarra from '@/components/EsqueletoBarra'
 import clsx from 'clsx'
+
+/** Mesmo padrão de /pedidos, FluxoEtapas.tsx e terceirizadas/page.tsx. */
+function descreverFalhaCarregar(err: unknown): string {
+  const f = classificarErro(err)
+  const motivo =
+    f.tipo === 'offline' ? 'Sem conexão com a internet' :
+    f.tipo === 'rede' ? 'Servidor inacessível' :
+    f.tipo === 'permissao' ? 'Seu perfil não tem permissão para ver os pedidos' :
+    `Falha${sufixoCodigo(f)}: ${f.message || 'erro desconhecido'}`
+  return `${motivo}, não deu para carregar o dashboard. Os números abaixo podem estar incompletos.`
+}
 
 export default function DashboardPage() {
   const { permissoes } = useMembro()
@@ -24,13 +38,23 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({ emProducao: 0, urgentes: 0, entregaEm7dias: 0, aguardandoProducao: 0 })
   const [filtro, setFiltro] = useState<FiltroDashboard>('todos')
   const [busca, setBusca] = useState('')
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const mostrarSkeleton = useSkeletonDelay(carregando)
 
   useEffect(() => {
     (async () => {
-      const [data, clientes] = await Promise.all([getPedidos(), getClientes()])
-      setPedidos(data)
-      setStats(pedidosStats(data))
-      setTotalClientes(clientes.length)
+      setErro(null)
+      try {
+        const [data, clientes] = await Promise.all([getPedidos(), getClientes()])
+        setPedidos(data)
+        setStats(pedidosStats(data))
+        setTotalClientes(clientes.length)
+      } catch (err) {
+        setErro(descreverFalhaCarregar(err))
+      } finally {
+        setCarregando(false)
+      }
     })()
   }, [])
 
@@ -86,6 +110,13 @@ export default function DashboardPage() {
           Novo Pedido
         </Link>
       </div>
+
+      {erro && (
+        <div className="flex items-center gap-2 rounded-xl bg-red-100 text-red-700 px-4 py-3 text-sm font-medium">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{erro}</span>
+        </div>
+      )}
 
       {/* KPI Cards — cor só quando o valor pede atenção. "Em produção" é o
           cartão dominante (a pergunta que o Pedro faz todo dia); Urgentes e
@@ -182,7 +213,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Tabela de pedidos ativos */}
-      <div className="card p-0 overflow-hidden">
+      <div className="card p-0 overflow-hidden" aria-busy={carregando}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-borda">
           <h2 className="font-semibold text-titulo flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-nice-500" />
@@ -219,7 +250,37 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {linhas.length === 0 ? (
+        {mostrarSkeleton && <span role="status" className="sr-only">Carregando pedidos</span>}
+        {mostrarSkeleton ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-superficie-2 text-xs text-suave uppercase tracking-wide">
+                  <th className="text-left px-6 py-3 font-semibold">Pedido</th>
+                  <th className="text-left px-6 py-3 font-semibold">Cliente</th>
+                  <th className="text-left px-6 py-3 font-semibold">Peças</th>
+                  <th className="text-left px-6 py-3 font-semibold">Status</th>
+                  <th className="text-left px-6 py-3 font-semibold">Produção</th>
+                  <th className="text-left px-6 py-3 font-semibold">Entrega</th>
+                  <th className="px-6 py-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-borda">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-16" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-32" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-10" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-16" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-20" /></td>
+                    <td className="px-6 py-4"><EsqueletoBarra className="h-4 w-20" /></td>
+                    <td className="px-6 py-4" />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : carregando ? null : linhas.length === 0 ? (
           filtrando ? (
             <div className="py-16 text-center text-fraco">
               <Search className="w-10 h-10 mx-auto mb-3 opacity-40" />
