@@ -37,4 +37,7 @@ next-env.d.ts
 # 394 arquivos, 12,4 MB, incluindo bases de fontes e icones de varios MB e a
 # pasta synced/ com skills pessoais da conta. Ficam no disco e continuam sendo
 # lidas pelo Claude Code e pelo Cowork; so nao vao para o Git.
-.claude/skills/
+# Excecao: README.md explica a convencao da pasta (uma skill = uma pasta com
+# SKILL.md) e fica pequeno o bastante para versionar.
+.claude/skills/*
+!.claude/skills/README.md
