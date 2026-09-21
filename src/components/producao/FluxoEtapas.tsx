@@ -123,7 +123,7 @@ function CardEtapa({
               {...attributes}
               {...listeners}
               aria-label={`Reordenar etapa ${rotulo}`}
-              className="cursor-grab active:cursor-grabbing text-fraco hover:text-conteudo touch-none -ml-1 mt-px"
+              className="cursor-grab active:cursor-grabbing text-fraco hover:text-conteudo hover:bg-superficie-3 touch-none rounded-md p-1.5 -m-1.5 transition-colors"
             >
               <GripVertical className="w-3.5 h-3.5" />
             </button>
@@ -172,7 +172,7 @@ function CardEtapa({
               type="button"
               onClick={onNaoSeAplica}
               aria-label={`Marcar ${rotulo} como não aplicável`}
-              className="text-fraco hover:text-red-600 transition-colors"
+              className="text-fraco hover:text-red-600 hover:bg-superficie-3 transition-colors rounded-md p-1.5 -m-1.5"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>

@@ -16,6 +16,10 @@
      border-borda    border-borda-forte
      bg-marca        text-marca-texto  bg-marca-suave    border-marca-borda
 
+   .btn-icone (Fase G2.2): botão só-de-ícone (lixeira, editar, arrastar). Dá o
+   alvo de toque mínimo e o hover/foco — a cor do ícone continua por conta de
+   quem usa (ex: text-fraco hover:text-red-600).
+
    NÃO use bg-white, text-gray-500, border-gray-100 e afins: cor literal não
    reage ao tema e vira texto invisível no escuro. As classes utilitárias mais
    abaixo (.card, .btn-*, .input, .label) já consomem as variáveis, então na
@@ -303,6 +307,24 @@ body {
   .sidebar-link:focus-visible {
     outline: 2px solid #b4e0ab;
     outline-offset: 2px;
+  }
+  /* Botão só-de-ícone (Fase G2.2). WCAG 2.2 AA pede 24×24 CSS px de alvo —
+     p-2 sobre um ícone de 16px chega a 32×32. A cor (default e hover) fica
+     com quem usa a classe, porque varia (lixeira vermelha, editar neutro). */
+  .btn-icone {
+    @apply inline-flex items-center justify-center rounded-lg p-2 transition-colors duration-150;
+  }
+  .btn-icone:hover {
+    background-color: var(--superficie-3);
+  }
+  .btn-icone:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 2px;
+  }
+  .btn-icone:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: transparent;
   }
 }
 

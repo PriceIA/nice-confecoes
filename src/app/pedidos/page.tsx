@@ -150,7 +150,7 @@ export default function PedidosPage() {
                 {filtrados.map(p => {
                   const sc = STATUS_CONFIG[p.status]
                   return (
-                    <tr key={p.id} className="hover:bg-superficie-2 transition-colors group">
+                    <tr key={p.id} className="hover:bg-superficie-2 transition-colors">
                       <td className="px-6 py-4 font-semibold text-marca-texto">#{p.numero}</td>
                       <td className="px-6 py-4">
                         <div className="font-medium text-conteudo">{p.cliente.nome}</div>
@@ -169,15 +169,16 @@ export default function PedidosPage() {
                       <td className="px-6 py-4 text-suave">{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</td>
                       <td className="px-6 py-4 text-suave font-medium">{format(new Date(p.dataEntrega), 'dd/MM/yyyy')}</td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Link href={`/pedidos/${p.id}`} className="text-marca-texto hover:text-marca-texto font-medium text-xs flex items-center gap-1">
+                        <div className="flex items-center gap-2">
+                          <Link href={`/pedidos/${p.id}`}
+                            className="text-suave hover:text-marca-texto focus-visible:text-marca-texto font-medium text-xs flex items-center gap-1 rounded-lg px-1 -mx-1 py-1 -my-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nice-400">
                             Ver <ArrowRight className="w-3 h-3" />
                           </Link>
                           {permissoes.excluirPedido && (
                             <button onClick={() => handleDeletar(p.id)}
                               aria-label={`Excluir pedido #${p.numero}`}
                               title={`Excluir pedido #${p.numero}`}
-                              className="text-red-400 hover:text-red-600 transition-colors">
+                              className="btn-icone text-red-400 hover:text-red-600">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           )}
