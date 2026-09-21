@@ -1,14 +1,14 @@
 'use client'
 import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { getPedidos } from '@/lib/store'
+import { getPedidosLista } from '@/lib/store'
 import { carregarEtapas } from '@/lib/etapas'
 import {
   ORDENS_PRODUCAO, OrdemPedidos, STATUS_CONFIG,
   ordenarPedidos, resumoProgresso,
 } from '@/lib/helpers'
 import { useMembro } from '@/components/AuthProvider'
-import { EntradaProgresso, EtapaProducao, Pedido, Progresso } from '@/types'
+import { EntradaProgresso, EtapaProducao, PedidoLista, Progresso } from '@/types'
 import { AlertTriangle, ArrowRight, Search } from 'lucide-react'
 import ModalProntoParaEnvio from '@/components/producao/ModalProntoParaEnvio'
 import FluxoEtapas from '@/components/producao/FluxoEtapas'
@@ -63,7 +63,7 @@ const RECORTES: { value: Recorte; label: string }[] = [
  * `atendimento` nasce concluído na criação do pedido (ninguém clicou nele), e
  * contá-lo faria todo pedido novo aparecer como já iniciado.
  */
-function casaRecorte(pedido: Pedido, recorte: Recorte): boolean {
+function casaRecorte(pedido: PedidoLista, recorte: Recorte): boolean {
   if (recorte === 'todos') return true
 
   const { pct } = resumoProgresso(pedido.progresso)
@@ -79,13 +79,14 @@ function casaRecorte(pedido: Pedido, recorte: Recorte): boolean {
 }
 
 type CardPedidoProducaoProps = {
-  pedido: Pedido
+  pedido: PedidoLista
   etapas: EtapaProducao[]
   catalogoSemente: boolean
   podeEditarStatus: boolean
   podeEditarFluxo: boolean
   nomeMembro?: string
-  onGravado: () => void | Promise<void>
+  /** Progresso já gravado no banco — o card atualiza só este pedido no estado do pai (Fase G4). */
+  onGravado: (pedidoId: string, progressoGravado: Progresso) => void | Promise<void>
   onAbrirModal: (id: string) => void
 }
 
@@ -151,7 +152,7 @@ const CardPedidoProducao = memo(function CardPedidoProducao({
         podeEditarStatus={podeEditarStatus}
         podeEditarFluxo={podeEditarFluxo}
         nomeMembro={nomeMembro}
-        onGravado={onGravado}
+        onGravado={novo => onGravado(pedido.id, novo)}
         onAcabamentoConcluido={() => onAbrirModal(pedido.id)}
       />
 
@@ -169,7 +170,7 @@ const CardPedidoProducao = memo(function CardPedidoProducao({
 
 export default function ProducaoPage() {
   const { membro, permissoes } = useMembro()
-  const [pedidos, setPedidos] = useState<Pedido[]>([])
+  const [pedidos, setPedidos] = useState<PedidoLista[]>([])
   const [modalPedidoId, setModalPedidoId] = useState<string | null>(null)
   // Mesmo padrão de /pedidos e /dashboard (Fase G3): `busca` acompanha o
   // input sem atraso, `buscaAplicada` é quem entra no useMemo e chega via
@@ -192,12 +193,14 @@ export default function ProducaoPage() {
     setErro(null)
     try {
       // Catálogo e pedidos em paralelo: sem o catálogo a tela não sabe o nome
-      // das etapas, então não adianta desenhar um antes do outro.
+      // das etapas, então não adianta desenhar um antes do outro. O filtro de
+      // status (Fase G4, item 2) vai na própria query — o Postgres já devolve
+      // só aprovado/em_producao, em vez de baixar tudo pra filtrar aqui.
       const [data, catalogo] = await Promise.all([
-        getPedidos(),
+        getPedidosLista({ status: ['aprovado', 'em_producao'] }),
         carregarEtapas(),
       ])
-      setPedidos(data.filter(p => ['aprovado', 'em_producao'].includes(p.status)))
+      setPedidos(data)
       setEtapas(catalogo.etapas)
       setCatalogoSemente(catalogo.semente)
     } catch (err) {
@@ -208,6 +211,17 @@ export default function ProducaoPage() {
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
+
+  // useCallback (Fase G4, item 6.2 — o item de maior impacto da fase): antes,
+  // CADA clique de setor refazia carregar() inteiro — getPedidos() +
+  // carregarEtapas() de novo, pra atualizar um campo de UM pedido. Agora só
+  // esse pedido muda no estado local, igual ao padrão que o Kanban já usa
+  // (`QuadroBoard.tsx`, função `gravar`). Objeto novo em cada pedido tocado —
+  // nunca mutar `progresso` no lugar, ou a barra/resumoProgresso não notam a
+  // mudança (React só re-renderiza em referência nova).
+  const atualizarProgressoLocal = useCallback((pedidoId: string, progressoGravado: Progresso) => {
+    setPedidos(ps => ps.map(p => p.id === pedidoId ? { ...p, progresso: progressoGravado } : p))
+  }, [])
 
   // A busca NÃO é guardada de propósito: uma busca salva esconderia pedidos
   // logo ao abrir a tela, e a pessoa acharia que sumiram.
@@ -363,7 +377,7 @@ export default function ProducaoPage() {
               podeEditarStatus={permissoes.editarProducao}
               podeEditarFluxo={permissoes.editarFluxoProducao}
               nomeMembro={membro?.nome}
-              onGravado={carregar}
+              onGravado={atualizarProgressoLocal}
               onAbrirModal={setModalPedidoId}
             />
           ))}

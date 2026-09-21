@@ -184,6 +184,37 @@ export interface Pedido {
 }
 
 /**
+ * Versão enxuta de `Pedido` para as telas de LISTA (Fase G4) —
+ * `getPedidosLista` (`store.ts`), não `getPedidos`. Sem `vetorizacao` e
+ * `observacoes`, que nenhuma lista mostra, e com `cliente` reduzido aos três
+ * campos que elas usam. `pecas` e `parcelas` continuam inteiros: `totalPecas`
+ * precisa das quantidades e `valorTotal`/`valorPago` derivam de `parcelas`
+ * (regra 4 do CLAUDE.md) — o que pesa em `pecas` é `fotos[]`, não dá pra
+ * cortar com um select parcial de JSONB.
+ */
+export interface PedidoLista {
+  id: string
+  numero: string
+  cliente: {
+    nome: string
+    empresa: string
+    telefone: string
+  }
+  consultor: string
+  tipo: TipoPedido
+  status: StatusPedido
+  pecas: Peca[]
+  parcelas: Parcela[]
+  dataEntrada: string
+  dataEntrega: string
+  progresso: Progresso
+  valorTotal: number
+  valorPago: number
+  tabelaPreco?: string
+  excecaoPagamento?: ExcecaoPagamento
+}
+
+/**
  * Uma etapa do catálogo de produção (tabela `etapas_producao`, migration 014).
  *
  * `chave` é o que vai para dentro de `pedidos.progresso` — é ela que

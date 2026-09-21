@@ -23,7 +23,10 @@ import { EntradaProgresso, EtapaProducao, Pedido, Progresso } from '@/types'
 const PRE_MARCADOS = ['estamparia_silk', 'prensa_dtf', 'prensa_sublimacao']
 
 type Props = {
-  pedido: Pedido
+  // Só id + progresso (Fase G4): /producao passa um PedidoLista, que tem os
+  // dois com o mesmo tipo de Pedido — Pick evita importar PedidoLista aqui
+  // só por isso.
+  pedido: Pick<Pedido, 'id' | 'progresso'>
   /** Catálogo, para nomear etapas criadas pelo Pedro (`extra_*`). */
   etapas: EtapaProducao[]
   onFechar: () => void

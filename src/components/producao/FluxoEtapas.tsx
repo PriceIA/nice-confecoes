@@ -47,8 +47,16 @@ type Props = {
   /** `permissoes.editarFluxoProducao` — arrastar, criar e remover etapa do pedido. */
   podeEditarFluxo: boolean
   nomeMembro?: string
-  /** Chamado depois de cada gravação bem-sucedida, para o pai recarregar do banco. */
-  onGravado: () => void | Promise<void>
+  /**
+   * Chamado depois de cada gravação bem-sucedida, com o progresso já
+   * gravado. Antes da Fase G4 isso só dizia "recarrega do banco" (`carregar`,
+   * sem argumento) — /producao agora usa o valor pra atualizar só o pedido
+   * que mudou, no estado local, sem refazer `getPedidos()` inteiro a cada
+   * clique. `/pedidos/[id]` continua recarregando o pedido único: um
+   * `onGravado={carregar}` de zero parâmetros aceita a chamada com um
+   * argumento igual, o parâmetro extra é só ignorado.
+   */
+  onGravado: (progressoGravado: Progresso) => void | Promise<void>
   /** Chamado ao concluir `acabamento` restando etapa pendente (modal da Fase C0). */
   onAcabamentoConcluido?: () => void
   /** 'grid' = 4 colunas (/producao). 'lista' = uma coluna (/pedidos/[id]). */
@@ -246,7 +254,7 @@ export default function FluxoEtapas({
     setErro(null)
     try {
       await atualizarPedido(pedidoId, { progresso: novo })
-      await onGravado()
+      await onGravado(novo)
       return true
     } catch (err) {
       revertendo?.()

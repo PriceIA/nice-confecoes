@@ -1,4 +1,4 @@
-import { Cliente, EntradaProgresso, Parcela, Pedido, Progresso, StatusSetor, Terceirizada } from '@/types'
+import { Cliente, EntradaProgresso, Parcela, Pedido, PedidoLista, Progresso, StatusPedido, StatusSetor, Terceirizada } from '@/types'
 import { addBusinessDays, format } from 'date-fns'
 import { supabase } from './supabase'
 import { criarClienteBrowser } from './supabase/client'
@@ -114,8 +114,12 @@ function mapCliente(row: any): Cliente {
   }
 }
 
-function mapPedido(row: any): Pedido {
-  const c = row.clientes
+/**
+ * Regra 4 do CLAUDE.md: HAVENDO parcelas, elas são a fonte da verdade de
+ * total e pago — não os campos avulsos. Extraído pra `mapPedido` e
+ * `mapPedidoLista` (Fase G4) nunca divergirem nessa conta.
+ */
+function calcularValores(row: any): { valorTotal: number; valorPago: number } {
   const parcelas: Parcela[] = row.parcelas ?? []
   const valorTotal = parcelas.length > 0
     ? parcelas.reduce((a: number, p: Parcela) => a + (p.valor || 0), 0)
@@ -123,6 +127,12 @@ function mapPedido(row: any): Pedido {
   const valorPago = parcelas.length > 0
     ? parcelas.filter((p: Parcela) => p.pago).reduce((a: number, p: Parcela) => a + (p.valor || 0), 0)
     : Number(row.valor_pago) || 0
+  return { valorTotal, valorPago }
+}
+
+function mapPedido(row: any): Pedido {
+  const c = row.clientes
+  const { valorTotal, valorPago } = calcularValores(row)
   return {
     id: row.id,
     numero: row.numero,
@@ -139,7 +149,7 @@ function mapPedido(row: any): Pedido {
     tipo: row.tipo,
     status: row.status,
     pecas: (row.pecas ?? []).map((p: any) => ({ fotos: [], ...p })),
-    parcelas,
+    parcelas: row.parcelas ?? [],
     dataEntrada: row.data_entrada,
     dataEntrega: row.data_entrega,
     progresso: normalizarProgresso(row.progresso),
@@ -147,6 +157,33 @@ function mapPedido(row: any): Pedido {
     valorTotal,
     valorPago,
     vetorizacao: row.vetorizacao ?? undefined,
+    tabelaPreco: row.tabela_preco ?? undefined,
+    excecaoPagamento: row.excecao_pagamento ?? undefined,
+  }
+}
+
+/** Igual a `mapPedido`, mas para a coluna reduzida de `getPedidosLista` (Fase G4). */
+function mapPedidoLista(row: any): PedidoLista {
+  const c = row.clientes
+  const { valorTotal, valorPago } = calcularValores(row)
+  return {
+    id: row.id,
+    numero: row.numero,
+    cliente: {
+      nome: c?.nome ?? '',
+      empresa: c?.empresa ?? '',
+      telefone: c?.telefone ?? '',
+    },
+    consultor: row.consultor ?? '',
+    tipo: row.tipo,
+    status: row.status,
+    pecas: (row.pecas ?? []).map((p: any) => ({ fotos: [], ...p })),
+    parcelas: row.parcelas ?? [],
+    dataEntrada: row.data_entrada,
+    dataEntrega: row.data_entrega,
+    progresso: normalizarProgresso(row.progresso),
+    valorTotal,
+    valorPago,
     tabelaPreco: row.tabela_preco ?? undefined,
     excecaoPagamento: row.excecao_pagamento ?? undefined,
   }
@@ -192,6 +229,37 @@ export async function getPedidos(): Promise<Pedido[]> {
     .order('data_entrada', { ascending: false })
   if (error) throw error
   return (data ?? []).map(mapPedido)
+}
+
+/**
+ * Versão enxuta de `getPedidos` para as telas de lista (Fase G4) — sem
+ * `vetorizacao`/`observacoes` e com `clientes(...)` reduzido aos três campos
+ * que as listas mostram. `getPedidos` continua servindo `/pedidos/[id]`, que
+ * precisa do pedido inteiro; não mexa nela.
+ *
+ * `status`/`statusExcluir` filtram no banco, não no cliente — é o item 2 da
+ * etapa 6.3: /producao já sabe de antemão que só quer `aprovado`/`em_producao`,
+ * então pedir isso ao Postgres corta o payload antes de ele nem trafegar.
+ */
+export async function getPedidosLista(opts?: {
+  status?: StatusPedido[]
+  statusExcluir?: StatusPedido[]
+}): Promise<PedidoLista[]> {
+  const supabase = criarClienteBrowser()
+  let query = supabase
+    .from('pedidos')
+    .select(`
+      id, numero, consultor, tipo, status, pecas, parcelas,
+      data_entrada, data_entrega, progresso, valor_total, valor_pago,
+      tabela_preco, excecao_pagamento,
+      clientes ( nome, empresa, telefone )
+    `)
+    .order('data_entrada', { ascending: false })
+  if (opts?.status) query = query.in('status', opts.status)
+  if (opts?.statusExcluir) query = query.not('status', 'in', `(${opts.statusExcluir.join(',')})`)
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []).map(mapPedidoLista)
 }
 
 export async function getPedidoById(id: string): Promise<Pedido | undefined> {
@@ -422,6 +490,15 @@ export async function getClientes(): Promise<Cliente[]> {
     .order('data_cadastro', { ascending: false })
   if (error) throw error
   return (data ?? []).map(mapCliente)
+}
+
+/** Só a contagem, sem baixar as linhas (Fase G4, item 3) — o dashboard usa
+ * isto só pra mostrar "N clientes na base", nunca a lista em si. */
+export async function getTotalClientes(): Promise<number> {
+  const supabase = criarClienteBrowser()
+  const { count, error } = await supabase.from('clientes').select('*', { count: 'exact', head: true })
+  if (error) throw error
+  return count ?? 0
 }
 
 export async function criarCliente(dados: Omit<Cliente, 'id' | 'dataCadastro'>): Promise<Cliente> {
