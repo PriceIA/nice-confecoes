@@ -10,7 +10,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ### Fase H — redesign visual do `/dashboard`
 
-Sessão de 22/09/2026, sem SQL e sem mudança de schema. Feita via Cowork (edição direta dos
+Sessão de 22/09/2026, commit `6b1e99a`, sem SQL e sem mudança de schema. Feita via Cowork (edição direta dos
 arquivos, sem terminal); `tsc`/`lint`/`npm run dev` rodados pelo Claude Code na máquina do
 Pedro. Aprovado pelo Pedro no navegador, nos dois temas.
 
