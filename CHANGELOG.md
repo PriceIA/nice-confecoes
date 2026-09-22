@@ -8,6 +8,53 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase H — redesign visual do `/dashboard`
+
+Sessão de 22/09/2026, sem SQL e sem mudança de schema. Feita via Cowork (edição direta dos
+arquivos, sem terminal); `tsc`/`lint`/`npm run dev` rodados pelo Claude Code na máquina do
+Pedro. Aprovado pelo Pedro no navegador, nos dois temas.
+
+O `/dashboard` passa a seguir o mockup aprovado ("Painel Nice"), com os dados reais do sistema.
+Estilo novo em `src/app/dashboard/painel.css`, escopado por classes `pn-*` dentro de
+`.pn-painel` (não vaza para outras telas) e responsivo por container query, já que a largura
+útil depende da sidebar.
+
+**Adicionado:**
+- Topo só do dashboard: busca (joga na busca da tabela), alternar tema, sino e perfil.
+  O sino abre um popover com os avisos — liberações de "pagar na retirada" aguardando o
+  gestor (só para quem tem `aprovarExcecaoPagamento`) e pedidos com prazo vencido; fecha com
+  clique fora ou Esc. Não é uma topbar global: o `AppShell` continua só com a Sidebar.
+- Pílulas de resumo (ativos, em produção, entregam em 7 dias, urgentes).
+- Card principal com saudação pela hora + primeiro nome, selo "Tudo em dia"/"N atrasados",
+  valor em carteira (soma de `valorTotal` dos ativos, **sem orçamentos**) e "% já recebido"
+  (`valorPago` / `valorTotal`), mais ações rápidas filtradas por `podeAcessarRota`
+  (Novo Pedido, Entregas, Produção, Buscar, Imprimir).
+- Botão de olho para esconder os valores (estilo app de banco). A escolha fica no
+  `localStorage` (`nice-ocultar-valores`), só naquele navegador.
+- Donut "Pedidos por Etapa" com uma cor por status real (Orçamento rosa, Aprovado violeta,
+  Ag. Pagamento âmbar, Em Produção verde Nice, Finalizado petróleo), com variantes próprias no
+  tema escuro. Paleta passada no validador de contraste/daltonismo; o par rosa/petróleo fica no
+  limite para deuteranopia, compensado pela legenda com nome e número.
+- "Carga de Entregas" (hoje + 14 dias, por `dataEntrega`) e "Produção Geral" (média de
+  `resumoProgresso` dos pedidos em produção, com aviso de ritmo).
+- Rail direita: atalho para Relatórios, Próximas Entregas, Atividade Recente e citação.
+- `helpers.ts`: `pecasPorCategoria` (peças por `Peca.categoria`, alimenta "Top Categorias") e
+  `atividadesRecentes` (deriva de `EntradaProgresso.atualizadoPor/atualizadoEm`).
+
+**Alterado:**
+- Tabela "Pedidos Ativos": colunas Pedido (iniciais + número + cliente) · Peças (tipo + qtd) ·
+  Produção (%) · Entrega · Status. Busca, os 7 chips, ordenação por `entrega_asc`, limite de 10
+  em repouso, skeleton e estados vazios continuam como antes.
+- Os 4 KPIs em cartão viraram as pílulas de resumo; "N clientes na base" saiu da tela
+  (`getTotalClientes` não é mais chamado no dashboard).
+
+**Limitações conhecidas (sem dado real para sustentar o que o mockup mostrava):**
+- "Atividade Recente" não é log de auditoria: só aparece etapa clicada manualmente. Um log de
+  verdade exigiria tabela nova (migration).
+- Não há comparação com a semana anterior (sem histórico de valores); no lugar entrou
+  "% já recebido".
+- "Pagamento" nas ações rápidas virou "Entregas" — não existe tela própria de pagamento.
+
 ### Fase G — acessibilidade, visual, renderização e peso das listas
 
 Sessão de 18–21/09/2026, sete commits, sem SQL. Spec completa em `docs/fase-g.md`, incluindo o

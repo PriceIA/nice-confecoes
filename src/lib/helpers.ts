@@ -1,4 +1,4 @@
-import { Complexidade, EntradaProgresso, Personalizacao, Pedido, ProgressoSetor, StatusPedido } from '@/types'
+import { Complexidade, EntradaProgresso, Personalizacao, Pedido, ProgressoSetor, StatusPedido, StatusSetor } from '@/types'
 import { differenceInCalendarDays, format } from 'date-fns'
 
 export const CATALOGO = {
@@ -257,3 +257,81 @@ export const FILTROS_DASHBOARD: { value: FiltroDashboard; label: string }[] = [
   { value: 'em_producao', label: 'Em Produção' },
   { value: 'finalizado', label: 'Finalizado' },
 ]
+
+// ---------------------------------------------------------------------------
+// Widgets novos do /dashboard (redesign) — só leitura, nada de RLS ou
+// migração envolvida: os dois agregam campos que já existem em `Pedido`.
+// ---------------------------------------------------------------------------
+
+export type CategoriaResumo = { categoria: string; quantidade: number }
+
+/**
+ * Quantidade de peças por categoria (as chaves de `CATALOGO`: Esportivo,
+ * Empresarial, Escolar, Acessórios) entre os pedidos passados. Alimenta o
+ * widget "Top Categorias" do /dashboard.
+ *
+ * Filtra `entregue`/`cancelado` por conta própria — mas o chamador típico já
+ * passa só pedidos ativos (mesmo recorte da tabela principal), então na
+ * prática o filtro abaixo raramente descarta algo.
+ */
+export function pecasPorCategoria(pedidos: Pick<Pedido, 'status' | 'pecas'>[]): CategoriaResumo[] {
+  const mapa = new Map<string, number>()
+  for (const p of pedidos) {
+    if (p.status === 'entregue' || p.status === 'cancelado') continue
+    for (const peca of p.pecas) {
+      const qtd = peca.tamanhos.reduce((a, t) => a + t.quantidade, 0)
+      mapa.set(peca.categoria, (mapa.get(peca.categoria) ?? 0) + qtd)
+    }
+  }
+  return Array.from(mapa.entries())
+    .map(([categoria, quantidade]) => ({ categoria, quantidade }))
+    .sort((a, b) => b.quantidade - a.quantidade)
+}
+
+export type AtividadeRecente = {
+  pedidoId: string
+  pedidoNumero: string
+  cliente: string
+  setorLabel: string
+  /** Estado do setor no momento desta atualização — não usado na tela hoje, mas fica disponível para quem quiser diferenciar "concluiu" de "reabriu" depois. */
+  status: StatusSetor
+  atualizadoPor: string
+  atualizadoEm: string
+}
+
+/**
+ * Aproximação de "atividade recente" — não existe uma tabela de auditoria no
+ * sistema hoje, então isto deriva do que já existe: cada etapa tocada em
+ * `progresso` guarda quem mexeu e quando (`EntradaProgresso.atualizadoPor`/
+ * `atualizadoEm`, só presentes a partir de um clique — nunca inventados,
+ * ver o comentário em `types/index.ts`).
+ *
+ * Consequência aceita: pedido cujas etapas nunca foram clicadas manualmente
+ * (só nasceu e ainda não andou) não aparece aqui. Se um dia existir uma
+ * tabela de auditoria de verdade, é só trocar a implementação — a assinatura
+ * desta função pode continuar igual.
+ */
+export function atividadesRecentes(
+  pedidos: Pick<Pedido, 'id' | 'numero' | 'cliente' | 'progresso'>[],
+  limite = 8,
+): AtividadeRecente[] {
+  const itens: AtividadeRecente[] = []
+  for (const p of pedidos) {
+    for (const [setor, entrada] of Object.entries(p.progresso)) {
+      if (entrada?.atualizadoEm && entrada.atualizadoPor) {
+        itens.push({
+          pedidoId: p.id,
+          pedidoNumero: p.numero,
+          cliente: p.cliente.nome,
+          setorLabel: SETOR_LABELS[setor] ?? setor,
+          status: entrada.status,
+          atualizadoPor: entrada.atualizadoPor,
+          atualizadoEm: entrada.atualizadoEm,
+        })
+      }
+    }
+  }
+  return itens
+    .sort((a, b) => b.atualizadoEm.localeCompare(a.atualizadoEm))
+    .slice(0, limite)
+}
