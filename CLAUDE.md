@@ -149,7 +149,14 @@ Código compartilhado:
 - `src/lib/store.ts` — acesso a dados de pedidos/clientes/terceirizadas (exceto
   `tabela-precos` e o Kanban, ver abaixo). Desde a Fase B, usa `criarClienteBrowser()`
   (client autenticado) função por função, igual `kanban.ts` — só `uploadFotoPeca` continua no
-  client anônimo, porque Storage não entrou na Fase B
+  client anônimo, porque Storage não entrou na Fase B. Desde a Fase G4, `getPedidosLista`
+  devolve `PedidoLista` (`src/types/index.ts`) — a versão enxuta de `Pedido` pras telas de
+  lista, sem `vetorizacao`/`observacoes` e com `cliente` reduzido a
+  nome/empresa/telefone; aceita `{ status?, statusExcluir? }` pra filtrar no banco em vez
+  de baixar tudo. `getPedidos` continua servindo `/pedidos/[id]`, que precisa do pedido
+  inteiro — não use `getPedidosLista` lá. `getTotalClientes` é só a contagem
+  (`count: 'exact', head: true`), pro dashboard não baixar `clientes` inteira só pra ler
+  `.length`
 - `src/lib/supabase.ts` — client singleton, anon key, **sem sessão**; hoje só usado pelo
   Storage (`uploadFotoPeca`, `store.ts`). Não confundir com os clients de auth acima
 - `src/lib/kanban.ts` — acesso a dados do Kanban. **Usa o client AUTENTICADO**, não o

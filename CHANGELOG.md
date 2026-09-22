@@ -8,6 +8,53 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase G — acessibilidade, visual, renderização e peso das listas
+
+Sessão de 18–21/09/2026, sete commits, sem SQL. Spec completa em `docs/fase-g.md`, incluindo o
+registro de execução (seção 7.1) com o que a auditoria original não previu e o que não foi
+testado.
+
+**G1 (`9c204b8`) — acessibilidade.** `aria-label` e o novo componente `Dica` (tooltip 100% CSS,
+sem `useState`) em `/producao`, `FluxoEtapas` e `/pedidos`. A lixeira de "não se aplica" ganhou
+o texto que faltava: ela parece "excluir" e na verdade é reversível.
+
+**G2 — visual, quatro commits:**
+- **G2.1 (`4d0e234`)** dá estado completo (`:focus-visible`, `:active`, `:disabled`) pras
+  classes utilitárias e resolve o "ghost card" (`.card` tinha borda **e** sombra).
+- **G2.2 (`2d2cc5e`)** cria `.btn-icone` (alvo de toque ≥24×24px) pra `/pedidos`,
+  `/terceirizadas` e `FluxoEtapas` (achado novo, não previsto na auditoria original), e troca
+  `opacity-0 group-hover` por presença permanente em `/pedidos`.
+- **G2.3 (`94c6c71`)** corrige o contraste do chip "não se aplica" (4,39:1 → 6,87:1) e a
+  informação errada que o projeto tinha sobre isso; cria `.num` (`tabular-nums`) e tematiza
+  `::selection`.
+- **G2.4 (`8277d72`)** dá skeleton (`useSkeletonDelay`, atraso de 200ms pra não piscar),
+  `aria-busy`/`role="status"`, faixa de erro visível e estados vazios que ensinam pras 6 telas
+  de lista.
+
+**G3 (`01978ad`) — renderização.** `useMemo` nos filtros/ordenação de `/pedidos`, `/dashboard`
+e `/producao`; busca via `startTransition` pra não travar a digitação; `<LinhaPedido>` e
+`<CardPedidoProducao>` memoizados com `React.memo`, com os callbacks estabilizados via
+`useCallback` — sem isso o memo não faz efeito nenhum.
+
+**G4 — peso das listas, dois commits:**
+- **`0a12082`** mata o refetch total de `/producao`: antes, cada clique de setor recarregava
+  `getPedidos()` + `carregarEtapas()` inteiros; agora `FluxoEtapas` devolve o progresso já
+  gravado e só aquele pedido atualiza no estado local (mesmo padrão do Kanban).
+- **`4e4bbe2`** cria `getPedidosLista`/`getTotalClientes` (`store.ts`) e os usa em
+  `/terceirizadas`, `/entregas`, `/dashboard` e `/pedidos` — sem `vetorizacao`/`observacoes`,
+  cliente reduzido a nome/empresa/telefone, filtro de status na query.
+
+**Medição honesta:** o tempo de `/pedidos` não caiu depois do G4 (ficou na mesma faixa,
+536–1677ms) — esperado, porque a seção 1.3 da spec já tinha avisado que abaixo de ~500 pedidos
+o payload não é o que trava a tela. O ganho real é o do primeiro commit do G4 (uma chamada
+inteira eliminada por clique em `/producao`), não bytes por carregamento inicial.
+
+`npx tsc --noEmit` e `npm run build` limpos em todo commit. Testado pelo Pedro no navegador a
+cada sub-etapa, nos dois temas. Um susto no fechamento do G5 (`/pedidos` e `/producao` pararam
+de carregar) era HMR quebrado por muitos `Fast Refresh` seguidos, não bug do G4 — resolvido
+reiniciando o `npm run dev` do zero. O único teste que ficou de fora foi o clique de setor real
+em `/producao` (a única gravação de verdade da fase) — decisão do Pedro, não lacuna escondida.
+
 ### Fase F — filtro de pesquisa e reforma visual do `/dashboard`
 
 Sessão de 10/09/2026, dois commits (`4f67eec`, `e140eed`), sem SQL. Spec completa em
