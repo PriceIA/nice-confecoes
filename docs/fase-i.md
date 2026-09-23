@@ -7,7 +7,9 @@ dúvida). O Claude (Cowork) lê o registro e escreve a etapa seguinte aqui mesmo
 
 Mockup aprovado: artifact "Aguardando o cliente — mockup" (7 telas).
 
-> **ETAPA ATUAL: I2a** (só depois de commitar a I1) — nada além dela. Terminou? Preencha o Registro e pare.
+> **ETAPA ATUAL: I2b-ajustes → commit da I2b → I3.** Uma de cada vez, na ordem. Terminou a I3? Preencha o Registro e pare.
+>
+> **Ao preencher o Registro, releia o arquivo do disco antes de gravar** — o Cowork também edita este documento.
 
 ---
 
@@ -231,7 +233,7 @@ Commit: `feat: coluna aguardando_cliente no pedido (migration 017)`
 
 ---
 
-## I2a — Regras + permissão (sem tela)  ← ATUAL (depois do commit da I1)
+## I2a — Regras + permissão (sem tela)  — feita (`5e1f0f5`)
 
 Só lógica. Nenhuma tela muda nesta etapa. Um commit.
 
@@ -435,7 +437,7 @@ Commit: `feat: regras de "aguardando o cliente" e permissão responderEntrega`
 
 ---
 
-## I2b — Cartão no pedido + modal  (não executar ainda)
+## I2b — Cartão no pedido + modal  — implementada, falta commit (ver I2b-ajustes)
 
 Segue o mockup (telas 1 a 4). Só tokens semânticos. Ícones do `lucide-react` (`CircleHelp`,
 `Hourglass`, `Bell`, `Check`, `RotateCcw`).
@@ -500,15 +502,102 @@ Commit: `feat: pergunta "já foi entregue?" e cartão aguardando o cliente no pe
 
 ---
 
-## I3 a I6 — resumo (o detalhe é escrito aqui antes de executar)
+## I2b-ajustes — revisão do Cowork (fazer antes do commit da I2b)
 
-- **I3** — `/entregas`: critério `prontoParaRetirada`, botão "Não retirou…" nos vencidos
-  (reusa `ModalNaoRetirou`), seção "Aguardando o cliente" com pílulas (pedidos, peças
-  paradas, a receber) e lembrete.
+Testado pelo Cowork no navegador, sem gravar: PIETRA (#2026-0015) e HEBERTON (#2026-0012)
+mostram a pergunta; MERCADO SANTA FE (#2026-0064, em produção) não mostra nada; o modal abre
+com "Falta de pagamento" sugerido e fecha no Esc. Está certo. Três ajustes:
+
+1. **`moeda()` em `src/lib/helpers.ts`** (junto de `formatarData`), e usar nos dois
+   componentes no lugar de `R$ {x.toFixed(2)}`:
+
+   ```ts
+   /** Valor em reais no formato brasileiro: 4688 → "R$ 4.688,00". */
+   export function moeda(v: number): string {
+     return (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+   }
+   ```
+
+2. **Frase do estado "pergunta"** (`CartaoEntrega.tsx`). Hoje sai "O prazo era 31/08/2026 e
+   atrasado 23 dias". Trocar por:
+   `O prazo era {prazo.data} — venceu há {N} {N === 1 ? 'dia' : 'dias'}. O pedido está pronto e ninguém confirmou a retirada ainda.`
+   com `N = Math.abs(prazo.dias ?? 0)`.
+
+3. **Erro não pode ser silencioso** (`CartaoEntrega.tsx`): `marcarEntregue`, `desfazer` e
+   `confirmarLembrete` ganham `catch` que põe num estado `erro` a frase "Não foi possível
+   gravar. Tente de novo." e mostra embaixo dos botões em `text-sm text-red-700`. Limpar o
+   erro no início de cada ação.
+
+4. Opcional de visual (bate com o mockup): `border-blue-200` no `card` dos dois estados,
+   para o cartão se destacar dos outros cards da tela.
+
+"Falta receber" só com saldo > 0: **mantenha assim** (decisão do Cowork, está certo).
+
+Depois: `npx tsc --noEmit`; pare o dev; `npm run build`; suba o dev; commit
+`feat: pergunta "já foi entregue?" e cartão aguardando o cliente no pedido`; push.
+
+---
+
+## I3 — `/entregas` com o grupo "Aguardando o cliente"  (depois do commit da I2b)
+
+Mockup tela 6. Só `src/app/entregas/page.tsx` (e o que precisar importar). Nada de regra nova
+na tela — tudo vem de `@/lib/aguardandoCliente`.
+
+1. **Recortes** (a query continua a mesma, `statusExcluir: ['entregue','cancelado']`):
+   - `prontos = pedidos.filter(p => prontoParaRetirada(p) && !estaAguardando(p))`, ordenado
+     com `ordenarPedidos(..., 'entrega_asc')` (troca o `sort` com `new Date(...)` atual).
+     **Isso muda o critério da tela**: pedido com status `finalizado` e etapa pendente
+     passa a aparecer (ex.: PIETRA). É a decisão aprovada — ver "Decisões já tomadas".
+   - `aguardando = pedidos.filter(estaAguardando)`, ordenado por `diasAguardando` decrescente.
+   - Subtítulo: `N prontos pra entrega · M aguardando o cliente`.
+
+2. **Tabela "Prontos pra entrega"** (a atual, com título de seção `h2`):
+   - Coluna Prazo: se `perguntarEntrega(p)` → selo `bg-red-100 text-red-700`
+     "Venceu há Nd"; senão o `badgePrazo` de hoje.
+   - Embaixo do nome do cliente, com `permissoes.verFinanceiro` e saldo > 0:
+     `falta {moeda(saldoEmAberto(p))}` em `text-xs text-fraco`.
+   - Ações: além de "Ver" e "Marcar como entregue", quando `perguntarEntrega(p)` e
+     `permissoes.responderEntrega`, botão `btn-secondary` **"Não retirou…"** que abre o
+     `ModalNaoRetirou` em modo `registrar` (reuso direto; `PedidoLista` serve nas props).
+     `onGravado` = `carregar`.
+   - Vazio: mantém a mensagem atual.
+
+3. **Seção "Aguardando o cliente"** (só aparece se `aguardando.length > 0`):
+   - Título com ícone `Hourglass` numa caixinha `bg-blue-100 text-blue-700`.
+   - Pílulas à direita (`bg-superficie border border-borda rounded-full`): `N pedidos`,
+     `X peças paradas` (soma de `totalPecas`), e — só com `verFinanceiro` —
+     `{moeda(soma dos saldos)} a receber`.
+   - Tabela: **Nº** · **Cliente** (embaixo, `text-xs text-fraco`: "confirmado por X há N
+     dias" se tiver `confirmadoEm`, senão "registrado por X") · **Motivo** (selo:
+     `pagamento` → `bg-amber-100 text-amber-700`; `sem_tempo` → `bg-blue-100 text-blue-700`;
+     `outro` → `bg-superficie-3 text-suave`; observação embaixo em `text-xs text-fraco`;
+     "combinou dd/MM" se tiver `previsaoRetirada`) · **Parado há** (`diasAguardando` + "dias")
+     · **Falta receber** (só com `verFinanceiro`: `moeda(saldo)` em `text-amber-700`, ou
+     "quitado" em `text-fraco`) · **Ações**.
+   - Ações (só com `responderEntrega`): se `lembreteDevido(p)` → selo `bg-blue-100
+     text-blue-700` "confirmar" + `btn-secondary` "Sim, ainda" (`confirmar(...)`); sempre
+     `btn-primary` **"Cliente retirou"** (mesmo `confirm()` + `status: 'entregue'` do botão
+     atual); e o link "Ver".
+   - Gravação com falha → usa o `setErro` que a tela já tem.
+
+4. Tokens semânticos só. Nada de cor literal.
+
+### Teste (Cowork, pelo navegador, sem gravar)
+- PIETRA e HEBERTON aparecem em "Prontos" com "Venceu há…" e o botão "Não retirou…";
+  o modal abre e fecha.
+- A seção "Aguardando o cliente" não aparece (ninguém registrado ainda). O primeiro registro
+  real é da Kalomira/Pedro, com caso de verdade.
+
+Commit: `feat: /entregas com o grupo aguardando o cliente`
+
+---
+
+## I4 a I6 — resumo (o detalhe é escrito aqui antes de executar)
+
 - **I4** — `/dashboard`: `atrasados` → `atrasoDaNice`; grupos novos no sino com botões
   curtos; selos; badge azul na coluna de prazo; chip "Aguardando cliente".
 - **I5** — `/relatorios`: seção "Aguardando o cliente" + "Exportar CSV" (separador `;`, BOM
-  UTF-8 pra abrir certo no Excel) + receita no formato brasileiro (R$ 4.688,00).
+  UTF-8 pra abrir certo no Excel) + valores com `moeda()` (a receita hoje sai "R$ 4688.00").
 - **I6** — CHANGELOG.md e CLAUDE.md (só depois da aprovação final).
 
 ---
@@ -555,12 +644,32 @@ Commit: `feat: pergunta "já foi entregue?" e cartão aguardando o cliente no pe
 - Arquivos alterados:
   - `src/lib/aguardandoCliente.ts` (novo) — copiado do documento, sem alteração: `prontoParaRetirada`, `estaAguardando`, `perguntarEntrega`, `atrasoDaNice`, `prontoEm`, `diasAguardando`, `saldoEmAberto`, `motivoSugerido`, `lembreteDevido`, `validar`, `registrar`, `atualizarMotivo`, `confirmar`, mais `DIAS_LEMBRETE`, `OBSERVACAO_MAX`, `MOTIVO_LABEL`.
   - `src/lib/permissoes.ts` — campo `responderEntrega: boolean` no tipo `Permissoes` (depois de `excluirTerceirizada`); `ACESSO_TOTAL.responderEntrega = true` (a `RECEPCIONISTA` herda pelo spread); `LEITURA_PRODUCAO.responderEntrega = false`.
-- tsc: `npx tsc --noEmit` limpo. Não precisei trocar `_o`/`_p` por `delete` em `atualizarMotivo` — sem `noUnusedLocals` no `tsconfig.json`, o `tsc` não reclamou. Fica pra ver se o ESLint reclama quando rodar `npm run build` (não rodei agora, dev estava de pé).
+- tsc: `npx tsc --noEmit` limpo. Não precisei trocar `_o`/`_p` por `delete` em `atualizarMotivo` — sem `noUnusedLocals` no `tsconfig.json`, o `tsc` não reclamou. Antes do push parei o `dev`, rodei `npm run build`: compilou limpo, o ESLint **não** reclamou dos `_o`/`_p`, só os mesmos 4 warnings pré-existentes (nenhum novo). Subi o `dev` de novo depois.
 - Dúvidas / algo diferente do esperado: nenhuma. Servidor (`localhost:3002`) continuou respondendo depois das mudanças — só os avisos de sempre no log (`Fast Refresh had to perform a full reload`, cache do webpack), nada de erro.
-- Commit (hash), depois da aprovação do Felipe:
+- Commit (hash), depois da aprovação do Felipe: `5e1f0f5` — `feat: regras de "aguardando o cliente" e permissão responderEntrega`. Push feito para `origin/main`.
 
 ### I2b
 - Arquivos alterados:
-- tsc:
+  - `src/components/entrega/ModalNaoRetirou.tsx` (novo) — modal com os 3 rádios de `MOTIVO_LABEL`, textarea de observação (contador N/120), campo de previsão de retirada (`min` = hoje) e a faixa azul explicando o efeito. Pré-seleção: `motivoSugerido` no modo `registrar` (com selo "sugerido" e a linha de saldo), motivo atual no modo `mudar`. Confirmar chama `validar` e, se ok, `registrar`/`atualizarMotivo` + `atualizarPedido(id, { aguardandoCliente })`.
+  - `src/components/entrega/CartaoEntrega.tsx` (novo) — `null` se `!responderEntrega` ou se nem `perguntarEntrega` nem `estaAguardando`. Estado "pergunta" (selo amber de saldo quando `verFinanceiro`), estado "aguardando" (grade com motivo/observação, falta receber, registrado por, previsão), faixa de lembrete quando `lembreteDevido`. Todos os botões desabilitam durante a gravação; `marcarEntregue` nunca apaga `aguardandoCliente`.
+  - `src/app/pedidos/[id]/page.tsx` — selo `bg-blue-100 text-blue-700` com `Hourglass` no cabeçalho quando `estaAguardando(pedido)`; `<CartaoEntrega pedido={pedido} onMudou={carregar} />` logo depois do cabeçalho, só com `!editando`.
+- tsc: `npx tsc --noEmit` limpo. Também rodei `npx eslint` direto nos 5 arquivos (sem tocar a pasta `.next`, com o `dev` de pé) — 0 erros, só os 2 warnings que já existiam em `pedidos/[id]/page.tsx` (nenhum novo).
+- Dúvidas / algo diferente do esperado:
+  - Não tinha acesso ao artifact do mockup do Cowork (7 telas) — segui o texto da I2b ao pé da letra e o padrão visual já usado no cartão "Pagar na retirada" e no `ModalProntoParaEnvio.tsx` (mesmo `Modal`, mesmas classes de badge/card). Vale conferir visualmente se bateu com o mockup.
+  - "Falta receber" na grade do estado "aguardando" só aparece quando o saldo é `> 0` (não coloquei "R$ 0,00") — mesma condição que já uso no selo âmbar do estado "pergunta". Não estava 100% explícito no documento; se quiser sempre mostrar a linha, é só tirar o `&& saldo > 0`.
+  - Não gravei nada em pedido real — nenhuma tela testada pelo navegador (extensão do Chrome segue indisponível aqui).
+- Commit (hash), depois da aprovação do Felipe:
+
+### I2b — revisão do Cowork (23/09 ~17:30)
+- Testado pelo navegador, sem gravar: PIETRA e HEBERTON mostram a pergunta; #2026-0064 (em produção) não mostra; modal abre com "Falta de pagamento" sugerido ("Falta R$ 90.00") e fecha no Esc.
+- Ajustes pedidos: ver seção "I2b-ajustes".
+
+### I2b-ajustes
+- Feito:
+- Commit da I2b (hash):
+
+### I3
+- Arquivos alterados:
+- tsc / build:
 - Dúvidas / algo diferente do esperado:
 - Commit (hash), depois da aprovação do Felipe:

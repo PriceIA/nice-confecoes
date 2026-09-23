@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { ArrowLeft, Printer, ChevronRight, Pencil, Save, X, PlusCircle, Trash2 } from 'lucide-react'
+import { ArrowLeft, Printer, ChevronRight, Pencil, Save, X, PlusCircle, Trash2, Hourglass } from 'lucide-react'
 import { getPedidoById, atualizarPedido } from '@/lib/store'
 import { carregarEtapas, etapasDoPedido } from '@/lib/etapas'
 import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade, formatarData } from '@/lib/helpers'
@@ -18,7 +18,9 @@ import CriarCartaoDoPedido from '@/components/kanban/CriarCartaoDoPedido'
 import ModalProntoParaEnvio from '@/components/producao/ModalProntoParaEnvio'
 import FluxoEtapas from '@/components/producao/FluxoEtapas'
 import Modal from '@/components/kanban/Modal'
+import CartaoEntrega from '@/components/entrega/CartaoEntrega'
 import { pedidoConcluido } from '@/lib/kanban-ui'
+import { estaAguardando } from '@/lib/aguardandoCliente'
 import { useMembro } from '@/components/AuthProvider'
 import clsx from 'clsx'
 import Link from 'next/link'
@@ -407,6 +409,11 @@ export default function DetalhePedidoPage() {
               <h1 className="text-2xl font-bold text-titulo">Pedido #{pedido.numero}</h1>
               <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
               {pedido.tipo === 'urgente' && <span className="badge bg-red-100 text-red-600">urgente</span>}
+              {estaAguardando(pedido) && (
+                <span className="badge bg-blue-100 text-blue-700 flex items-center gap-1">
+                  <Hourglass className="w-3 h-3" /> Aguardando o cliente
+                </span>
+              )}
             </div>
             <p className="text-sm text-fraco mt-0.5">Entrada: {format(new Date(pedido.dataEntrada), 'dd/MM/yyyy')}</p>
           </div>
@@ -422,6 +429,8 @@ export default function DetalhePedidoPage() {
           </button>
         </div>
       </div>
+
+      {!editando && <CartaoEntrega pedido={pedido} onMudou={carregar} />}
 
       {/* Edit mode */}
       {editando && (

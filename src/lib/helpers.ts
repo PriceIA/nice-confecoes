@@ -225,6 +225,11 @@ export function formatarData(valor: string | null | undefined, padrao = 'dd/MM/y
   return d ? format(d, padrao) : '—'
 }
 
+/** Valor em reais no formato brasileiro: 4688 → "R$ 4.688,00". */
+export function moeda(v: number): string {
+  return (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
 /**
  * O prazo de entrega como a pessoa lê: "em 4 dias", "atrasado 1 dia", "amanhã".
  * `tom` é a severidade, para a tela escolher a cor — a função não escolhe classe
