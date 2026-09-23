@@ -2,14 +2,16 @@
 
 **Spec escrita em 23/09/2026 pelo Claude (Cowork), aprovada pelo Felipe no mesmo dia.**
 Este documento é o handoff: o Claude Code lê daqui, executa **SÓ a etapa marcada como ATUAL**,
-e depois preenche a seção "Registro" no fim deste arquivo (o que fez, o que viu, o que ficou em
+e depois registra em `docs/fase-i-registro.md` (o que fez, o que viu, o que ficou em
 dúvida). O Claude (Cowork) lê o registro e escreve a etapa seguinte aqui mesmo.
 
 Mockup aprovado: artifact "Aguardando o cliente — mockup" (7 telas).
 
-> **ETAPA ATUAL: I2b-ajustes → commit da I2b → I3.** Uma de cada vez, na ordem. Terminou a I3? Preencha o Registro e pare.
+> **ETAPA ATUAL: commit da I5 → I6.** Uma de cada vez, na ordem. Terminou a I6?
+> Registre em `docs/fase-i-registro.md` e pare.
 >
-> **Ao preencher o Registro, releia o arquivo do disco antes de gravar** — o Cowork também edita este documento.
+> **Este arquivo é só do Cowork. O Claude Code NÃO edita `docs/fase-i.md`.** O registro de
+> cada etapa vai em **`docs/fase-i-registro.md`** (acrescentando no fim).
 
 ---
 
@@ -437,7 +439,7 @@ Commit: `feat: regras de "aguardando o cliente" e permissão responderEntrega`
 
 ---
 
-## I2b — Cartão no pedido + modal  — implementada, falta commit (ver I2b-ajustes)
+## I2b — Cartão no pedido + modal  — feita (`2441cc0`)
 
 Segue o mockup (telas 1 a 4). Só tokens semânticos. Ícones do `lucide-react` (`CircleHelp`,
 `Hourglass`, `Bell`, `Check`, `RotateCcw`).
@@ -538,7 +540,7 @@ Depois: `npx tsc --noEmit`; pare o dev; `npm run build`; suba o dev; commit
 
 ---
 
-## I3 — `/entregas` com o grupo "Aguardando o cliente"  (depois do commit da I2b)
+## I3 — `/entregas` com o grupo "Aguardando o cliente"  — feita (`8ec3bed`)
 
 Mockup tela 6. Só `src/app/entregas/page.tsx` (e o que precisar importar). Nada de regra nova
 na tela — tudo vem de `@/lib/aguardandoCliente`.
@@ -592,94 +594,302 @@ Commit: `feat: /entregas com o grupo aguardando o cliente`
 
 ---
 
-## I4 a I6 — resumo (o detalhe é escrito aqui antes de executar)
+## I4 — `/dashboard`: atraso da Nice, sino e tabela  — feita (`421aa99`)
 
-- **I4** — `/dashboard`: `atrasados` → `atrasoDaNice`; grupos novos no sino com botões
-  curtos; selos; badge azul na coluna de prazo; chip "Aguardando cliente".
-- **I5** — `/relatorios`: seção "Aguardando o cliente" + "Exportar CSV" (separador `;`, BOM
-  UTF-8 pra abrir certo no Excel) + valores com `moeda()` (a receita hoje sai "R$ 4688.00").
-- **I6** — CHANGELOG.md e CLAUDE.md (só depois da aprovação final).
+Mockup telas 5 e 7. Arquivos: `src/app/dashboard/page.tsx`, `src/app/dashboard/painel.css` e
+`src/lib/helpers.ts` (só o chip). Regras só de `@/lib/aguardandoCliente`.
+
+### 1. Recortes (`page.tsx`)
+- `atrasados` passa a ser `ativos.filter(atrasoDaNice)` — **é a mudança que resolve o
+  problema original**: pedido pronto parado não conta mais como atraso da Nice.
+- Novos: `confirmarEntrega = ativos.filter(perguntarEntrega)`,
+  `aguardando = ativos.filter(estaAguardando)`, `lembretes = aguardando.filter(p => lembreteDevido(p))`.
+- `mostrarEntrega = permissoes.responderEntrega`.
+- `avisos = atrasados.length + (mostrarAprovacao ? aguardandoAprovacao.length : 0)
+  + (mostrarEntrega ? confirmarEntrega.length + lembretes.length : 0)`.
+- O carregamento de hoje está dentro do `useEffect`: extraia para uma função `carregar()`
+  (mesma lógica) para poder recarregar depois de gravar pelo sino.
+
+### 2. Sino (popover) — ordem dos grupos
+1. "Aguardando sua aprovação" (já existe, não muda).
+2. **"Pronto e vencido — já foi entregue?"** (`confirmarEntrega`, só com `mostrarEntrega`,
+   até 4 + "+ N"). Cada item: ícone `CircleHelp` em `var(--pn-azul-fundo)/--pn-azul-texto`,
+   título `#numero cliente` como `Link` para o pedido, sub "Venceu há Nd" + (com
+   `verFinanceiro` e saldo) "· falta {moeda}". Embaixo, dois botões pequenos:
+   **"Foi entregue"** (`confirm()` → `status: 'entregue'` → `carregar()`) e
+   **"Não retirou…"** (abre o `ModalNaoRetirou` em `registrar`; `onGravado={carregar}`).
+3. **"Ainda aguardando o cliente?"** (`lembretes`, só com `mostrarEntrega`). Ícone
+   `Hourglass`, sub "{MOTIVO_LABEL} · parado há Nd". Botões **"Sim, ainda"**
+   (`confirmar(...)`) e **"Já retirou"** (entregue).
+4. **"Atrasado na produção"** — o grupo que hoje se chama "Prazo vencido", agora só com
+   `atrasoDaNice` (renomeie o título do grupo).
+5. Rodapé do popover, se `aguardando.length > 0`: link para `/entregas`
+   "Ver os N aguardando o cliente em Entregas →".
+- **Atenção a HTML inválido:** hoje cada item é um `<Link className="pn-rail-item">`
+  inteiro. Botão dentro de link não pode. Nos grupos 2 e 3 o item vira `<div
+  className="pn-rail-item">` com só o título como `Link`, e os botões ao lado/abaixo.
+- Texto do vazio: "Nenhum aviso agora. Nada atrasado, nada para confirmar e nenhuma
+  liberação esperando você."
+- Falha ao gravar pelo sino: mostrar a frase de erro no topo do popover (`text-red-700`),
+  não `alert()`.
+
+### 3. Hero
+- Subtítulo e selo "N atrasados"/"Tudo em dia" continuam usando `atrasados` (agora só a Nice).
+- Ao lado, selos novos quando > 0 (só com `mostrarEntrega`): `pn-selo azul`
+  "N aguardando o cliente" (ícone `Hourglass`) e `pn-selo ambar` "N pra confirmar entrega".
+- `painel.css`, junto de `.pn-selo.ok/.alerta` (o hero é verde escuro nos dois temas, por
+  isso ali a cor é fixa, como os selos existentes):
+  `.pn-selo.azul { color: #bcdcff; }` e `.pn-selo.ambar { color: #ffe29a; }`.
+
+### 4. Tabela "Pedidos Ativos"
+- Coluna Prazo: se `estaAguardando(p)` → em vez do texto de atraso, `<strong>` "Aguardando
+  cliente · {diasAguardando}d" com a classe nova `tom-aguardando`; se `perguntarEntrega(p)`
+  → "Venceu · confirmar entrega" com `tom-confirmar`. Senão, como hoje.
+  CSS: `.pn-prazo.tom-aguardando strong { color: var(--pn-azul-texto); }` e
+  `.pn-prazo.tom-confirmar strong { color: var(--pn-ambar-texto); }`.
+- Barra de progresso: nesses dois casos, cor verde (não vermelha) — pronto não é atraso.
+- Chip novo em `FILTROS_DASHBOARD` (`helpers.ts`), depois de "Finalizado":
+  `{ value: 'aguardando_cliente', label: 'Aguardando cliente' }`, e `FiltroDashboard`
+  ganha `| 'aguardando_cliente'`. No filtro da tabela: `filtro === 'aguardando_cliente' ?
+  estaAguardando(p)`.
+
+### 5. `painel.css` — botões pequenos do sino
+```css
+.pn-mini-acoes { display: flex; gap: 6px; margin-top: 6px; }
+.pn-mini { font: inherit; font-size: 11.5px; font-weight: 600; border-radius: 8px; padding: 5px 10px; min-height: 30px; cursor: pointer; border: 1px solid var(--borda-forte); background: var(--superficie); color: var(--texto); }
+.pn-mini:hover { background: var(--superficie-2); }
+.pn-mini.primario { background: var(--marca); border-color: var(--marca); color: #fff; }
+.pn-mini.primario:hover { background: var(--marca-hover); }
+.pn-mini:disabled { opacity: .5; cursor: not-allowed; }
+.pn-mini:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
+```
+
+### Teste (Cowork, pelo navegador, sem gravar)
+- O hero deve dizer só os atrasos da produção (antes: 6 atrasados, que incluíam pedidos
+  prontos). PIETRA, LUANA e HEBERTON saem de "atrasado" e aparecem no sino em "já foi
+  entregue?". O chip "Aguardando cliente" filtra (hoje, vazio).
+
+Commit: `feat: dashboard separa atraso da Nice de pedido esperando o cliente`
 
 ---
 
-## Registro (o Claude Code preenche)
+## I4-ajuste — ordem do grupo "já foi entregue?" (antes do commit da I4)
 
-### I0
-- Confirmação do bug (saída do `node -e`): `Mon Aug 31 2026 21:00:00 GMT-0300 (Horário Padrão de Brasília)` — bateu com o esperado.
-- Antes de mexer (Felipe conferiu em localhost, campo mês = setembro/2026): título "Agosto De 2026", Pedidos no mês = 31, Entregues = 16, Cancelados = 0, Receita = R$ 4688.00.
-- Arquivos alterados:
-  - `src/lib/helpers.ts` — `dataLocal`/`formatarData` novos; `prazoTexto` lê a data com `dataLocal`.
-  - `src/lib/store.ts` — import de `prazoTexto`; `pedidosStats.entregaEm7dias` agora usa `prazoTexto` em vez de comparar `Date` direto; `hoje`/`em7dias` removidos.
-  - `src/app/pedidos/[id]/page.tsx` — `formatarData` para `pedido.dataEntrega` (linhas do cabeçalho impresso e do card de entrega). `dataEntrada` e os timestamps de exceção/parcela não foram tocados.
-  - `src/app/pedidos/page.tsx` — `formatarData` para `p.dataEntrega` na tabela.
-  - `src/app/relatorios/page.tsx` — `base = dataLocal(`${mes}-01`) ?? new Date()`; `inicio`/`fim` derivados de `base`; título usa `format(base, ...)`; linha da tabela usa `formatarData(p.dataEntrega, 'dd/MM')`.
-  - `src/app/terceirizadas/page.tsx` — `formatarData(t.dataEnvio)`; import de `format`/`date-fns` removido (ficou sem outro uso).
-  - `src/lib/kanban-ui.ts` — `formatarData(pedido.dataEntrega)` em `descricaoSugerida`; `badgePrazo` não mudou (já usava `+'T00:00:00'`).
-- tsc / build: `npx tsc --noEmit` limpo. `npm run build` compilou sem erro — só os 4 warnings de lint que já existiam antes (`react-hooks/exhaustive-deps` em configuracoes e pedidos/[id], `no-img-element` em pedidos/[id], FotoUpload e MiniaturaArquivo), nenhum novo.
-- "Pedidos no mês" em /relatorios, antes → depois (testado pelo Claude do Cowork pelo navegador, campo mês = setembro/2026):
-  - antes: título "Agosto De 2026" — 31 pedidos / 16 entregues / 0 cancelados / R$ 4688.
-  - depois: título "Setembro De 2026" — 26 pedidos / 2 entregues / 1 cancelado / R$ 390. Escolhendo agosto agora mostra os números antigos (31/16/0/4688) — confirma que era mesmo o mês anterior sendo calculado.
-  - Data de pedido conferida: #2026-0063 TOKA era 25/10 e passou a 26/10 (valor real do banco); #2026-0064 mostra 11/09/2026 igual na lista, no detalhe e na impressão.
-- Dúvidas / algo diferente do esperado:
-  - A extensão do Claude in Chrome não conectou nesta sessão, então a checagem "antes" do passo 2 foi feita pelo Felipe manualmente, não por mim.
-  - Rodar `npm run build` com o `npm run dev` ainda de pé (mesma pasta `.next`) derrubou o dev server (`Cannot find module './426.js'`, 500 em qualquer rota) — tive que matar o processo (PID na porta 3002) e subir o `npm run dev` de novo. Não é um problema do código da I0; é o build de produção e o dev server disputando o mesmo `.next`. Registrando para não repetir a sequência build→dev sem reiniciar nas próximas etapas.
-- Commit (hash), depois da aprovação do Felipe: `664fea9` — `fix: datas do banco lidas no fuso local (relatório mostrava o mês anterior)`. Push feito para `origin/main`.
+No sino, o grupo "Pronto e vencido — já foi entregue?" aparece fora de ordem (7d, 1d, 23d).
+Ordene `confirmarEntrega` com `ordenarPedidos(..., 'entrega_asc')` — o vencido há mais tempo
+primeiro. O mesmo vale para `lembretes` (maior `diasAguardando` primeiro). Depois: pare o dev →
+`npm run build` → suba o dev → commit `feat: dashboard separa atraso da Nice de pedido esperando o cliente` → push.
 
-### I1
-- Migration `017_aguardando_cliente.sql` criada exatamente como no documento. Felipe rodou no Supabase SQL Editor; conferência (consulta única): `tipo_coluna = jsonb`, `constraint_existe = 1`, `com_aguardando = 0`. Bateu com o esperado.
-- Passos 3–5 executados depois da confirmação do Felipe:
-  - `src/types/index.ts` — `MotivoAguardando` e `AguardandoCliente` novos (antes de `Parcela`); `aguardandoCliente?: AguardandoCliente | null` em `Pedido` e em `PedidoLista`.
-  - `src/lib/store.ts` — `mapPedido`/`mapPedidoLista` lêem `row.aguardando_cliente ?? undefined`; `getPedidosLista` inclui `aguardando_cliente` no `select`; `atualizarPedido` grava `dados.aguardandoCliente` quando `!== undefined` (o `null` passa e limpa).
-  - Nenhuma tela mudou, como previsto.
-- tsc / build: `npx tsc --noEmit` limpo. **Não rodei `npm run build`** desta vez — o `npm run dev` ficou de pé o tempo todo, e a I0 já mostrou que os dois brigam pela mesma pasta `.next`.
-- Teste de carregamento: sem a extensão do Claude in Chrome conectada, não consegui clicar nas telas eu mesmo. O log do `npm run dev` não mostra nenhum erro depois das mudanças (as últimas requisições registradas, de antes desta etapa, foram 200 em `/dashboard`, `/relatorios`, `/pedidos`, `/pedidos/[id]` e `/terceirizadas`). Pedi para o Felipe confirmar visualmente que as listas continuam carregando.
-- Dúvidas / algo diferente do esperado: nenhuma além da já registrada na I0 (extensão do Chrome indisponível).
-- Commit (hash), depois da aprovação do Felipe: `062d9eb` — `feat: coluna aguardando_cliente no pedido (migration 017)`. Push feito para `origin/main`.
+---
 
-### I1 — teste de carregamento (Claude do Cowork, pelo navegador, 23/09 ~16:40)
-- /pedidos (64), /dashboard, /entregas (1 pronto: #2026-0012), /producao (30 em andamento), /relatorios (setembro: 26) e /terceirizadas abriram sem erro de carregamento e sem 42703.
-- Console: só avisos que já existiam — chave duplicada ("Bordado") na tabela de impressão de /pedidos/[id] e dois 404 de recurso. Nada da I1.
+## I5 — `/relatorios`: "Aguardando o cliente" + exportar CSV  — implementada, aprovada pelo Cowork
 
-### I2a
-- Arquivos alterados:
-  - `src/lib/aguardandoCliente.ts` (novo) — copiado do documento, sem alteração: `prontoParaRetirada`, `estaAguardando`, `perguntarEntrega`, `atrasoDaNice`, `prontoEm`, `diasAguardando`, `saldoEmAberto`, `motivoSugerido`, `lembreteDevido`, `validar`, `registrar`, `atualizarMotivo`, `confirmar`, mais `DIAS_LEMBRETE`, `OBSERVACAO_MAX`, `MOTIVO_LABEL`.
-  - `src/lib/permissoes.ts` — campo `responderEntrega: boolean` no tipo `Permissoes` (depois de `excluirTerceirizada`); `ACESSO_TOTAL.responderEntrega = true` (a `RECEPCIONISTA` herda pelo spread); `LEITURA_PRODUCAO.responderEntrega = false`.
-- tsc: `npx tsc --noEmit` limpo. Não precisei trocar `_o`/`_p` por `delete` em `atualizarMotivo` — sem `noUnusedLocals` no `tsconfig.json`, o `tsc` não reclamou. Antes do push parei o `dev`, rodei `npm run build`: compilou limpo, o ESLint **não** reclamou dos `_o`/`_p`, só os mesmos 4 warnings pré-existentes (nenhum novo). Subi o `dev` de novo depois.
-- Dúvidas / algo diferente do esperado: nenhuma. Servidor (`localhost:3002`) continuou respondendo depois das mudanças — só os avisos de sempre no log (`Fast Refresh had to perform a full reload`, cache do webpack), nada de erro.
-- Commit (hash), depois da aprovação do Felipe: `5e1f0f5` — `feat: regras de "aguardando o cliente" e permissão responderEntrega`. Push feito para `origin/main`.
+Pedido do Pedro: **relatório sempre para ver E para extrair.** Arquivos:
+`src/lib/csv.ts` (novo), `src/app/relatorios/page.tsx`.
 
-### I2b
-- Arquivos alterados:
-  - `src/components/entrega/ModalNaoRetirou.tsx` (novo) — modal com os 3 rádios de `MOTIVO_LABEL`, textarea de observação (contador N/120), campo de previsão de retirada (`min` = hoje) e a faixa azul explicando o efeito. Pré-seleção: `motivoSugerido` no modo `registrar` (com selo "sugerido" e a linha de saldo), motivo atual no modo `mudar`. Confirmar chama `validar` e, se ok, `registrar`/`atualizarMotivo` + `atualizarPedido(id, { aguardandoCliente })`.
-  - `src/components/entrega/CartaoEntrega.tsx` (novo) — `null` se `!responderEntrega` ou se nem `perguntarEntrega` nem `estaAguardando`. Estado "pergunta" (selo amber de saldo quando `verFinanceiro`), estado "aguardando" (grade com motivo/observação, falta receber, registrado por, previsão), faixa de lembrete quando `lembreteDevido`. Todos os botões desabilitam durante a gravação; `marcarEntregue` nunca apaga `aguardandoCliente`.
-  - `src/app/pedidos/[id]/page.tsx` — selo `bg-blue-100 text-blue-700` com `Hourglass` no cabeçalho quando `estaAguardando(pedido)`; `<CartaoEntrega pedido={pedido} onMudou={carregar} />` logo depois do cabeçalho, só com `!editando`.
-- tsc: `npx tsc --noEmit` limpo. Também rodei `npx eslint` direto nos 5 arquivos (sem tocar a pasta `.next`, com o `dev` de pé) — 0 erros, só os 2 warnings que já existiam em `pedidos/[id]/page.tsx` (nenhum novo).
-- Dúvidas / algo diferente do esperado:
-  - Não tinha acesso ao artifact do mockup do Cowork (7 telas) — segui o texto da I2b ao pé da letra e o padrão visual já usado no cartão "Pagar na retirada" e no `ModalProntoParaEnvio.tsx` (mesmo `Modal`, mesmas classes de badge/card). Vale conferir visualmente se bateu com o mockup.
-  - "Falta receber" na grade do estado "aguardando" só aparece quando o saldo é `> 0` (não coloquei "R$ 0,00") — mesma condição que já uso no selo âmbar do estado "pergunta". Não estava 100% explícito no documento; se quiser sempre mostrar a linha, é só tirar o `&& saldo > 0`.
-  - Não gravei nada em pedido real — nenhuma tela testada pelo navegador (extensão do Chrome segue indisponível aqui).
-- Commit (hash), depois da aprovação do Felipe: ver "I2b-ajustes" abaixo — o commit da I2b só foi feito depois dos ajustes, como pedido.
+### 1. `src/lib/csv.ts` (novo) — exportação que abre certo no Excel brasileiro
 
-### I2b — revisão do Cowork (23/09 ~17:30)
-- Testado pelo navegador, sem gravar: PIETRA e HEBERTON mostram a pergunta; #2026-0064 (em produção) não mostra; modal abre com "Falta de pagamento" sugerido ("Falta R$ 90.00") e fecha no Esc.
-- Ajustes pedidos: ver seção "I2b-ajustes".
+```ts
+// Exporta CSV que o Excel em português abre direto, com acento e colunas certas:
+// separador ';' (o Excel pt-BR usa vírgula como decimal), BOM UTF-8 (sem ele o
+// Excel lê "Ã§" no lugar de "ç") e aspas em todo campo com ; " ou quebra de linha.
 
-### I2b-ajustes
-- Feito:
-  - `moeda()` em `src/lib/helpers.ts`, junto de `formatarData`. Trocado por ela nos dois componentes: `ModalNaoRetirou.tsx` (linha do saldo sugerido) e `CartaoEntrega.tsx` (selo âmbar do estado "pergunta" e "Falta receber" do estado "aguardando").
-  - Frase do estado "pergunta" trocada para "O prazo era {data} — venceu há N dia(s). O pedido está pronto e ninguém confirmou a retirada ainda.", com `N = Math.abs(prazo.dias ?? 0)`.
-  - `erro` (estado + `text-sm text-red-700` abaixo dos botões) em `marcarEntregue`, `desfazer` e `confirmarLembrete` do `CartaoEntrega.tsx`, limpo no início de cada ação.
-  - `border-blue-200` nos dois `card` do `CartaoEntrega.tsx` (confirmei que `.card` define a cor da borda como propriedade CSS solta dentro de `@layer components`, então o utilitário Tailwind — `@layer utilities` — vence por ordem de camada, não precisa de `!important`).
-- `npx tsc --noEmit` limpo. Parei o `dev`, rodei `npm run build`: compilou limpo, os mesmos 4 warnings pré-existentes, nenhum novo. Subi o `dev` de novo.
-- Commit da I2b (hash): `2441cc0` — `feat: pergunta "já foi entregue?" e cartão aguardando o cliente no pedido`. Push feito para `origin/main`.
+export type Celula = string | number | null | undefined
 
-### I3
-- Arquivos alterados:
-  - `src/app/entregas/page.tsx` — reescrita. `prontos = ordenarPedidos(pedidos.filter(p => prontoParaRetirada(p) && !estaAguardando(p)), 'entrega_asc')`; `aguardando = pedidos.filter(estaAguardando)` ordenado por `diasAguardando` decrescente. Subtítulo "N prontos pra entrega · M aguardando o cliente". Tabela "Prontos pra entrega": selo vermelho "Venceu há Nd" quando `perguntarEntrega(p)` (senão `badgePrazo` de sempre), linha "falta {moeda(saldo)}" com `verFinanceiro`, botão "Não retirou…" (abre `ModalNaoRetirou` em `registrar`) quando `perguntarEntrega(p)` e `responderEntrega`. Seção "Aguardando o cliente" (só com `aguardando.length > 0`): título com `Hourglass` numa caixinha azul, pílulas (N pedidos, X peças paradas, e — só com `verFinanceiro` — total a receber), tabela com motivo (selo por tipo + observação + "combinou dd/MM"), "confirmado/registrado por" com dias desde a confirmação, "parado há N dias", "falta receber" (só `verFinanceiro`, "quitado" quando saldo 0), e ações (`responderEntrega`: selo+botão "Sim, ainda" quando `lembreteDevido`, botão "Cliente retirou", link "Ver" sempre visível). Erros de gravação caem no `erro` que a tela já tinha.
-- tsc / build: `npx tsc --noEmit` limpo em todas as passagens. `npx eslint src/app/entregas/page.tsx` direto (dev de pé, sem tocar `.next`) deu 0 erros/0 warnings antes da aprovação. Depois da aprovação do Felipe: parei o `dev`, `npm run build` compilou limpo (mesmos 4 warnings pré-existentes, nenhum novo), subi o `dev` de novo.
-- Dúvidas / algo diferente do esperado:
-  - "Ver" na seção "Aguardando o cliente" ficou fora do `permissoes.responderEntrega` — é só navegação, sem gravação, e a tabela "Prontos pra entrega" já trata o link assim. O documento lista "Ver" dentro do mesmo item de bullet das ações restritas, mas não deixa claro se ele também deveria ser restrito; segui o padrão já existente na outra tabela.
-  - "Combinou dd/MM" usa `formatarData(a.previsaoRetirada, 'dd/MM')`, não um parse manual — mesma função da I0/I2b, evita reabrir o bug de fuso.
-  - Não gravei nada em pedido real. O Cowork testou pelo navegador antes da aprovação (ver mensagem do Felipe) e aprovou.
-  - **Nota sobre este mesmo Registro:** entre o preenchimento anterior (I2b-ajustes/I3) e agora, o `docs/fase-i.md` em disco voltou para uma versão sem essas duas seções preenchidas (parecia ser a versão de antes do commit `2441cc0`) — reescrevi o conteúdo de memória desta conversa. Se o Cowork reescreve o arquivo inteiro a cada atualização (em vez de só adicionar a etapa nova), isso vai continuar derrubando o Registro já preenchido; talvez valha ele só acrescentar, não substituir o arquivo todo.
-- Commit (hash), depois da aprovação do Felipe: `[preencher após o commit desta etapa]`
+function celula(v: Celula): string {
+  if (v === null || v === undefined) return ''
+  const t = typeof v === 'number' ? String(v).replace('.', ',') : v
+  return /[;"\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t
+}
+
+export function montarCsv(cabecalho: string[], linhas: Celula[][]): string {
+  return [cabecalho, ...linhas].map(l => l.map(celula).join(';')).join('\r\n')
+}
+
+export function baixarCsv(nomeArquivo: string, cabecalho: string[], linhas: Celula[][]): void {
+  const blob = new Blob(['﻿' + montarCsv(cabecalho, linhas)], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nomeArquivo
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+```
+
+Valores em dinheiro vão como **número** (ex.: `480.5` → `480,5`), não como texto "R$ …",
+para o Pedro conseguir somar no Excel.
+
+### 2. `/relatorios` — seção nova "Aguardando o cliente"
+
+Entre os cards de KPI e a grade "Complexidade / Em Andamento".
+
+- **Quem entra:** `lista = pedidos.filter(p => p.aguardandoCliente && (estaAguardando(p) ||
+  registradoNoMes(p)))`, onde `registradoNoMes` = `registradoEm` dentro de `inicio`/`fim` do
+  mês escolhido. Ou seja: todo pedido que **está** aguardando agora, mais os que **foram**
+  registrados no mês e já saíram (entregues/cancelados) — é o histórico.
+- **Coluna "Situação":** "Aguardando" (`estaAguardando`) · "Entregue" · "Cancelado".
+- **4 números no topo da seção** (só dos que estão aguardando AGORA): pedidos, peças paradas
+  (`totalPecas`), valor parado (soma de `valorTotal`) e a receber (soma de `saldoEmAberto`).
+  Os dois de dinheiro com `moeda()`.
+- **Por motivo:** uma linha por `MOTIVO_LABEL` com quantidade e valor a receber (só os
+  aguardando agora). Pode ser uma lista simples com barra, igual "Distribuição por
+  Complexidade" (barra `bg-amber-400` para pagamento, `bg-blue-400` sem tempo,
+  `bg-gray-400` outro).
+- **Tabela:** Nº · Cliente · Situação · Motivo (+ observação em `text-xs text-fraco`) ·
+  Parado há (`diasAguardando`, só para "Aguardando"; senão "—") · Valor · Falta receber ·
+  Registrado por/em · Combinou (`previsaoRetirada`). Ordenada por dias parado decrescente.
+- Vazio: "Nenhum pedido aguardando o cliente neste mês."
+- A tela `/relatorios` já é só de gestor/recepcionista (rotas), mas mantenha os valores atrás
+  de `permissoes.verFinanceiro` como no resto do sistema.
+
+### 3. Botões "Exportar CSV" (`btn-secondary`, ícone `Download`, `print:hidden`)
+
+- Na seção nova: arquivo `aguardando-cliente-AAAA-MM.csv` com as colunas da tabela, mais
+  "Prazo" (`formatarData`), "Pronto desde" (`prontoEm`) e "Confirmado por/em".
+- Na tabela "Todos os Pedidos do Mês": arquivo `pedidos-AAAA-MM.csv` com Nº, Cliente,
+  Empresa, Peças, Status (`STATUS_CONFIG[..].label`), Entrada, Entrega, Valor total, Valor
+  pago, Falta receber.
+- Datas no CSV como `dd/MM/yyyy`.
+
+### 4. Formato brasileiro no que já existe
+- Card "Receita (entregues)": `moeda(receitaTotal)` (hoje sai "R$ 4688.00").
+- Coluna Valor da tabela do mês: `moeda(p.valorTotal)`.
+- De passagem, nesses mesmos cards: `bg-green-50`/`bg-red-50`/`bg-blue-50` etc. já são
+  variáveis do tema — não mexer.
+
+### Teste (Cowork, pelo navegador, sem gravar)
+- Setembro: seção vazia (ninguém registrado ainda); exportar os pedidos do mês baixa um CSV.
+  Abrir o CSV no Excel é com o Felipe/Pedro (acento e colunas certas).
+- Receita em "R$ 390,00".
+
+Commit: `feat: relatório de pedidos aguardando o cliente e exportação CSV`
+
+---
+
+## I6 — CHANGELOG.md e CLAUDE.md  ← ATUAL (depois do commit da I5)
+
+Aprovado pelo Felipe. Só documentação. Um commit: `docs: fase I no CHANGELOG e no CLAUDE.md`.
+Incluir no mesmo commit `docs/fase-i.md` e `docs/fase-i-registro.md` (o `fase-i.md` você pode
+commitar como está no disco — só não edite).
+
+### 1. `CHANGELOG.md` — acrescentar no topo de `[Não lançado]` (acima da Fase H)
+
+```markdown
+### Fase I — "Aguardando o cliente" + correção de fuso nas datas
+
+Sessão de 23/09/2026. Spec em `docs/fase-i.md` (Claude do Cowork), registro em
+`docs/fase-i-registro.md` (Claude Code). Migration `017_aguardando_cliente.sql`, rodada pelo
+Felipe no mesmo dia. Commits: I0 `664fea9` · I1 `062d9eb` · I2a `5e1f0f5` · I2b `2441cc0` ·
+I3 `8ec3bed` · I4 `421aa99` · I5 `<hash>`.
+
+**O problema:** pedido pronto que o cliente não vem buscar (falta de dinheiro, de tempo, outro
+motivo) aparecia como ATRASADO no dashboard, mas o atraso não é da Nice.
+
+**Corrigido (I0):**
+- Coluna `date` do banco (`data_entrega`, `data_envio`) era lida como meia-noite UTC — em
+  Brasília, 21h do dia anterior. Efeitos reais: **`/relatorios` calculava o mês anterior**
+  (com setembro escolhido, título "Agosto" e 31 pedidos em vez de 26); datas de entrega
+  apareciam um dia antes em `/pedidos`, `/pedidos/[id]` e na impressão; o pedido que vence
+  hoje aparecia "atrasado 1 dia" no dashboard. Novas `dataLocal`/`formatarData` em `helpers.ts`.
+
+**Adicionado:**
+- Coluna `pedidos.aguardando_cliente` (jsonb, migration 017): motivo (`pagamento` /
+  `sem_tempo` / `outro`), observação, previsão de retirada, quem registrou/confirmou e quando.
+  Não é status novo — mesmo padrão de `excecao_pagamento`.
+- `src/lib/aguardandoCliente.ts`: ponto único das regras — `prontoParaRetirada` (status
+  `finalizado` OU todas as etapas concluídas), `atrasoDaNice`, `perguntarEntrega`,
+  `estaAguardando`, `lembreteDevido` (todo dia, ou a partir da data combinada),
+  `diasAguardando`, `motivoSugerido` (saldo em aberto → falta de pagamento).
+- Permissão `responderEntrega` (só gestor e recepcionista).
+- `/pedidos/[id]`: pergunta "Este pedido já foi entregue?" para pedido pronto e vencido; modal
+  "O cliente ainda não retirou"; cartão "Aguardando o cliente há N dias" com lembrete diário,
+  mudar motivo e desfazer. Selo no cabeçalho.
+- `/entregas`: botão "Não retirou…" nos vencidos e seção "Aguardando o cliente" com pedidos,
+  peças paradas e valor a receber.
+- `/dashboard`: sino com "Pronto e vencido — já foi entregue?" e "Ainda aguardando o
+  cliente?" (botões direto no sino); selos no topo; prazo "aguardando cliente" na tabela;
+  chip "Aguardando cliente".
+- `/relatorios`: seção "Aguardando o cliente" (agora + histórico do mês, por motivo) e
+  **Exportar CSV** (aguardando e pedidos do mês) — abre direto no Excel.
+- `src/lib/csv.ts` e `moeda()` em `helpers.ts` (valores no formato R$ 1.234,56).
+
+**Alterado:**
+- `/dashboard`: "atrasados" agora é só atraso da produção. No dia da entrega: de "6 atrasados"
+  para "3 atrasados · 3 pra confirmar entrega".
+- `/entregas`: critério passou a `prontoParaRetirada` — pedido `finalizado` com etapa pendente
+  também entra (de 1 para 5 pedidos no dia).
+
+**Processo:** handoff em dois arquivos — `docs/fase-i.md` só do Cowork, `docs/fase-i-registro.md`
+só do Code. Motivo: duas vezes um lado gravou o documento inteiro a partir de uma cópia antiga
+e apagou o que o outro tinha escrito.
+```
+
+(Troque `<hash>` pelo hash da I5.)
+
+### 2. `CLAUDE.md` — mudanças pontuais (não reescrever o arquivo)
+
+a) **Tabela "Módulos existentes"**, 3 linhas:
+- `/dashboard`: acrescentar no fim da descrição: "Sino com avisos (liberações, pedidos prontos
+  e vencidos pra confirmar entrega, lembretes de aguardando o cliente, atrasos da produção) —
+  'atrasados' é `atrasoDaNice`, nunca 'prazo vencido' puro (Fase I)."
+- `/entregas`: trocar por "Pedidos prontos para retirada (`prontoParaRetirada`: status
+  `finalizado` OU todas as etapas concluídas/não aplicáveis), ainda não entregues; 'Marcar como
+  entregue' e 'Não retirou…'. Seção 'Aguardando o cliente'. Só gestor/recepcionista".
+- `/relatorios`: trocar por "Fechamento mensal: receita, unidades, complexidade, 'Aguardando o
+  cliente' (agora + histórico do mês) e Exportar CSV".
+
+b) **Código compartilhado**, novos itens (depois de `excecaoPagamento.ts`):
+- `src/lib/aguardandoCliente.ts` — **ponto único** das regras de "aguardando o cliente" e de
+  "atraso da Nice" (Fase I). Ver regra 13.
+- `src/lib/csv.ts` — `baixarCsv`/`montarCsv`: `;`, BOM UTF-8, número com vírgula. Use para
+  toda exportação nova.
+- `src/components/entrega/` — `CartaoEntrega` (pedido) e `ModalNaoRetirou` (pedido, /entregas
+  e sino do dashboard). Não duplique.
+- No item de `helpers.ts`, acrescentar: "Desde a Fase I: **`dataLocal`/`formatarData`** (toda
+  coluna `date` do banco passa por elas — nunca `new Date('AAAA-MM-DD')`, que é UTC e volta um
+  dia no Brasil) e **`moeda`** (R$ no formato brasileiro — nunca `toFixed(2)`)."
+
+c) **Modelo de dados / `pedidos`:** acrescentar `aguardando_cliente jsonb` na lista de colunas
+e uma linha: "`aguardando_cliente` (migration 017, Fase I): nullable; `null` = não se aplica.
+Constraint `pedidos_aguardando_cliente_motivo_check` limita `motivo` a pagamento/sem_tempo/outro.
+Marcar entregue **não** limpa o campo — fica de histórico para o relatório."
+
+d) **Convenções do schema:** trocar "Numere a próxima a partir de `016_`" por "Já foram usadas
+até a `017_` (Fase I). Numere a próxima a partir de `018_`. **Atenção:** a `016_cards_visibilidade.sql`
+rodou em 29/08 mas o arquivo não está em `supabase/migrations/` — recuperar se possível."
+
+e) **Regras de negócio**, nova regra 13 (depois da 12):
+
+```markdown
+13. **Atraso da Nice ≠ pedido esperando o cliente** (Fase I, 23/09/2026). Toda a decisão vive
+    em `src/lib/aguardandoCliente.ts`; as telas só perguntam.
+
+    - **Pronto para retirada** = status `finalizado` OU todas as etapas concluídas/não
+      aplicáveis. Os dois sentidos de "finalizado" que o sistema tem valem igual.
+    - **Atraso da Nice** = ativo, vencido e **não** pronto. É o único "atrasado" do dashboard.
+    - **Pronto + vencido + sem resposta** → o sistema pergunta "já foi entregue?" (pedido,
+      /entregas, sino). Não conta como atraso.
+    - **Aguardando o cliente** = `aguardando_cliente` preenchido. Lembrete **todo dia**
+      ("Ainda aguardando?"), ou só a partir de `previsaoRetirada` se o cliente combinou um dia.
+    - **Dias parado** contam desde o que vier depois: prazo ou dia em que ficou pronto.
+    - Quem responde: só gestor e recepcionista (`responderEntrega`; no banco, `pedidos_write`).
+```
+
+f) **Convenções de trabalho**, novo item: "Handoff de fase: `docs/fase-X.md` é a spec (só o
+Claude do Cowork edita); `docs/fase-X-registro.md` é o registro (só o Claude Code, sempre
+acrescentando no fim). Nunca grave um desses arquivos a partir de cópia antiga."
+
+### Teste
+`npx tsc --noEmit` e build (só doc, mas confirma que nada quebrou). Push.
+
+Depois disso a Fase I está fechada. O Cowork atualiza os documentos do projeto no claude.ai.
+
+---
+
+## Registro
+
+Fica em **`docs/fase-i-registro.md`** (desde 23/09, ~17:45). Este arquivo (`fase-i.md`) é só do
+Cowork; o Claude Code não edita aqui.

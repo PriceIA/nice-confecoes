@@ -120,18 +120,18 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | Rota | Arquivo | O que faz |
 |---|---|---|
 | `/` | `src/app/page.tsx` | Server component; redireciona para `/dashboard` |
-| `/dashboard` | `src/app/dashboard/page.tsx` | 4 cards de KPI (`pedidosStats`; "Em produção" é o cartão dominante, "Urgentes"/"Entrega em 7 dias" só coloridos quando `> 0`), tabela "Pedidos Ativos" com busca + chips de status (`FILTROS_DASHBOARD`) e colunas de progresso (`resumoProgresso`) e prazo em dias (`prazoTexto`), faixa de urgentes (1 linha, botão "Filtrar urgentes") e faixa de liberações de "pagar na retirada" esperando o gestor (1 linha) |
+| `/dashboard` | `src/app/dashboard/page.tsx` | 4 cards de KPI (`pedidosStats`; "Em produção" é o cartão dominante, "Urgentes"/"Entrega em 7 dias" só coloridos quando `> 0`), tabela "Pedidos Ativos" com busca + chips de status (`FILTROS_DASHBOARD`) e colunas de progresso (`resumoProgresso`) e prazo em dias (`prazoTexto`), faixa de urgentes (1 linha, botão "Filtrar urgentes") e faixa de liberações de "pagar na retirada" esperando o gestor (1 linha). Sino com avisos (liberações, pedidos prontos e vencidos pra confirmar entrega, lembretes de aguardando o cliente, atrasos da produção) — "atrasados" é `atrasoDaNice`, nunca "prazo vencido" puro (Fase I) |
 | `/pedidos` | `src/app/pedidos/page.tsx` | Lista, busca (cliente/empresa/número), filtro por status, excluir |
 | `/pedidos/[id]` | `src/app/pedidos/[id]/page.tsx` | Detalhe e edição ampla, progresso por setor, parcelas, layout de impressão A4 (bloco `print:block` em `:681`) |
 | `/novo-pedido` | `src/app/novo-pedido/page.tsx` | Cadastro: cliente com autocomplete, seletor da tabela de preço do pedido, peças (com "outra peça" digitável e cadastrável), tamanhos (com tamanho livre), personalizações, parcelas, arte em imagem/PDF, vetorização |
 | `/clientes` | `src/app/clientes/page.tsx` | Lista, busca, edição inline, histórico de pedidos do cliente |
 | `/tabela-precos` | `src/app/tabela-precos/page.tsx` | **Várias** listas de preço (`Escolar 1`, `Escolar 2`, …), cada uma com grupos e peças criáveis/removíveis pela própria tela. Grade lida do banco, não do código |
 | `/producao` | `src/app/producao/page.tsx` | Acompanhamento das etapas do pedido; clique cicla pendente → em_andamento → concluido. Lixeira marca "não se aplica"; a gestão arrasta para reordenar e adiciona etapa. Busca, recorte por estágio e ordenação (inclusive por completude), guardados em `localStorage` |
-| `/entregas` | `src/app/entregas/page.tsx` | Fila de pedidos com **todas as etapas** concluídas ou não aplicáveis, ainda não entregues; botão "Marcar como entregue". Só gestor/recepcionista |
+| `/entregas` | `src/app/entregas/page.tsx` | Pedidos prontos para retirada (`prontoParaRetirada`: status `finalizado` OU todas as etapas concluídas/não aplicáveis), ainda não entregues; "Marcar como entregue" e "Não retirou…". Seção "Aguardando o cliente". Só gestor/recepcionista |
 | `/quadros` | `src/app/quadros/page.tsx` | Kanban livre: grid de quadros, com criar/renomear/arquivar/excluir |
 | `/quadros/[id]` | `src/app/quadros/[id]/page.tsx` + `components/kanban/QuadroBoard.tsx` | O quadro: listas lado a lado, cartões, drag-and-drop |
 | `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros. Lançamento editável em todos os campos; excluir só o gestor (`excluirTerceirizada`). Seção **Prestadores**: cadastro com serviços e valor por prestador — o lançamento passa a escolher prestador + serviço num seletor (com "outro/avulso" pra não travar ninguém), que preenche quantidade × valor unitário automaticamente |
-| `/relatorios` | `src/app/relatorios/page.tsx` | Fechamento mensal: receita, unidades, distribuição por complexidade |
+| `/relatorios` | `src/app/relatorios/page.tsx` | Fechamento mensal: receita, unidades, complexidade, "Aguardando o cliente" (agora + histórico do mês) e Exportar CSV |
 | `/configuracoes` | `src/app/configuracoes/page.tsx` | **Etapas de produção** — criar, renomear, reordenar, ativar/desativar; esta seção **vai para o banco** (`etapas_producao`). O catálogo de peças e personalizações, logo abaixo, continua gravando **só em `localStorage`**: não vai para o banco nem é compartilhado entre dispositivos. Peça registrada pelo `/novo-pedido` NÃO passa por aqui: vai para `tabela_precos` |
 | `/login` | `src/app/login/page.tsx` + `LoginForm.tsx` | Única rota pública. Usuário curto + senha; o e-mail é montado como `usuario@niceconfec.app` |
 | `/perfil` | `src/app/perfil/page.tsx` | Mostra nome e perfil do usuário logado e permite trocar a própria senha. Aberta a todos os perfis |
@@ -173,6 +173,12 @@ Código compartilhado:
   usada por `/tabela-precos` e `/novo-pedido`. Client autenticado, como o resto pós-Fase B
 - `src/lib/excecaoPagamento.ts` — **ponto único** da decisão "este pedido pode ir para
   produção?". Ver regra 1
+- `src/lib/aguardandoCliente.ts` — **ponto único** das regras de "aguardando o cliente" e de
+  "atraso da Nice" (Fase I). Ver regra 13
+- `src/lib/csv.ts` — `baixarCsv`/`montarCsv`: `;`, BOM UTF-8, número com vírgula. Use para
+  toda exportação nova
+- `src/components/entrega/` — `CartaoEntrega` (pedido) e `ModalNaoRetirou` (pedido, /entregas
+  e sino do dashboard). Não duplique
 - `src/lib/arquivos.ts` — anexos de arte: tipos aceitos (imagem + PDF), teto de tamanho,
   detecção de PDF pela URL, nome legível, sanitização da chave do Storage
 - `src/lib/precosEscolar.ts` — semente dos preços da categoria Escolar, com os
@@ -206,7 +212,9 @@ Código compartilhado:
   `differenceInDays`, para não contar em blocos de 24h). A tabela de `/dashboard` ordena por
   **`entrega_asc` fixo**, sem seletor e sem `localStorage` — é proposital (Fase F), não
   esqueça disso por "consertar" de volta para a ordem crua de `getPedidos()`
-  (`data_entrada desc`)
+  (`data_entrada desc`). Desde a Fase I: **`dataLocal`/`formatarData`** (toda coluna `date` do
+  banco passa por elas — nunca `new Date('AAAA-MM-DD')`, que é UTC e volta um dia no Brasil) e
+  **`moeda`** (R$ no formato brasileiro — nunca `toFixed(2)`)
 - `src/lib/etapas.ts` — o catálogo de etapas (`etapas_producao`) e, mais importante, a
   RESOLUÇÃO de nome e ordem: `rotuloEtapa` (catálogo → `SETOR_LABELS` → a própria chave) e
   `etapasDoPedido` (ordem do pedido → do catálogo → canônica). `ETAPAS_PADRAO` é **semente**,
@@ -279,13 +287,17 @@ id uuid pk · numero text · cliente_id uuid fk→clientes · consultor text
 tipo text · status text · data_entrada timestamptz · data_entrega date
 valor_total numeric · valor_pago numeric · observacoes text · updated_at timestamptz
 pecas jsonb · parcelas jsonb · progresso jsonb · vetorizacao jsonb · imagem text
-tabela_preco text · excecao_pagamento jsonb
+tabela_preco text · excecao_pagamento jsonb · aguardando_cliente jsonb
 ```
 
 `tabela_preco` (migration 012) e `excecao_pagamento` (migration 013) são da Fase C2. As duas
 são **nullable sem default**, de propósito: pedido gravado antes delas não escolheu tabela
 nenhuma nem pediu exceção nenhuma, e preencher um valor retroativo afirmaria uma coisa que
 não aconteceu. As telas tratam `null` como "não registrado".
+
+`aguardando_cliente` (migration 017, Fase I): nullable; `null` = não se aplica. Constraint
+`pedidos_aguardando_cliente_motivo_check` limita `motivo` a pagamento/sem_tempo/outro. Marcar
+entregue **não** limpa o campo — fica de histórico para o relatório.
 
 > **As peças do pedido são JSONB dentro da tabela `pedidos`, não uma tabela relacional
 > separada.** O mesmo vale para `parcelas`, `progresso` e `vetorizacao`.
@@ -512,7 +524,8 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
 - Os arquivos de migration têm **prefixos duplicados**: existem dois `002_` e dois `004_`.
   `004_pedido_imagem.sql` e `004_vetorizacao.sql` criam a mesma coluna `vetorizacao`
   (ambos com `if not exists`, então é idempotente, mas confuso). Já foram usadas até a
-  `015_` (Fase D2.1). Numere a próxima a partir de `016_`.
+  `017_` (Fase I). Numere a próxima a partir de `018_`. **Atenção:** a `016_cards_visibilidade.sql`
+  rodou em 29/08 mas o arquivo não está em `supabase/migrations/` — recuperar se possível.
 - Colunas órfãs, criadas por migration e **não usadas em nenhum lugar do código**:
   `pedidos.imagem` e `clientes.responsavel_empresa`. Não assuma que estão populadas.
 
@@ -660,6 +673,18 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
     `membrosVisiveis` preenchido > `perfisVisiveis` EXATAMENTE `['gestor','recepcionista']` >
     `perfisVisiveis` preenchido > "Todos". A maioria dos cartões já existentes tem
     `perfisVisiveis` restrito — "Todos" por padrão errado seria pior que não ter seletor.
+13. **Atraso da Nice ≠ pedido esperando o cliente** (Fase I, 23/09/2026). Toda a decisão vive
+    em `src/lib/aguardandoCliente.ts`; as telas só perguntam.
+
+    - **Pronto para retirada** = status `finalizado` OU todas as etapas concluídas/não
+      aplicáveis. Os dois sentidos de "finalizado" que o sistema tem valem igual.
+    - **Atraso da Nice** = ativo, vencido e **não** pronto. É o único "atrasado" do dashboard.
+    - **Pronto + vencido + sem resposta** → o sistema pergunta "já foi entregue?" (pedido,
+      /entregas, sino). Não conta como atraso.
+    - **Aguardando o cliente** = `aguardando_cliente` preenchido. Lembrete **todo dia**
+      ("Ainda aguardando?"), ou só a partir de `previsaoRetirada` se o cliente combinou um dia.
+    - **Dias parado** contam desde o que vier depois: prazo ou dia em que ficou pronto.
+    - Quem responde: só gestor e recepcionista (`responderEntrega`; no banco, `pedidos_write`).
 
 ## Convenções de trabalho
 
@@ -679,6 +704,9 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
   `459da20` falhou por um erro que já estava no código havia semanas
   (`react/no-unescaped-entities` em `pedidos/[id]/page.tsx:879`). `tsc --noEmit` limpo NÃO é
   suficiente.
+- **Handoff de fase:** `docs/fase-X.md` é a spec (só o Claude do Cowork edita);
+  `docs/fase-X-registro.md` é o registro (só o Claude Code, sempre acrescentando no fim).
+  Nunca grave um desses arquivos a partir de cópia antiga.
 
 ## Estado de segurança atual
 

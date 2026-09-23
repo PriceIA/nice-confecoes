@@ -8,6 +8,54 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase I — "Aguardando o cliente" + correção de fuso nas datas
+
+Sessão de 23/09/2026. Spec em `docs/fase-i.md` (Claude do Cowork), registro em
+`docs/fase-i-registro.md` (Claude Code). Migration `017_aguardando_cliente.sql`, rodada pelo
+Felipe no mesmo dia. Commits: I0 `664fea9` · I1 `062d9eb` · I2a `5e1f0f5` · I2b `2441cc0` ·
+I3 `8ec3bed` · I4 `421aa99` · I5 `efd2d6d`.
+
+**O problema:** pedido pronto que o cliente não vem buscar (falta de dinheiro, de tempo, outro
+motivo) aparecia como ATRASADO no dashboard, mas o atraso não é da Nice.
+
+**Corrigido (I0):**
+- Coluna `date` do banco (`data_entrega`, `data_envio`) era lida como meia-noite UTC — em
+  Brasília, 21h do dia anterior. Efeitos reais: **`/relatorios` calculava o mês anterior**
+  (com setembro escolhido, título "Agosto" e 31 pedidos em vez de 26); datas de entrega
+  apareciam um dia antes em `/pedidos`, `/pedidos/[id]` e na impressão; o pedido que vence
+  hoje aparecia "atrasado 1 dia" no dashboard. Novas `dataLocal`/`formatarData` em `helpers.ts`.
+
+**Adicionado:**
+- Coluna `pedidos.aguardando_cliente` (jsonb, migration 017): motivo (`pagamento` /
+  `sem_tempo` / `outro`), observação, previsão de retirada, quem registrou/confirmou e quando.
+  Não é status novo — mesmo padrão de `excecao_pagamento`.
+- `src/lib/aguardandoCliente.ts`: ponto único das regras — `prontoParaRetirada` (status
+  `finalizado` OU todas as etapas concluídas), `atrasoDaNice`, `perguntarEntrega`,
+  `estaAguardando`, `lembreteDevido` (todo dia, ou a partir da data combinada),
+  `diasAguardando`, `motivoSugerido` (saldo em aberto → falta de pagamento).
+- Permissão `responderEntrega` (só gestor e recepcionista).
+- `/pedidos/[id]`: pergunta "Este pedido já foi entregue?" para pedido pronto e vencido; modal
+  "O cliente ainda não retirou"; cartão "Aguardando o cliente há N dias" com lembrete diário,
+  mudar motivo e desfazer. Selo no cabeçalho.
+- `/entregas`: botão "Não retirou…" nos vencidos e seção "Aguardando o cliente" com pedidos,
+  peças paradas e valor a receber.
+- `/dashboard`: sino com "Pronto e vencido — já foi entregue?" e "Ainda aguardando o
+  cliente?" (botões direto no sino); selos no topo; prazo "aguardando cliente" na tabela;
+  chip "Aguardando cliente".
+- `/relatorios`: seção "Aguardando o cliente" (agora + histórico do mês, por motivo) e
+  **Exportar CSV** (aguardando e pedidos do mês) — abre direto no Excel.
+- `src/lib/csv.ts` e `moeda()` em `helpers.ts` (valores no formato R$ 1.234,56).
+
+**Alterado:**
+- `/dashboard`: "atrasados" agora é só atraso da produção. No dia da entrega: de "6 atrasados"
+  para "3 atrasados · 3 pra confirmar entrega".
+- `/entregas`: critério passou a `prontoParaRetirada` — pedido `finalizado` com etapa pendente
+  também entra (de 1 para 5 pedidos no dia).
+
+**Processo:** handoff em dois arquivos — `docs/fase-i.md` só do Cowork, `docs/fase-i-registro.md`
+só do Code. Motivo: duas vezes um lado gravou o documento inteiro a partir de uma cópia antiga
+e apagou o que o outro tinha escrito.
+
 ### Fase H — redesign visual do `/dashboard`
 
 Sessão de 22/09/2026, commit `6b1e99a`, sem SQL e sem mudança de schema. Feita via Cowork (edição direta dos

@@ -139,4 +139,5 @@ partir de uma cópia antiga e apagou etapas novas que o Cowork tinha acabado de 
   - Coluna "Parado há" mostra "—" para pedido que já saiu (entregue/cancelado) — só faz sentido pra quem `estaAguardando` de verdade, como o documento pede ("só para 'Aguardando'").
   - Não gravei nada em pedido real. O Felipe testou o CSV no Excel (ok) antes de aprovar.
   - **Nota sobre este mesmo Registro:** de novo o `docs/fase-i-registro.md` em disco voltou pro estado do commit anterior (`421aa99`), sem as seções "I4-ajuste" e "I5" que eu tinha escrito — restaurei o conteúdo de memória desta conversa antes de seguir.
+- Commit (hash), depois da aprovação do Felipe: `efd2d6d` — `feat: relatório de pedidos aguardando o cliente e exportação CSV`. Push feito para `origin/main`.
 
