@@ -658,7 +658,7 @@ Commit: `feat: /entregas com o grupo aguardando o cliente`
   - Não tinha acesso ao artifact do mockup do Cowork (7 telas) — segui o texto da I2b ao pé da letra e o padrão visual já usado no cartão "Pagar na retirada" e no `ModalProntoParaEnvio.tsx` (mesmo `Modal`, mesmas classes de badge/card). Vale conferir visualmente se bateu com o mockup.
   - "Falta receber" na grade do estado "aguardando" só aparece quando o saldo é `> 0` (não coloquei "R$ 0,00") — mesma condição que já uso no selo âmbar do estado "pergunta". Não estava 100% explícito no documento; se quiser sempre mostrar a linha, é só tirar o `&& saldo > 0`.
   - Não gravei nada em pedido real — nenhuma tela testada pelo navegador (extensão do Chrome segue indisponível aqui).
-- Commit (hash), depois da aprovação do Felipe:
+- Commit (hash), depois da aprovação do Felipe: ver "I2b-ajustes" abaixo — o commit da I2b só foi feito depois dos ajustes, como pedido.
 
 ### I2b — revisão do Cowork (23/09 ~17:30)
 - Testado pelo navegador, sem gravar: PIETRA e HEBERTON mostram a pergunta; #2026-0064 (em produção) não mostra; modal abre com "Falta de pagamento" sugerido ("Falta R$ 90.00") e fecha no Esc.
@@ -666,10 +666,20 @@ Commit: `feat: /entregas com o grupo aguardando o cliente`
 
 ### I2b-ajustes
 - Feito:
-- Commit da I2b (hash):
+  - `moeda()` em `src/lib/helpers.ts`, junto de `formatarData`. Trocado por ela nos dois componentes: `ModalNaoRetirou.tsx` (linha do saldo sugerido) e `CartaoEntrega.tsx` (selo âmbar do estado "pergunta" e "Falta receber" do estado "aguardando").
+  - Frase do estado "pergunta" trocada para "O prazo era {data} — venceu há N dia(s). O pedido está pronto e ninguém confirmou a retirada ainda.", com `N = Math.abs(prazo.dias ?? 0)`.
+  - `erro` (estado + `text-sm text-red-700` abaixo dos botões) em `marcarEntregue`, `desfazer` e `confirmarLembrete` do `CartaoEntrega.tsx`, limpo no início de cada ação.
+  - `border-blue-200` nos dois `card` do `CartaoEntrega.tsx` (confirmei que `.card` define a cor da borda como propriedade CSS solta dentro de `@layer components`, então o utilitário Tailwind — `@layer utilities` — vence por ordem de camada, não precisa de `!important`).
+- `npx tsc --noEmit` limpo. Parei o `dev`, rodei `npm run build`: compilou limpo, os mesmos 4 warnings pré-existentes, nenhum novo. Subi o `dev` de novo.
+- Commit da I2b (hash): `2441cc0` — `feat: pergunta "já foi entregue?" e cartão aguardando o cliente no pedido`. Push feito para `origin/main`.
 
 ### I3
 - Arquivos alterados:
-- tsc / build:
+  - `src/app/entregas/page.tsx` — reescrita. `prontos = ordenarPedidos(pedidos.filter(p => prontoParaRetirada(p) && !estaAguardando(p)), 'entrega_asc')`; `aguardando = pedidos.filter(estaAguardando)` ordenado por `diasAguardando` decrescente. Subtítulo "N prontos pra entrega · M aguardando o cliente". Tabela "Prontos pra entrega": selo vermelho "Venceu há Nd" quando `perguntarEntrega(p)` (senão `badgePrazo` de sempre), linha "falta {moeda(saldo)}" com `verFinanceiro`, botão "Não retirou…" (abre `ModalNaoRetirou` em `registrar`) quando `perguntarEntrega(p)` e `responderEntrega`. Seção "Aguardando o cliente" (só com `aguardando.length > 0`): título com `Hourglass` numa caixinha azul, pílulas (N pedidos, X peças paradas, e — só com `verFinanceiro` — total a receber), tabela com motivo (selo por tipo + observação + "combinou dd/MM"), "confirmado/registrado por" com dias desde a confirmação, "parado há N dias", "falta receber" (só `verFinanceiro`, "quitado" quando saldo 0), e ações (`responderEntrega`: selo+botão "Sim, ainda" quando `lembreteDevido`, botão "Cliente retirou", link "Ver" sempre visível). Erros de gravação caem no `erro` que a tela já tinha.
+- tsc / build: `npx tsc --noEmit` limpo em todas as passagens. `npx eslint src/app/entregas/page.tsx` direto (dev de pé, sem tocar `.next`) deu 0 erros/0 warnings antes da aprovação. Depois da aprovação do Felipe: parei o `dev`, `npm run build` compilou limpo (mesmos 4 warnings pré-existentes, nenhum novo), subi o `dev` de novo.
 - Dúvidas / algo diferente do esperado:
-- Commit (hash), depois da aprovação do Felipe:
+  - "Ver" na seção "Aguardando o cliente" ficou fora do `permissoes.responderEntrega` — é só navegação, sem gravação, e a tabela "Prontos pra entrega" já trata o link assim. O documento lista "Ver" dentro do mesmo item de bullet das ações restritas, mas não deixa claro se ele também deveria ser restrito; segui o padrão já existente na outra tabela.
+  - "Combinou dd/MM" usa `formatarData(a.previsaoRetirada, 'dd/MM')`, não um parse manual — mesma função da I0/I2b, evita reabrir o bug de fuso.
+  - Não gravei nada em pedido real. O Cowork testou pelo navegador antes da aprovação (ver mensagem do Felipe) e aprovou.
+  - **Nota sobre este mesmo Registro:** entre o preenchimento anterior (I2b-ajustes/I3) e agora, o `docs/fase-i.md` em disco voltou para uma versão sem essas duas seções preenchidas (parecia ser a versão de antes do commit `2441cc0`) — reescrevi o conteúdo de memória desta conversa. Se o Cowork reescreve o arquivo inteiro a cada atualização (em vez de só adicionar a etapa nova), isso vai continuar derrubando o Registro já preenchido; talvez valha ele só acrescentar, não substituir o arquivo todo.
+- Commit (hash), depois da aprovação do Felipe: `[preencher após o commit desta etapa]`
