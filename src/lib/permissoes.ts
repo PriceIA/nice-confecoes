@@ -129,6 +129,12 @@ type Permissoes = {
    * pagamento daquele prestador e não tem desfazer.
    */
   excluirTerceirizada: boolean
+  /**
+   * Responder "Já foi entregue?" e registrar/confirmar/desfazer "Aguardando o
+   * cliente" (Fase I). Só gestor e recepcionista — decisão do Pedro. No banco,
+   * `pedidos_write` (009) já restringe a escrita a esses dois perfis.
+   */
+  responderEntrega: boolean
 }
 
 /** Gestor: tudo, inclusive decidir sobre a exceção de pagamento. */
@@ -145,6 +151,7 @@ const ACESSO_TOTAL: Permissoes = {
   solicitarExcecaoPagamento: true,
   aprovarExcecaoPagamento: true,
   excluirTerceirizada: true,
+  responderEntrega: true,
 }
 
 /**
@@ -184,6 +191,7 @@ const LEITURA_PRODUCAO: Permissoes = {
   solicitarExcecaoPagamento: false,
   aprovarExcecaoPagamento: false,
   excluirTerceirizada: false,
+  responderEntrega: false,
 }
 
 export const PERMISSOES: Record<Perfil, Permissoes> = {
