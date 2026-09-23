@@ -262,7 +262,7 @@ export function prazoTexto(dataEntrega: string | null | undefined): {
 // Chips do /dashboard
 // ---------------------------------------------------------------------------
 
-export type FiltroDashboard = StatusPedido | 'todos' | 'urgentes'
+export type FiltroDashboard = StatusPedido | 'todos' | 'urgentes' | 'aguardando_cliente'
 
 /**
  * Os chips do /dashboard. Sete, não oito: `entregue` e `cancelado` não entram
@@ -281,6 +281,7 @@ export const FILTROS_DASHBOARD: { value: FiltroDashboard; label: string }[] = [
   { value: 'aguardando_pagamento', label: 'Ag. Pagamento' },
   { value: 'em_producao', label: 'Em Produção' },
   { value: 'finalizado', label: 'Finalizado' },
+  { value: 'aguardando_cliente', label: 'Aguardando cliente' },
 ]
 
 // ---------------------------------------------------------------------------

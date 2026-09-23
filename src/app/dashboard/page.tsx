@@ -4,9 +4,9 @@ import Link from 'next/link'
 import {
   Search, Moon, Sun, Bell, PlusCircle, Activity, PackageCheck, Printer,
   TrendingUp, Check, AlertTriangle, AlertCircle, Clock, ArrowRight, Truck, Minus, Sparkles,
-  Eye, EyeOff, HandCoins,
+  Eye, EyeOff, HandCoins, CircleHelp, Hourglass,
 } from 'lucide-react'
-import { getPedidos, pedidosStats } from '@/lib/store'
+import { getPedidos, pedidosStats, atualizarPedido } from '@/lib/store'
 import {
   STATUS_CONFIG, totalPecas, resumoProgresso, prazoTexto,
   FILTROS_DASHBOARD, FiltroDashboard, pedidoCasaComBusca, ordenarPedidos,
@@ -14,6 +14,12 @@ import {
 } from '@/lib/helpers'
 import { Pedido, StatusSetor } from '@/types'
 import { excecaoPendente } from '@/lib/excecaoPagamento'
+import {
+  MOTIVO_LABEL,
+  atrasoDaNice, confirmar as confirmarAguardando, diasAguardando, estaAguardando,
+  lembreteDevido, perguntarEntrega, saldoEmAberto,
+} from '@/lib/aguardandoCliente'
+import ModalNaoRetirou from '@/components/entrega/ModalNaoRetirou'
 import { useMembro } from '@/components/AuthProvider'
 import { useTema } from '@/components/TemaProvider'
 import { PERFIL_LABEL, podeAcessarRota } from '@/lib/permissoes'
@@ -141,6 +147,9 @@ export default function DashboardPage() {
   const [dica, setDica] = useState<Dica>(null)
   const [avisosAberto, setAvisosAberto] = useState(false)
   const [ocultarValores, setOcultarValores] = useState(false)
+  const [erroSino, setErroSino] = useState<string | null>(null)
+  const [salvandoSino, setSalvandoSino] = useState<string | null>(null)
+  const [modalNaoRetirou, setModalNaoRetirou] = useState<Pedido | null>(null)
   const mostrarSkeleton = useSkeletonDelay(carregando)
 
   const tabelaRef = useRef<HTMLDivElement>(null)
@@ -176,20 +185,20 @@ export default function DashboardPage() {
     }
   }, [avisosAberto])
 
-  useEffect(() => {
-    (async () => {
-      setErro(null)
-      try {
-        const data = await getPedidos()
-        setPedidos(data)
-        setStats(pedidosStats(data))
-      } catch (err) {
-        setErro(descreverFalhaCarregar(err))
-      } finally {
-        setCarregando(false)
-      }
-    })()
-  }, [])
+  const carregar = async () => {
+    setErro(null)
+    try {
+      const data = await getPedidos()
+      setPedidos(data)
+      setStats(pedidosStats(data))
+    } catch (err) {
+      setErro(descreverFalhaCarregar(err))
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  useEffect(() => { carregar() }, [])
 
   const pode = (href: string) => (membro ? podeAcessarRota(membro.perfil, href) : false)
 
@@ -200,13 +209,25 @@ export default function DashboardPage() {
     [pedidos],
   )
   const urgentes = useMemo(() => ativos.filter(p => p.tipo === 'urgente'), [ativos])
-  const atrasados = useMemo(() => ativos.filter(p => {
-    const { dias } = prazoTexto(p.dataEntrega)
-    return dias !== null && dias < 0
-  }), [ativos])
+  // Fase I4: atraso da Nice é só o que ela ainda não entregou por conta própria —
+  // pedido pronto e vencido, esperando o cliente, sai daqui e vai para
+  // `confirmarEntrega`/`aguardando` (ver src/lib/aguardandoCliente.ts).
+  const atrasados = useMemo(() => ativos.filter(atrasoDaNice), [ativos])
   // A "notificação" do gestor: enquanto o pedido estiver aqui, está PARADO.
   const aguardandoAprovacao = useMemo(() => ativos.filter(p => excecaoPendente(p)), [ativos])
   const mostrarAprovacao = permissoes.aprovarExcecaoPagamento && aguardandoAprovacao.length > 0
+
+  // I4-ajuste: vencido há mais tempo primeiro, nos dois grupos do sino.
+  const confirmarEntrega = useMemo(
+    () => ordenarPedidos(ativos.filter(perguntarEntrega), 'entrega_asc'),
+    [ativos],
+  )
+  const aguardando = useMemo(() => ativos.filter(estaAguardando), [ativos])
+  const lembretes = useMemo(
+    () => [...aguardando.filter(p => lembreteDevido(p))].sort((a, b) => diasAguardando(b) - diasAguardando(a)),
+    [aguardando],
+  )
+  const mostrarEntrega = permissoes.responderEntrega
 
   // ---- Tabela ----------------------------------------------------------------
 
@@ -216,6 +237,7 @@ export default function DashboardPage() {
       const matchFiltro =
         filtro === 'todos' ? true
         : filtro === 'urgentes' ? p.tipo === 'urgente'
+        : filtro === 'aguardando_cliente' ? estaAguardando(p)
         : p.status === filtro
       return matchFiltro && pedidoCasaComBusca(p, buscaAplicada)
     }),
@@ -300,6 +322,36 @@ export default function DashboardPage() {
   const atividades = useMemo(() => atividadesRecentes(pedidos, 4), [pedidos])
 
   const avisos = atrasados.length + (mostrarAprovacao ? aguardandoAprovacao.length : 0)
+    + (mostrarEntrega ? confirmarEntrega.length + lembretes.length : 0)
+
+  async function marcarEntregueSino(p: Pedido) {
+    if (!confirm(`Marcar o pedido #${p.numero} (${p.cliente.nome}) como entregue?`)) return
+    setErroSino(null)
+    setSalvandoSino(p.id)
+    try {
+      await atualizarPedido(p.id, { status: 'entregue' })
+      await carregar()
+    } catch {
+      setErroSino('Não foi possível gravar. Tente de novo.')
+    } finally {
+      setSalvandoSino(null)
+    }
+  }
+
+  async function confirmarLembreteSino(p: Pedido) {
+    setErroSino(null)
+    setSalvandoSino(p.id)
+    try {
+      await atualizarPedido(p.id, {
+        aguardandoCliente: confirmarAguardando(p.aguardandoCliente!, membro?.nome ?? 'desconhecido'),
+      })
+      await carregar()
+    } catch {
+      setErroSino('Não foi possível gravar. Tente de novo.')
+    } finally {
+      setSalvandoSino(null)
+    }
+  }
 
   function mostrarDica(el: Element, valor: string, rotulo: string) {
     const r = el.getBoundingClientRect()
@@ -370,10 +422,14 @@ export default function DashboardPage() {
                       <span className="pn-contador">{avisos === 0 ? 'nenhum' : avisos === 1 ? '1 aviso' : `${avisos} avisos`}</span>
                     </div>
 
+                    {erroSino && (
+                      <div className="pn-popover-mais" style={{ color: 'var(--pn-vermelho-texto)', fontWeight: 600 }}>{erroSino}</div>
+                    )}
+
                     {avisos === 0 ? (
                       <div className="pn-popover-vazio">
                         <Check aria-hidden="true" />
-                        Nenhum aviso agora. Nada atrasado e nenhuma liberação esperando você.
+                        Nenhum aviso agora. Nada atrasado, nada para confirmar e nenhuma liberação esperando você.
                       </div>
                     ) : (
                       <>
@@ -398,9 +454,73 @@ export default function DashboardPage() {
                           </>
                         )}
 
+                        {mostrarEntrega && confirmarEntrega.length > 0 && (
+                          <>
+                            <div className="pn-popover-grupo">Pronto e vencido — já foi entregue?</div>
+                            {confirmarEntrega.slice(0, 4).map(p => {
+                              const diasVencido = Math.abs(prazoTexto(p.dataEntrega).dias ?? 0)
+                              const saldo = saldoEmAberto(p)
+                              return (
+                                <div key={p.id} className="pn-rail-item">
+                                  <span className="pn-rail-icone" style={{ background: 'var(--pn-azul-fundo)', color: 'var(--pn-azul-texto)' }}><CircleHelp aria-hidden="true" /></span>
+                                  <div className="pn-rail-corpo">
+                                    <Link href={`/pedidos/${p.id}`} className="pn-rail-titulo block" onClick={() => setAvisosAberto(false)}>
+                                      #{p.numero} {p.cliente.nome}
+                                    </Link>
+                                    <div className="pn-rail-sub">
+                                      Venceu há {diasVencido}d{permissoes.verFinanceiro && saldo > 0 ? ` · falta ${moeda(saldo)}` : ''}
+                                    </div>
+                                    <div className="pn-mini-acoes">
+                                      <button type="button" className="pn-mini primario" disabled={salvandoSino === p.id} onClick={() => marcarEntregueSino(p)}>
+                                        Foi entregue
+                                      </button>
+                                      <button type="button" className="pn-mini" disabled={salvandoSino === p.id} onClick={() => setModalNaoRetirou(p)}>
+                                        Não retirou…
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                            {confirmarEntrega.length > 4 && (
+                              <div className="pn-popover-mais">+ {confirmarEntrega.length - 4} pra confirmar</div>
+                            )}
+                          </>
+                        )}
+
+                        {mostrarEntrega && lembretes.length > 0 && (
+                          <>
+                            <div className="pn-popover-grupo">Ainda aguardando o cliente?</div>
+                            {lembretes.slice(0, 4).map(p => (
+                              <div key={p.id} className="pn-rail-item">
+                                <span className="pn-rail-icone" style={{ background: 'var(--pn-azul-fundo)', color: 'var(--pn-azul-texto)' }}><Hourglass aria-hidden="true" /></span>
+                                <div className="pn-rail-corpo">
+                                  <Link href={`/pedidos/${p.id}`} className="pn-rail-titulo block" onClick={() => setAvisosAberto(false)}>
+                                    #{p.numero} {p.cliente.nome}
+                                  </Link>
+                                  <div className="pn-rail-sub">
+                                    {p.aguardandoCliente ? MOTIVO_LABEL[p.aguardandoCliente.motivo] : ''} · parado há {diasAguardando(p)}d
+                                  </div>
+                                  <div className="pn-mini-acoes">
+                                    <button type="button" className="pn-mini" disabled={salvandoSino === p.id} onClick={() => confirmarLembreteSino(p)}>
+                                      Sim, ainda
+                                    </button>
+                                    <button type="button" className="pn-mini" disabled={salvandoSino === p.id} onClick={() => marcarEntregueSino(p)}>
+                                      Já retirou
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {lembretes.length > 4 && (
+                              <div className="pn-popover-mais">+ {lembretes.length - 4} aguardando</div>
+                            )}
+                          </>
+                        )}
+
                         {atrasados.length > 0 && (
                           <>
-                            <div className="pn-popover-grupo">Prazo vencido</div>
+                            <div className="pn-popover-grupo">Atrasado na produção</div>
                             {ordenarPedidos(atrasados, 'entrega_asc').slice(0, 5).map(p => (
                               <Link key={p.id} href={`/pedidos/${p.id}`} className="pn-rail-item" onClick={() => setAvisosAberto(false)}>
                                 <span className="pn-rail-icone" style={{ background: 'var(--pn-vermelho-fundo)', color: 'var(--pn-vermelho-texto)' }}><AlertTriangle aria-hidden="true" /></span>
@@ -415,6 +535,17 @@ export default function DashboardPage() {
                               <div className="pn-popover-mais">+ {atrasados.length - 5} atrasados — veja todos na tabela abaixo</div>
                             )}
                           </>
+                        )}
+
+                        {aguardando.length > 0 && (
+                          <Link
+                            href="/entregas"
+                            className="pn-popover-mais"
+                            style={{ display: 'block', textAlign: 'center', color: 'var(--marca-texto)', fontWeight: 600 }}
+                            onClick={() => setAvisosAberto(false)}
+                          >
+                            Ver os {aguardando.length} aguardando o cliente em Entregas →
+                          </Link>
                         )}
                       </>
                     )}
@@ -464,11 +595,19 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 {!carregando && (
-                  atrasados.length === 0 ? (
-                    <span className="pn-selo ok"><Check aria-hidden="true" /> Tudo em dia</span>
-                  ) : (
-                    <span className="pn-selo alerta"><AlertCircle aria-hidden="true" /> {atrasados.length} {atrasados.length === 1 ? 'atrasado' : 'atrasados'}</span>
-                  )
+                  <div className="pn-selos">
+                    {atrasados.length === 0 ? (
+                      <span className="pn-selo ok"><Check aria-hidden="true" /> Tudo em dia</span>
+                    ) : (
+                      <span className="pn-selo alerta"><AlertCircle aria-hidden="true" /> {atrasados.length} {atrasados.length === 1 ? 'atrasado' : 'atrasados'}</span>
+                    )}
+                    {mostrarEntrega && aguardando.length > 0 && (
+                      <span className="pn-selo azul"><Hourglass aria-hidden="true" /> {aguardando.length} aguardando o cliente</span>
+                    )}
+                    {mostrarEntrega && confirmarEntrega.length > 0 && (
+                      <span className="pn-selo ambar"><CircleHelp aria-hidden="true" /> {confirmarEntrega.length} pra confirmar entrega</span>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -728,8 +867,12 @@ export default function DashboardPage() {
                         const sc = STATUS_CONFIG[p.status]
                         const r = resumoProgresso(p.progresso)
                         const prazo = prazoTexto(p.dataEntrega)
+                        // Pronto (esperando o cliente ou por confirmação) não é atraso — a
+                        // barra fica verde mesmo com o prazo vencido (Fase I4).
+                        const pedidoPronto = estaAguardando(p) || perguntarEntrega(p)
                         const corBarra =
-                          prazo.tom === 'atrasado' ? 'var(--pn-barra-vermelha)'
+                          pedidoPronto ? 'var(--pn-barra-verde)'
+                          : prazo.tom === 'atrasado' ? 'var(--pn-barra-vermelha)'
                           : prazo.tom === 'proximo' && r.pct < 70 ? 'var(--pn-barra-laranja)'
                           : 'var(--pn-barra-verde)'
                         const tipos: string[] = []
@@ -767,10 +910,20 @@ export default function DashboardPage() {
                               </div>
                             </td>
                             <td>
-                              <div className={clsx('pn-prazo', `tom-${prazo.tom}`)}>
-                                <strong>{capitalizar(prazo.texto)}</strong>
-                                {prazo.data && <span className="pn-data">{prazo.data}</span>}
-                              </div>
+                              {estaAguardando(p) ? (
+                                <div className="pn-prazo tom-aguardando">
+                                  <strong>Aguardando cliente · {diasAguardando(p)}d</strong>
+                                </div>
+                              ) : perguntarEntrega(p) ? (
+                                <div className="pn-prazo tom-confirmar">
+                                  <strong>Venceu · confirmar entrega</strong>
+                                </div>
+                              ) : (
+                                <div className={clsx('pn-prazo', `tom-${prazo.tom}`)}>
+                                  <strong>{capitalizar(prazo.texto)}</strong>
+                                  {prazo.data && <span className="pn-data">{prazo.data}</span>}
+                                </div>
+                              )}
                             </td>
                             <td>
                               <span className={clsx('badge', sc.bg, sc.color)} title={sc.label}>
@@ -900,6 +1053,17 @@ export default function DashboardPage() {
         <div className="pn-tooltip" style={{ left: dica.x, top: dica.y }} role="status">
           <strong>{dica.valor}</strong> — {dica.rotulo}
         </div>
+      )}
+
+      {modalNaoRetirou && (
+        <ModalNaoRetirou
+          pedido={modalNaoRetirou}
+          aberto
+          modo="registrar"
+          onFechar={() => setModalNaoRetirou(null)}
+          onGravado={carregar}
+          nomeMembro={membro?.nome}
+        />
       )}
     </div>
   )

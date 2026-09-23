@@ -164,7 +164,12 @@
 }
 .pn-selo.ok { color: #bdf0ad; }
 .pn-selo.alerta { color: #ffd3ba; }
+.pn-selo.azul { color: #bcdcff; }
+.pn-selo.ambar { color: #ffe29a; }
 .pn-selo svg { width: 12px; height: 12px; }
+/* Fase I4: mais de um selo pode aparecer ao mesmo tempo (atraso + aguardando
+   cliente + confirmar entrega) — quebra linha em telas estreitas. */
+.pn-selos { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 
 .pn-hero-metrica { position: relative; z-index: 1; }
 .pn-hero-metrica .pn-rotulo { font-size: 11.5px; color: #bfdcb8; }
@@ -327,6 +332,8 @@
 .pn-prazo.tom-proximo strong { color: var(--pn-laranja-texto); }
 .pn-prazo.tom-normal strong { color: var(--texto); }
 .pn-prazo.tom-sem_data strong { color: var(--texto-fraco); }
+.pn-prazo.tom-aguardando strong { color: var(--pn-azul-texto); }
+.pn-prazo.tom-confirmar strong { color: var(--pn-ambar-texto); }
 
 .pn-estado-vazio { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 50px 20px 56px; text-align: center; border-top: 1px solid var(--borda); }
 .pn-estado-vazio svg { width: 34px; height: 34px; color: var(--texto-fraco); }
@@ -371,6 +378,17 @@
 .pn-rail-titulo { font-size: 12.5px; font-weight: 600; color: var(--texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pn-rail-sub { font-size: 11px; color: var(--texto-fraco); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pn-rail-direita { font-size: 11px; font-weight: 700; white-space: nowrap; text-align: right; flex: 0 0 auto; }
+
+/* Fase I4: botões pequenos dentro de um item do sino (grupos "confirmar
+   entrega" e "ainda aguardando"). O item vira <div>, só o título é <Link> —
+   botão dentro de <a> não é HTML válido. */
+.pn-mini-acoes { display: flex; gap: 6px; margin-top: 6px; }
+.pn-mini { font: inherit; font-size: 11.5px; font-weight: 600; border-radius: 8px; padding: 5px 10px; min-height: 30px; cursor: pointer; border: 1px solid var(--borda-forte); background: var(--superficie); color: var(--texto); }
+.pn-mini:hover { background: var(--superficie-2); }
+.pn-mini.primario { background: var(--marca); border-color: var(--marca); color: #fff; }
+.pn-mini.primario:hover { background: var(--marca-hover); }
+.pn-mini:disabled { opacity: .5; cursor: not-allowed; }
+.pn-mini:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
 
 .pn-quote {
   position: relative; overflow: hidden; border-radius: 20px; padding: 20px; background: var(--marca-suave); box-shadow: var(--pn-sombra);
