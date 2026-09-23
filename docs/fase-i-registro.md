@@ -117,3 +117,26 @@ partir de uma cópia antiga e apagou etapas novas que o Cowork tinha acabado de 
 - Testado pelo navegador, sem gravar. Hero: "3 atrasados · 3 pra confirmar entrega" (antes: "6 atrasados" — o problema original resolvido). Sino "8 avisos": 2 aguardando aprovação (TOKA, IMPERADOR GLASS), 3 "já foi entregue?" (LUANA, HEBERTON, PIETRA — "falta R$ 90"), 3 "atrasado na produção" (MERCADO SANTA FE 12d, CASA CLARA 7d, KARINA 1d). Nenhum botão dentro de link. Tabela: tom-confirmar nos 3 prontos, tom-atrasado só nos de produção. Chip "Aguardando cliente" presente.
 - Ajuste pedido: ordem do grupo "já foi entregue?" (ver "I4-ajuste" em fase-i.md). Aprovada com esse ajuste.
 
+### I4-ajuste
+- `confirmarEntrega` agora é `ordenarPedidos(ativos.filter(perguntarEntrega), 'entrega_asc')` (vencido há mais tempo primeiro); `lembretes` agora ordena por `diasAguardando` decrescente (mais dias parado primeiro), com um `.sort` numa cópia do array (`[...aguardando.filter(...)]`, sem mutar `aguardando`).
+- `npx tsc --noEmit` limpo. Parei o `dev`, `npm run build` compilou limpo (mesmos 4 warnings pré-existentes, nenhum novo), subi o `dev` de novo.
+- Commit (hash): incluído no mesmo commit da I4 (`421aa99`), como o documento pediu (ajuste antes do commit da I4, não um commit à parte). Não commitei `docs/fase-i.md` — só o código e este registro, como combinado.
+
+### I5
+- Arquivos alterados:
+  - `src/lib/csv.ts` (novo) — copiado do documento. Única diferença: troquei o BOM literal (o caractere invisível colado direto no código) por `'﻿'` escapado, pra não arriscar perder esse caractere num copy/paste ou numa troca de encoding do editor — o byte gerado no Blob é o mesmo.
+  - `src/app/relatorios/page.tsx`:
+    - Imports novos: `Download`/`Hourglass`; `moeda` de `helpers.ts`; `MOTIVO_LABEL`, `diasAguardando`, `estaAguardando`, `prontoEm`, `saldoEmAberto` de `@/lib/aguardandoCliente`; `baixarCsv`/`Celula` de `@/lib/csv`; `useMembro`; `MotivoAguardando` de `@/types`.
+    - `registradoNoMes(p)`, `listaAguardando` (aguardando agora OU registrado no mês), `listaAguardandoOrdenada` (por `diasAguardando` decrescente), `situacaoDe(p)` (Aguardando/Entregue/Cancelado), `aguardandoAgora` (só quem está aguardando de verdade — base dos 4 números e do "Por motivo"), `porMotivo` (com `COR_MOTIVO` — amber/blue/gray, mesma paleta pedida).
+    - Seção nova "Aguardando o cliente", entre os KPIs e a grade Complexidade/Em Andamento: 4 números (pedidos, peças paradas, valor parado, a receber — os dois de dinheiro atrás de `permissoes.verFinanceiro`), barra "Por motivo", tabela (Nº/Cliente/Situação/Motivo+observação/Parado há/Valor/Falta receber atrás de `verFinanceiro`/Registrado (por + "confirmado por X, dd/MM" quando tem)/Combinou), vazio quando `listaAguardando.length === 0`.
+    - `exportarAguardandoCliente()` e `exportarPedidosDoMes()`, cada uma com seu botão "Exportar CSV" (`btn-secondary`, ícone `Download`, `print:hidden`) — o primeiro só aparece com `listaAguardando.length > 0`, o segundo com `doMes.length > 0`.
+    - `moeda()` no card "Receita (entregues)" e na coluna Valor da tabela do mês (troquei `R$ {x.toFixed(2)}` pelas duas).
+  - Não toquei em `bg-green-50`/`bg-red-50`/`bg-blue-50` dos cards de KPI nem em `dataEntrada`/timestamps.
+- **Um cuidado com fuso que o documento não detalhou:** nas colunas de data do CSV, usei `format(new Date(x), 'dd/MM/yyyy')` direto para os campos `timestamptz` (`registradoEm`, `confirmadoEm`, `dataEntrada` — já vêm com fuso certo) e `formatarData(x)` só para os campos `date` puros (`previsaoRetirada`, `dataEntrega`). Cheguei a escrever errado numa primeira passada (`formatarData(registradoEm.slice(0,10))`, que reabriria o bug da I0 — tratar timestamp como se fosse só data), me corrigi antes de rodar qualquer teste.
+- tsc / build: `npx tsc --noEmit` limpo. `npx eslint src/app/relatorios/page.tsx src/lib/csv.ts` direto (dev de pé, sem tocar `.next`) — 0 erros, 0 warnings. Depois da aprovação do Felipe: parei o `dev`, `npm run build` compilou limpo (mesmos 4 warnings pré-existentes, nenhum novo), subi o `dev` de novo.
+- Dúvidas / algo diferente do esperado:
+  - O documento não especifica exatamente o layout dos "4 números" nem da tabela — usei o mesmo padrão visual de `/entregas` (pílulas/cartõezinhos com `bg-superficie-2`, badge de motivo, "quitado" em cinza quando saldo zero) pra manter consistência entre as duas telas que mostram a mesma informação.
+  - Coluna "Parado há" mostra "—" para pedido que já saiu (entregue/cancelado) — só faz sentido pra quem `estaAguardando` de verdade, como o documento pede ("só para 'Aguardando'").
+  - Não gravei nada em pedido real. O Felipe testou o CSV no Excel (ok) antes de aprovar.
+  - **Nota sobre este mesmo Registro:** de novo o `docs/fase-i-registro.md` em disco voltou pro estado do commit anterior (`421aa99`), sem as seções "I4-ajuste" e "I5" que eu tinha escrito — restaurei o conteúdo de memória desta conversa antes de seguir.
+
