@@ -4,7 +4,7 @@ import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Printer, TrendingUp, Package, CheckCircle2, XCircle } from 'lucide-react'
 import { getPedidos } from '@/lib/store'
-import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, totalPecas } from '@/lib/helpers'
+import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, totalPecas, dataLocal, formatarData } from '@/lib/helpers'
 import { Pedido, Complexidade } from '@/types'
 import clsx from 'clsx'
 
@@ -14,8 +14,9 @@ export default function RelatoriosPage() {
 
   useEffect(() => { (async () => setPedidos(await getPedidos()))() }, [])
 
-  const inicio = startOfMonth(new Date(`${mes}-01`))
-  const fim = endOfMonth(new Date(`${mes}-01`))
+  const base = dataLocal(`${mes}-01`) ?? new Date()
+  const inicio = startOfMonth(base)
+  const fim = endOfMonth(base)
 
   const doMes = pedidos.filter(p =>
     isWithinInterval(new Date(p.dataEntrada), { start: inicio, end: fim })
@@ -42,7 +43,7 @@ export default function RelatoriosPage() {
         <div>
           <h1 className="text-2xl font-bold text-titulo">Relatórios</h1>
           <p className="text-sm text-suave mt-0.5 capitalize">
-            {format(new Date(`${mes}-01`), "MMMM 'de' yyyy", { locale: ptBR })}
+            {format(base, "MMMM 'de' yyyy", { locale: ptBR })}
           </p>
         </div>
         <div className="flex gap-3">
@@ -120,7 +121,7 @@ export default function RelatoriosPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
-                      <span className="text-xs text-fraco num">{format(new Date(p.dataEntrega), 'dd/MM')}</span>
+                      <span className="text-xs text-fraco num">{formatarData(p.dataEntrega, 'dd/MM')}</span>
                     </div>
                   </div>
                 )

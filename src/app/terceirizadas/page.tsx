@@ -1,9 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { format } from 'date-fns'
 import { PlusCircle, CheckCircle2, Clock, Truck, Pencil, Trash2, AlertTriangle, Users } from 'lucide-react'
 import { getTerceirizadas, criarTerceirizada, atualizarTerceirizada, deletarTerceirizada, getPedidosLista } from '@/lib/store'
 import { getPrestadores, getServicos } from '@/lib/prestadores'
+import { formatarData } from '@/lib/helpers'
 import { Terceirizada, PedidoLista, Prestador, PrestadorServico } from '@/types'
 import { useMembro } from '@/components/AuthProvider'
 import { classificarErro, sufixoCodigo } from '@/lib/erros'
@@ -371,7 +371,7 @@ export default function TerceirizadasPage() {
                       <td className="px-6 py-4 font-medium text-conteudo">{t.nome}</td>
                       <td className="px-6 py-4"><span className={clsx('badge', tc.bg, tc.color)}>{tc.label}</span></td>
                       <td className="px-6 py-4 text-suave num">{t.numeroPedido ? `#${t.numeroPedido}` : '—'}</td>
-                      <td className="px-6 py-4 text-suave num">{format(new Date(t.dataEnvio), 'dd/MM/yyyy')}</td>
+                      <td className="px-6 py-4 text-suave num">{formatarData(t.dataEnvio)}</td>
                       <td className="px-6 py-4">
                         <div className="font-medium text-conteudo num">R$ {t.valorCombinado.toFixed(2)}</div>
                         {t.valorPago > 0 && <div className="text-xs text-green-600 num">Pago: R$ {t.valorPago.toFixed(2)}</div>}

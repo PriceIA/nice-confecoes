@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { ArrowLeft, Printer, ChevronRight, Pencil, Save, X, PlusCircle, Trash2 } from 'lucide-react'
 import { getPedidoById, atualizarPedido } from '@/lib/store'
 import { carregarEtapas, etapasDoPedido } from '@/lib/etapas'
-import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade } from '@/lib/helpers'
+import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade, formatarData } from '@/lib/helpers'
 import { Pedido, Peca, Parcela, ExcecaoPagamento, StatusPedido, StatusSetor, EtapaProducao, Personalizacao, TamanhoQuantidade, TipoPedido } from '@/types'
 import FotoUpload from '@/components/FotoUpload'
 import MiniaturaArquivo from '@/components/MiniaturaArquivo'
@@ -80,7 +80,7 @@ function PrintHeader({ pedido }: { pedido: Pedido }) {
       </div>
       <div className="text-right text-[11px] leading-tight">
         <div>Data do Pedido: {format(new Date(pedido.dataEntrada), 'dd/MM/yy')}</div>
-        <div>Data da Entrega: {format(new Date(pedido.dataEntrega), 'dd/MM/yy')}</div>
+        <div>Data da Entrega: {formatarData(pedido.dataEntrega, 'dd/MM/yy')}</div>
         {badge && <div className="mt-1 inline-block border border-black px-2 py-0.5 font-bold text-[10px]">{badge}</div>}
       </div>
     </div>
@@ -1045,7 +1045,7 @@ export default function DetalhePedidoPage() {
               )}
               <div className="flex justify-between">
                 <span className="text-fraco">Entrega</span>
-                <span className="font-medium num">{format(new Date(pedido.dataEntrega), 'dd/MM/yyyy')}</span>
+                <span className="font-medium num">{formatarData(pedido.dataEntrega, 'dd/MM/yyyy')}</span>
               </div>
               {/* De qual lista de preços os valores saíram. Pedido anterior às
                   múltiplas tabelas não registrou nenhuma — e a tela diz isso

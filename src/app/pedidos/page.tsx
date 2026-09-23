@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { AlertTriangle, PlusCircle, Search, ArrowRight, Trash2 } from 'lucide-react'
 import { getPedidosLista, deletarPedido } from '@/lib/store'
-import { ORDENS_DATA, OrdemPedidos, STATUS_CONFIG, ordenarPedidos, pedidoCasaComBusca, totalPecas } from '@/lib/helpers'
+import { ORDENS_DATA, OrdemPedidos, STATUS_CONFIG, ordenarPedidos, pedidoCasaComBusca, totalPecas, formatarData } from '@/lib/helpers'
 import { PedidoLista, StatusPedido } from '@/types'
 import { useMembro } from '@/components/AuthProvider'
 import { classificarErro, sufixoCodigo } from '@/lib/erros'
@@ -72,7 +72,7 @@ const LinhaPedido = memo(function LinhaPedido({ pedido: p, podeExcluir, onExclui
         <span className={clsx('badge', sc.bg, sc.color)}>{sc.label}</span>
       </td>
       <td className="px-6 py-4 text-suave num">{format(new Date(p.dataEntrada), 'dd/MM/yyyy')}</td>
-      <td className="px-6 py-4 text-suave font-medium num">{format(new Date(p.dataEntrega), 'dd/MM/yyyy')}</td>
+      <td className="px-6 py-4 text-suave font-medium num">{formatarData(p.dataEntrega)}</td>
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
           <Link href={`/pedidos/${p.id}`}

@@ -205,6 +205,27 @@ export function pedidoCasaComBusca(
 export type TomPrazo = 'atrasado' | 'proximo' | 'normal' | 'sem_data'
 
 /**
+ * Lê uma data do banco no fuso LOCAL.
+ *
+ * Coluna `date` chega como 'AAAA-MM-DD', e `new Date('AAAA-MM-DD')` é meia-noite
+ * UTC — em Brasília, 21h do DIA ANTERIOR. Foi o que fazia /relatorios calcular o
+ * mês anterior e o dashboard chamar de "atrasado" o pedido que vence hoje (Fase I0).
+ * Valor com hora (timestamptz, ISO completo) já traz fuso e passa direto.
+ */
+export function dataLocal(valor: string | null | undefined): Date | null {
+  if (!valor) return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor)
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(valor)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** `dataLocal` + `format`. Data ausente ou inválida vira '—', nunca "Invalid Date". */
+export function formatarData(valor: string | null | undefined, padrao = 'dd/MM/yyyy'): string {
+  const d = dataLocal(valor)
+  return d ? format(d, padrao) : '—'
+}
+
+/**
  * O prazo de entrega como a pessoa lê: "em 4 dias", "atrasado 1 dia", "amanhã".
  * `tom` é a severidade, para a tela escolher a cor — a função não escolhe classe
  * nenhuma, porque /dashboard e uma futura tela podem pintar isso diferente.
@@ -216,9 +237,8 @@ export function prazoTexto(dataEntrega: string | null | undefined): {
   /** Dias de calendário até a entrega; negativo = atrasado. `null` sem data. */
   dias: number | null
 } {
-  if (!dataEntrega) return { texto: 'sem data', tom: 'sem_data', data: null, dias: null }
-  const d = new Date(dataEntrega)
-  if (Number.isNaN(d.getTime())) return { texto: 'sem data', tom: 'sem_data', data: null, dias: null }
+  const d = dataLocal(dataEntrega)
+  if (!d) return { texto: 'sem data', tom: 'sem_data', data: null, dias: null }
 
   const dias = differenceInCalendarDays(d, new Date())
   const data = format(d, 'dd/MM/yyyy')

@@ -4,7 +4,7 @@
 import { differenceInCalendarDays, format } from 'date-fns'
 import type { Cartao, CorLista, Pedido } from '@/types'
 import type { Perfil } from '@/lib/permissoes'
-import { totalPecas } from '@/lib/helpers'
+import { totalPecas, formatarData } from '@/lib/helpers'
 import { classificarErro, sufixoCodigo } from '@/lib/erros'
 
 // ---------------------------------------------------------------------------
@@ -165,7 +165,7 @@ export function descricaoSugerida(pedido: Pedido): string {
 
   linhas.push(`Total: ${totalPecas(pedido)} un.`)
   if (pedido.dataEntrega) {
-    linhas.push(`Entrega: ${format(new Date(pedido.dataEntrega), 'dd/MM/yyyy')}`)
+    linhas.push(`Entrega: ${formatarData(pedido.dataEntrega)}`)
   }
 
   return linhas.join('\n')

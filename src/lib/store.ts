@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import { criarClienteBrowser } from './supabase/client'
 import { sanitizarNome } from './arquivos'
 import { carregarEtapas } from './etapas'
+import { prazoTexto } from './helpers'
 
 // Fase B: pedidos/clientes/terceirizadas ganharam RLS baseada em auth.uid()
 // (ver CLAUDE.md, "Estado de segurança atual"). O client anônimo de
@@ -601,17 +602,13 @@ export function calcularDataEntrega(diasUteis = 25): string {
 }
 
 export function pedidosStats(pedidos: Pedido[]) {
-  const hoje = new Date()
-  const em7dias = new Date(hoje)
-  em7dias.setDate(em7dias.getDate() + 7)
-
   return {
     emProducao: pedidos.filter(p => p.status === 'em_producao').length,
     urgentes: pedidos.filter(p => p.tipo === 'urgente' && !['entregue', 'cancelado'].includes(p.status)).length,
     entregaEm7dias: pedidos.filter(p => {
       if (['entregue', 'cancelado'].includes(p.status)) return false
-      const d = new Date(p.dataEntrega)
-      return d >= hoje && d <= em7dias
+      const { dias } = prazoTexto(p.dataEntrega)
+      return dias !== null && dias >= 0 && dias <= 7
     }).length,
     aguardandoProducao: pedidos.filter(p => p.status === 'aprovado').length,
   }
