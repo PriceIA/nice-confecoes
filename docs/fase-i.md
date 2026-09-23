@@ -7,7 +7,7 @@ dúvida). O Claude (Cowork) lê o registro e escreve a etapa seguinte aqui mesmo
 
 Mockup aprovado: artifact "Aguardando o cliente — mockup" (7 telas).
 
-> **ETAPA ATUAL: I0** — nada além dela. Terminou? Preencha o Registro e pare.
+> **ETAPA ATUAL: I1** — nada além dela. Terminou? Preencha o Registro e pare.
 
 ---
 
@@ -269,4 +269,15 @@ Commit: `feat: coluna aguardando_cliente no pedido (migration 017)`
 - Dúvidas / algo diferente do esperado:
   - A extensão do Claude in Chrome não conectou nesta sessão, então a checagem "antes" do passo 2 foi feita pelo Felipe manualmente, não por mim.
   - Rodar `npm run build` com o `npm run dev` ainda de pé (mesma pasta `.next`) derrubou o dev server (`Cannot find module './426.js'`, 500 em qualquer rota) — tive que matar o processo (PID na porta 3002) e subir o `npm run dev` de novo. Não é um problema do código da I0; é o build de produção e o dev server disputando o mesmo `.next`. Registrando para não repetir a sequência build→dev sem reiniciar nas próximas etapas.
+- Commit (hash), depois da aprovação do Felipe: `664fea9` — `fix: datas do banco lidas no fuso local (relatório mostrava o mês anterior)`. Push feito para `origin/main`.
+
+### I1
+- Migration `017_aguardando_cliente.sql` criada exatamente como no documento. Felipe rodou no Supabase SQL Editor; conferência (consulta única): `tipo_coluna = jsonb`, `constraint_existe = 1`, `com_aguardando = 0`. Bateu com o esperado.
+- Passos 3–5 executados depois da confirmação do Felipe:
+  - `src/types/index.ts` — `MotivoAguardando` e `AguardandoCliente` novos (antes de `Parcela`); `aguardandoCliente?: AguardandoCliente | null` em `Pedido` e em `PedidoLista`.
+  - `src/lib/store.ts` — `mapPedido`/`mapPedidoLista` lêem `row.aguardando_cliente ?? undefined`; `getPedidosLista` inclui `aguardando_cliente` no `select`; `atualizarPedido` grava `dados.aguardandoCliente` quando `!== undefined` (o `null` passa e limpa).
+  - Nenhuma tela mudou, como previsto.
+- tsc / build: `npx tsc --noEmit` limpo. **Não rodei `npm run build`** desta vez — o `npm run dev` ficou de pé o tempo todo, e a I0 já mostrou que os dois brigam pela mesma pasta `.next`.
+- Teste de carregamento: sem a extensão do Claude in Chrome conectada, não consegui clicar nas telas eu mesmo. O log do `npm run dev` não mostra nenhum erro depois das mudanças (as últimas requisições registradas, de antes desta etapa, foram 200 em `/dashboard`, `/relatorios`, `/pedidos`, `/pedidos/[id]` e `/terceirizadas`). Pedi para o Felipe confirmar visualmente que as listas continuam carregando.
+- Dúvidas / algo diferente do esperado: nenhuma além da já registrada na I0 (extensão do Chrome indisponível).
 - Commit (hash), depois da aprovação do Felipe:

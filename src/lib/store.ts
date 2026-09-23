@@ -160,6 +160,7 @@ function mapPedido(row: any): Pedido {
     vetorizacao: row.vetorizacao ?? undefined,
     tabelaPreco: row.tabela_preco ?? undefined,
     excecaoPagamento: row.excecao_pagamento ?? undefined,
+    aguardandoCliente: row.aguardando_cliente ?? undefined,
   }
 }
 
@@ -187,6 +188,7 @@ function mapPedidoLista(row: any): PedidoLista {
     valorPago,
     tabelaPreco: row.tabela_preco ?? undefined,
     excecaoPagamento: row.excecao_pagamento ?? undefined,
+    aguardandoCliente: row.aguardando_cliente ?? undefined,
   }
 }
 
@@ -252,7 +254,7 @@ export async function getPedidosLista(opts?: {
     .select(`
       id, numero, consultor, tipo, status, pecas, parcelas,
       data_entrada, data_entrega, progresso, valor_total, valor_pago,
-      tabela_preco, excecao_pagamento,
+      tabela_preco, excecao_pagamento, aguardando_cliente,
       clientes ( nome, empresa, telefone )
     `)
     .order('data_entrada', { ascending: false })
@@ -395,6 +397,7 @@ export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promi
   if (dados.vetorizacao !== undefined) update.vetorizacao = dados.vetorizacao
   if (dados.tabelaPreco !== undefined) update.tabela_preco = dados.tabelaPreco
   if (dados.excecaoPagamento !== undefined) update.excecao_pagamento = dados.excecaoPagamento
+  if (dados.aguardandoCliente !== undefined) update.aguardando_cliente = dados.aguardandoCliente
 
   const { error } = await supabase.from('pedidos').update(update).eq('id', id)
   if (error) throw error

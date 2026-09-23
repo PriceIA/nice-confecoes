@@ -135,6 +135,28 @@ export interface ExcecaoPagamento {
   decisaoObservacao?: string
 }
 
+export type MotivoAguardando = 'pagamento' | 'sem_tempo' | 'outro'
+
+/**
+ * Pedido pronto e com prazo vencido que o cliente ainda não retirou (Fase I).
+ *
+ * Guardado como JSONB numa coluna própria de `pedidos` (migration 017), no
+ * mesmo espírito de `excecaoPagamento` — não é um status novo.
+ */
+export interface AguardandoCliente {
+  motivo: MotivoAguardando
+  /** Até 120 caracteres. Obrigatória quando motivo = 'outro'. */
+  observacao?: string
+  /** 'AAAA-MM-DD'. Cliente combinou de buscar neste dia: o lembrete só volta a partir dele. */
+  previsaoRetirada?: string
+  registradoPor: string
+  /** ISO 8601. */
+  registradoEm: string
+  /** Última resposta "ainda aguardando". Base do lembrete diário. */
+  confirmadoPor?: string
+  confirmadoEm?: string
+}
+
 export interface Parcela {
   id: string
   descricao: string
@@ -181,6 +203,12 @@ export interface Pedido {
    * o caso da esmagadora maioria dos pedidos.
    */
   excecaoPagamento?: ExcecaoPagamento
+  /**
+   * Pedido pronto e vencido que o cliente não retirou (Fase I). `undefined` =
+   * não se aplica (a esmagadora maioria). `null` só existe na ESCRITA, para
+   * limpar o registro (ex.: marcar como entregue).
+   */
+  aguardandoCliente?: AguardandoCliente | null
 }
 
 /**
@@ -212,6 +240,7 @@ export interface PedidoLista {
   valorPago: number
   tabelaPreco?: string
   excecaoPagamento?: ExcecaoPagamento
+  aguardandoCliente?: AguardandoCliente | null
 }
 
 /**
