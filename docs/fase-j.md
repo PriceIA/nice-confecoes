@@ -3,7 +3,8 @@
 **Spec escrita em 25/09/2026 pelo Claude (Cowork), com as respostas do Pedro.** Mockup:
 artifact "Recados — mockup" (6 telas).
 
-> **ETAPA ATUAL: J0.** Uma etapa por vez. Terminou? Registre em `docs/fase-j-registro.md` e pare.
+> **ETAPA ATUAL: commit da J0 → J1.** A SQL da J0 já rodou (25/09, conferida pelo Cowork). Uma etapa
+> por vez. Terminou a J1? Registre em `docs/fase-j-registro.md` e pare, sem commitar a J1.
 >
 > **Este arquivo é só do Cowork. O Claude Code NÃO edita `docs/fase-j.md`.** O registro vai em
 > **`docs/fase-j-registro.md`** (sempre acrescentando no fim). Não rode `git checkout`,
@@ -34,7 +35,7 @@ artifact "Recados — mockup" (6 telas).
 
 ---
 
-## J0 — Migrations 018 (Felipe roda) + commit pendente  ← ATUAL
+## J0 — Migrations 018 (Felipe roda) + commit pendente  — SQL rodada em 25/09; falta o commit
 
 0. Commite a última anotação que ficou pendente em `docs/fase-i-registro.md` junto com os
    arquivos desta etapa.
@@ -170,7 +171,7 @@ Commit (depois que o Felipe rodar e conferir):
 
 ---
 
-## J1 — Tipos + `src/lib/recados.ts` + permissão (sem tela)  (não executar ainda)
+## J1 — Tipos + `src/lib/recados.ts` + permissão (sem tela)  ← ATUAL (depois do commit da J0)
 
 - `src/types/index.ts`: `Recado { id, remetenteId, destinatarioId, texto, pedidoId: string | null,
   criadoEm, lidoEm: string | null }` e `Conversa { outro: MembroEquipe, ultima: Recado,

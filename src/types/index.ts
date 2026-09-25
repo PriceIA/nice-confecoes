@@ -347,6 +347,33 @@ export interface MembroEquipe {
   perfil: Perfil
 }
 
+// ---------------------------------------------------------------------------
+// Recados (Fase J) — chat privado entre duas pessoas da equipe.
+//
+// Privado no BANCO, não só na tela: a policy de select de `recados`
+// (migration 018) só deixa remetente e destinatário lerem — nem o gestor vê
+// conversa dos outros. Some sozinho depois de 30 dias (pg_cron, 018b).
+// ---------------------------------------------------------------------------
+
+export interface Recado {
+  id: string
+  remetenteId: string
+  destinatarioId: string
+  texto: string
+  pedidoId: string | null
+  /** ISO 8601. */
+  criadoEm: string
+  /** ISO 8601, ou null enquanto o destinatário não viu. */
+  lidoEm: string | null
+}
+
+/** Uma conversa agrupada, para a lista da gaveta de recados. */
+export interface Conversa {
+  outro: MembroEquipe
+  ultima: Recado
+  naoLidas: number
+}
+
 export interface Terceirizada {
   id: string
   nome: string

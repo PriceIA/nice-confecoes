@@ -135,6 +135,16 @@ type Permissoes = {
    * `pedidos_write` (009) já restringe a escrita a esses dois perfis.
    */
   responderEntrega: boolean
+  /**
+   * Ver e usar o painel de Recados (Fase J) — mandar e receber mensagem com
+   * qualquer outra pessoa da equipe.
+   *
+   * `true` para os 8 perfis: decisão do Pedro foi "todos mandam e recebem
+   * recado", diferente de `editarKanban`/`responderEntrega`, que são só
+   * gestão. A privacidade da conversa em si (só remetente e destinatário
+   * leem) é regra de RLS, não desta permissão.
+   */
+  usarRecados: boolean
 }
 
 /** Gestor: tudo, inclusive decidir sobre a exceção de pagamento. */
@@ -152,6 +162,7 @@ const ACESSO_TOTAL: Permissoes = {
   aprovarExcecaoPagamento: true,
   excluirTerceirizada: true,
   responderEntrega: true,
+  usarRecados: true,
 }
 
 /**
@@ -192,6 +203,7 @@ const LEITURA_PRODUCAO: Permissoes = {
   aprovarExcecaoPagamento: false,
   excluirTerceirizada: false,
   responderEntrega: false,
+  usarRecados: true,
 }
 
 export const PERMISSOES: Record<Perfil, Permissoes> = {
