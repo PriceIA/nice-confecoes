@@ -141,3 +141,14 @@ partir de uma cópia antiga e apagou etapas novas que o Cowork tinha acabado de 
   - **Nota sobre este mesmo Registro:** de novo o `docs/fase-i-registro.md` em disco voltou pro estado do commit anterior (`421aa99`), sem as seções "I4-ajuste" e "I5" que eu tinha escrito — restaurei o conteúdo de memória desta conversa antes de seguir.
 - Commit (hash), depois da aprovação do Felipe: `efd2d6d` — `feat: relatório de pedidos aguardando o cliente e exportação CSV`. Push feito para `origin/main`.
 
+### I6
+- Arquivos alterados:
+  - `CHANGELOG.md` — bloco "Fase I" acrescentado no topo de `[Não lançado]`, acima da "Fase H", exatamente como no documento, com `<hash>` trocado por `efd2d6d` (hash real da I5).
+  - `CLAUDE.md` — os seis pontos do documento: (a) as 3 linhas da tabela "Módulos existentes" (`/dashboard`, `/entregas`, `/relatorios`); (b) `src/lib/aguardandoCliente.ts`, `src/lib/csv.ts` e `src/components/entrega/` na lista de "Código compartilhado" (logo depois de `excecaoPagamento.ts`), mais o complemento no item de `helpers.ts` sobre `dataLocal`/`formatarData`/`moeda`; (c) `aguardando_cliente jsonb` na lista de colunas de `pedidos` + parágrafo explicando; (d) "Convenções e pendências do schema" atualizado pra `017_`/`018_` com a nota sobre a `016_cards_visibilidade.sql` que rodou mas não está versionada; (e) regra de negócio 13 nova, depois da 12; (f) item novo em "Convenções de trabalho" sobre o handoff em dois arquivos.
+  - `docs/fase-i.md` e `docs/fase-i-registro.md` commitados como estavam no disco (não editei nenhum dos dois).
+- tsc / build: `npx tsc --noEmit` limpo (rodei antes de mexer no `dev`, é só doc). Parei o `dev`, `npm run build` compilou limpo (mesmos 4 warnings pré-existentes, nenhum novo), subi o `dev` de novo.
+- Dúvidas / algo diferente do esperado: nenhuma — os textos do documento eram literais, só troquei o `<hash>` da I5.
+- Commit (hash), depois da aprovação do Felipe: `b688fe6` — `docs: fase I no CHANGELOG e no CLAUDE.md`. Push feito para `origin/main`.
+
+**Fase I fechada** (I0 a I6, commits `664fea9` · `062d9eb` · `5e1f0f5` · `2441cc0` · `8ec3bed` · `421aa99` · `efd2d6d` · `b688fe6`).
+
