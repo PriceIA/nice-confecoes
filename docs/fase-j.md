@@ -3,12 +3,12 @@
 **Spec escrita em 25/09/2026 pelo Claude (Cowork), com as respostas do Pedro.** Mockup:
 artifact "Recados — mockup" (6 telas).
 
-> **ETAPA ATUAL: commit da J0 → J1.** A SQL da J0 já rodou (25/09, conferida pelo Cowork). Uma etapa
-> por vez. Terminou a J1? Registre em `docs/fase-j-registro.md` e pare, sem commitar a J1.
+> **ETAPA ATUAL: commit da J1 → J2.** Uma etapa por vez. Terminou a J2? Registre em
+> `docs/fase-j-registro.md` e pare, sem commitar a J2.
 >
-> **Este arquivo é só do Cowork. O Claude Code NÃO edita `docs/fase-j.md`.** O registro vai em
-> **`docs/fase-j-registro.md`** (sempre acrescentando no fim). Não rode `git checkout`,
-> `restore` ou `stash` em `docs/`.
+> **Este arquivo é só do Cowork. O Claude Code NÃO edita `docs/fase-j.md`** — e ao commitar,
+> commite o arquivo **como está no disco**, sem regravar a partir de cópia antiga. Não rode
+> `git checkout`, `restore` ou `stash` em `docs/`.
 
 ---
 
@@ -35,7 +35,7 @@ artifact "Recados — mockup" (6 telas).
 
 ---
 
-## J0 — Migrations 018 (Felipe roda) + commit pendente  — SQL rodada em 25/09; falta o commit
+## J0 — Migrations 018 (Felipe roda) + commit pendente  — feita (`17f853c`)
 
 0. Commite a última anotação que ficou pendente em `docs/fase-i-registro.md` junto com os
    arquivos desta etapa.
@@ -171,7 +171,7 @@ Commit (depois que o Felipe rodar e conferir):
 
 ---
 
-## J1 — Tipos + `src/lib/recados.ts` + permissão (sem tela)  ← ATUAL (depois do commit da J0)
+## J1 — Tipos + `src/lib/recados.ts` + permissão (sem tela)  — aprovada pelo Cowork; falta o commit
 
 - `src/types/index.ts`: `Recado { id, remetenteId, destinatarioId, texto, pedidoId: string | null,
   criadoEm, lidoEm: string | null }` e `Conversa { outro: MembroEquipe, ultima: Recado,
@@ -198,61 +198,85 @@ Teste: `tsc`. Nenhuma tela muda. Commit: `feat: acesso a dados dos recados`
 
 ---
 
-## J2 — Painel de recados em todas as telas  (não executar ainda)
+## J2 — Painel de recados + conversa  ← ATUAL (depois do commit da J1)
 
-Mockup telas 1, 3 e 6. Arquivos novos em `src/components/recados/`:
+Painel e conversa entram juntos: um sem o outro não dá para testar. Mockup telas 1, 2, 3 e 6.
+Arquivos novos em `src/components/recados/`.
 
-- `RecadosProvider.tsx` — contexto montado no `AppShell` (só com `membro` e `usarRecados`):
-  carrega equipe + recados, assina o realtime, guarda `aberto`, `tela` (`'lista' | 'conversa' |
-  'nova'`), `conversaCom`, `pedidoAnexado`, e expõe `useRecados()` com `naoLidas` (total),
-  `abrir()`, `abrirConversa(id)`, `abrirNova(pedidoId?)`, `fechar()`.
-  Título da aba vira `(N) Nice Confecções` quando há não lidas.
-- `PainelRecados.tsx` — gaveta à direita (`fixed`, `z-50`, `w-full sm:w-[420px]`,
-  `bg-superficie`, `print:hidden`), fecha com Esc e com o X. Tela `lista`: busca por nome,
-  "Nova conversa", conversas (iniciais, nome, prévia, hora, bolinha de não lidas), rodapé
-  "Mensagens com mais de 30 dias somem sozinhas."
-- `NovaConversa.tsx` — pessoas agrupadas "Gestão" (gestor/recepcionista) e "Produção" (resto),
-  com `PERFIL_LABEL`; busca por nome.
-- **Sidebar**: botão "Recados" (ícone `MessageCircle`) no topo do `nav`, com contador; é
-  `<button>`, não link. **Topbar do celular**: ícone com contador ao lado do tema.
+### 1. `RecadosProvider.tsx` — o estado de tudo
+- Montado no `AppShell`, envolvendo `Sidebar` e `main`, **só** com `membro` e
+  `permissoes.usarRecados`. O `PainelRecados` é renderizado dentro dele, uma vez.
+- Carrega `getEquipeRecados(membro.id)` + `getMeusRecados()` ao montar, e de novo quando a aba
+  volta a ter foco (`visibilitychange`) — cobre mensagem perdida com o Realtime caído.
+- `assinarRecados(membro.id, …)`: `aoInserir` junta o recado na lista (sem duplicar por `id`);
+  se a conversa com o remetente está aberta, chama `marcarLidos`. `aoAtualizar` troca o recado
+  pelo novo (✓ → ✓✓). Limpa a assinatura ao desmontar.
+- Expõe `useRecados()`: `naoLidas` (total), `conversas` (`agruparConversas`), `recadosCom(id)`,
+  `equipe`, `aberto`, `tela` (`'lista' | 'conversa' | 'nova'`), `conversaCom`, `pedidoAnexado`,
+  `abrir()`, `abrirConversa(id)`, `abrirNova(pedidoId?)`, `fechar()`, `enviar(texto)`.
+- `enviar`: põe o balão na hora com estado "enviando"; se `enviarRecado` falhar, o balão fica
+  "Não enviado — tentar de novo" (nunca some em silêncio — regra 10). Deu certo: troca pelo
+  recado que o banco devolveu.
+- Título da aba: `(N) Nice Confecções` quando `naoLidas > 0`.
 
-Commit: `feat: painel de recados na sidebar`
+### 2. `PainelRecados.tsx` — a gaveta
+- `fixed inset-y-0 right-0 z-50 w-full sm:w-[420px] bg-superficie border-l border-borda
+  shadow-xl print:hidden`, com fundo escurecido atrás só no celular. Fecha com Esc e com o X.
+- Tela `lista`: título "Recados", botão "Nova conversa", busca por nome, conversas (iniciais
+  numa bolinha, nome, prévia da última mensagem com "Você: " quando é minha e ✓/✓✓, hora
+  curta — HH:mm hoje, "ontem", dd/MM —, bolinha verde com não lidas). Vazio: "Nenhum recado
+  ainda. Toque em Nova conversa." Rodapé: "Mensagens com mais de 30 dias somem sozinhas."
+- Tela `nova` (`NovaConversa.tsx`): busca + pessoas em "Gestão" (gestor/recepcionista) e
+  "Produção" (resto), com `PERFIL_LABEL`. Clicar abre a conversa.
+
+### 3. `Conversa.tsx` — o chat
+- Cabeçalho: voltar (para a lista), iniciais, nome, `PERFIL_LABEL`.
+- Separador de dia ("Hoje", "Ontem", dd/MM). Balões: meus à direita
+  (`bg-marca-suave border border-marca-borda`), do outro à esquerda (`bg-superficie
+  border border-borda`), `whitespace-pre-wrap`, hora embaixo; nos meus, ✓ (`text-fraco`,
+  enviado) ou ✓✓ (`text-marca-texto`, visto). Recado com `pedidoId`: link `#AAAA-NNNN` no topo do
+  balão para `/pedidos/[id]` (número via `numerosDePedidos`, de `kanban.ts`).
+- Chips de `RESPOSTAS_RAPIDAS`: mandam na hora.
+- Campo: `textarea` que cresce até 4 linhas, `maxLength={TEXTO_MAX}`, contador a partir de 400,
+  Enter envia, Shift+Enter quebra linha. Botão enviar redondo verde (`aria-label="Enviar"`).
+  Se houver `pedidoAnexado`, um chip "#AAAA-NNNN ×" em cima do campo (vai no próximo envio e
+  some). O clipe para escolher pedido fica para a J3.
+- Ao abrir e a cada recado que chega com ela aberta: `marcarLidos(outroId)`. Rola para o fim
+  ao abrir e ao chegar/enviar mensagem.
+
+### 4. Onde abre
+- **Sidebar** (`SidebarContent`): primeiro item do `nav`, um `<button className="sidebar-link">`
+  "Recados" com `MessageCircle` e contador (`bg-superficie text-nice-800` sobre o verde) quando
+  `naoLidas > 0`. Ativo (`bg-nice-500`) enquanto o painel está aberto.
+- **Topbar do celular**: botão só-ícone `MessageCircle` com contador, antes do `BotaoTema`
+  (`aria-label="Recados, N não lidos"`).
+- Tudo só com `permissoes.usarRecados`.
+
+### Teste (Cowork pelo navegador + Felipe)
+- Painel abre e fecha; lista e "Nova conversa" mostram a equipe.
+- **Mensagem de verdade só entre Pedro e o login Nice** (os dois do Pedro): mandar de um, ver
+  chegar no outro sem recarregar, abrir e ver o ✓✓ aparecer no primeiro. Nunca para a produção.
+
+Commit: `feat: recados — painel na sidebar e conversa estilo chat`
 
 ---
 
-## J3 — A conversa  (não executar ainda)
-
-Mockup telas 2 e 6. `src/components/recados/Conversa.tsx`:
-- Cabeçalho: voltar, iniciais, nome, perfil. Separador de dia ("Hoje", "Ontem", dd/MM).
-- Balões: meus à direita (`bg-marca-suave border-marca-borda`), dos outros à esquerda
-  (`bg-superficie border-borda`); hora + ✓ (enviado, `text-fraco`) / ✓✓ (visto, `text-marca-texto`)
-  nos meus. Link do pedido no topo do balão (`#AAAA-NNNN`, abre `/pedidos/[id]`).
-- Respostas prontas (chips) mandam na hora. Campo de texto: Enter envia, Shift+Enter quebra
-  linha, contador quando passar de 400. Botão de clipe para ligar a um pedido (busca por número).
-- Ao abrir a conversa e a cada recado que chega com ela aberta: `marcarLidos(outroId)`.
-- Rola para o fim ao abrir e ao chegar mensagem. Falha ao enviar: o balão fica com
-  "Não enviado — tentar de novo" (nunca some em silêncio — regra 10).
-
-Commit: `feat: conversa de recados estilo chat`
-
----
-
-## J4 — Aviso de chegada + recado a partir do pedido  (não executar ainda)
+## J3 — Aviso de chegada + recado a partir do pedido  (não executar ainda)
 
 Mockup telas 4 e 5.
 - `AvisoRecado.tsx`: chegou recado e a conversa daquela pessoa não está aberta → cartão no canto
   inferior direito (`role="status"`), com "Responder" (abre a conversa) e "Ok" (manda "Ok").
   Some em 8 s ou no X. Vários seguidos: empilha no máximo 3.
-- `/pedidos/[id]`: botão "Mandar recado" no cabeçalho (só com `usarRecados`) → `abrirNova(pedido.id)`;
-  a conversa escolhida abre com o pedido já ligado no campo de texto (removível).
+- Clipe na conversa para ligar um pedido (busca por número, `getPedidosLista`).
+- `/pedidos/[id]`: botão "Mandar recado" no cabeçalho (só com `usarRecados`) → `abrirNova(pedido.id)`.
 
 Commit: `feat: aviso de recado novo e recado a partir do pedido`
 
 ---
 
-## J5 — CHANGELOG.md e CLAUDE.md  (não executar ainda)
+## J4 — CHANGELOG.md e CLAUDE.md  (não executar ainda)
 
-O texto será escrito aqui pelo Cowork depois da J4.
+O texto será escrito aqui pelo Cowork depois da J3.
 
 ---
 

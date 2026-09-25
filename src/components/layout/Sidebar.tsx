@@ -4,12 +4,13 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
   LayoutDashboard, ClipboardList, PlusCircle,
-  Factory, Users, Users2, BarChart3, Menu, X, Table2, Settings, LogOut,
+  Factory, Users, Users2, BarChart3, Menu, MessageCircle, X, Table2, Settings, LogOut,
   KanbanSquare, PackageCheck
 } from 'lucide-react'
 import clsx from 'clsx'
 import { LogoNiceN } from '@/components/LogoNiceN'
 import { useMembro } from '@/components/AuthProvider'
+import { useRecados } from '@/components/recados/RecadosProvider'
 import BotaoTema from '@/components/BotaoTema'
 import { PERFIL_LABEL, podeAcessarRota } from '@/lib/permissoes'
 
@@ -33,7 +34,8 @@ const NAV = [
 ]
 
 function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
-  const { membro, sair } = useMembro()
+  const { membro, permissoes, sair } = useMembro()
+  const { naoLidas, aberto, abrir } = useRecados()
 
   // O menu esconde o que o perfil não pode abrir. Quem decide é a mesma função
   // que o middleware usa, então menu e bloqueio nunca divergem.
@@ -58,6 +60,26 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {permissoes.usarRecados && (
+          <button
+            onClick={() => { abrir(); onNavigate?.() }}
+            className={clsx(
+              'sidebar-link w-full',
+              aberto ? 'bg-nice-500 text-white shadow-sm' : 'text-nice-200 hover:bg-nice-700 hover:text-white'
+            )}
+          >
+            <MessageCircle className="w-4 h-4 shrink-0" />
+            <span className="flex-1 text-left">Recados</span>
+            {naoLidas > 0 && (
+              // Tons FIXOS da escala nice-*, não variável de superfície: a sidebar é
+              // verde nos dois temas, e --superficie escurece no escuro — bolinha e
+              // número ficariam ambos escuros, quase invisíveis.
+              <span className="bg-nice-50 text-nice-800 text-[11px] font-bold rounded-full min-w-5 h-5 px-1 flex items-center justify-center shrink-0">
+                {naoLidas}
+              </span>
+            )}
+          </button>
+        )}
         {itens.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (
@@ -107,6 +129,8 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
 export default function Sidebar() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const { permissoes } = useMembro()
+  const { naoLidas, abrir } = useRecados()
 
   return (
     <>
@@ -119,6 +143,20 @@ export default function Sidebar() {
           <div className="text-white font-bold text-sm">Nice Confecções</div>
         </div>
         <div className="flex items-center gap-1 -mr-2">
+          {permissoes.usarRecados && (
+            <button
+              onClick={abrir}
+              aria-label={naoLidas > 0 ? `Recados, ${naoLidas} não lidos` : 'Recados'}
+              className="relative text-white p-2"
+            >
+              <MessageCircle className="w-5 h-5" />
+              {naoLidas > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-nice-50 text-nice-800 text-[10px] font-bold rounded-full min-w-4 h-4 px-1 flex items-center justify-center">
+                  {naoLidas}
+                </span>
+              )}
+            </button>
+          )}
           <BotaoTema variante="icone" />
           <button onClick={() => setOpen(true)} aria-label="Abrir menu" className="text-white p-2">
             <Menu className="w-6 h-6" />
