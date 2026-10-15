@@ -52,6 +52,12 @@ Todo módulo novo segue este padrão — não invente componentes ou cores fora 
 - **Responsivo:** sidebar fixa a partir de `md:`; no mobile vira topbar + drawer
   (`src/components/layout/Sidebar.tsx`). Elementos de navegação levam `print:hidden`.
 
+**Skills de design (impeccable, taste-skill) não mudam a identidade.** Elas servem
+para auditar e polir hierarquia, espaçamento, estados vazios/erro, acessibilidade e
+textos. Paleta, fonte, sidebar e as classes de globals.css continuam valendo: nenhuma
+cor literal, nenhum componente novo fora do padrão, contraste WCAG AA. A taste-skill
+não é usada nas telas do sistema, só em site/landing page.
+
 ## Tema claro/escuro — leia antes de escrever qualquer cor
 
 **Nunca escreva cor literal numa tela.** `bg-white`, `text-gray-500`, `border-gray-100` não
