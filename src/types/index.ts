@@ -435,3 +435,49 @@ export interface PrestadorServico {
   /** Nunca excluído pela tela — só desativado. Some dos seletores, fica no histórico. */
   ativo: boolean
 }
+
+// ---------------------------------------------------------------------------
+// Almoxarifado (migration 019, Fase K)
+// ---------------------------------------------------------------------------
+
+export type CategoriaMaterial = 'malha' | 'tecido_plano' | 'aviamento' | 'estamparia' | 'embalagem' | 'outro'
+export type UnidadeMaterial = 'kg' | 'm' | 'un' | 'cone' | 'rolo' | 'l'
+export type TipoMovimento = 'entrada' | 'saida' | 'devolucao' | 'ajuste'
+
+/**
+ * Tecido, aviamento ou insumo — o total por tecido + cor, sem rolo nem lote.
+ * `saldo` é DERIVADO dos movimentos (regra K-1): a aplicação nunca o grava.
+ */
+export interface Material {
+  id: string
+  nome: string
+  cor: string            // '' = sem cor
+  categoria: CategoriaMaterial
+  unidade: UnidadeMaterial
+  saldo: number
+  estoqueMinimo: number | null
+  local: string | null
+  custoUnitario: number | null
+  observacoes: string | null
+  /** Nunca excluído pela tela — só desativado (regra K-3). */
+  ativo: boolean
+  updatedAt: string
+}
+
+/** Uma entrada, saída, devolução ou ajuste. Imutável (regra K-2). */
+export interface MovimentoEstoque {
+  id: string
+  materialId: string
+  material?: Pick<Material, 'nome' | 'cor' | 'unidade'>
+  tipo: TipoMovimento
+  quantidade: number     // com sinal, como está no banco
+  saldoDepois: number | null
+  pedidoId: string | null
+  numeroPedido?: string | null
+  fornecedor: string | null
+  notaFiscal: string | null
+  custoUnitario: number | null
+  observacao: string | null
+  feitoPor: string | null   // nome, via join em equipe
+  criadoEm: string
+}

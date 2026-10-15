@@ -5,7 +5,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, ClipboardList, PlusCircle,
   Factory, Users, Users2, BarChart3, Menu, MessageCircle, X, Table2, Settings, LogOut,
-  KanbanSquare, PackageCheck
+  KanbanSquare, PackageCheck, Warehouse
 } from 'lucide-react'
 import clsx from 'clsx'
 import { LogoNiceN } from '@/components/LogoNiceN'
@@ -25,6 +25,9 @@ const NAV = [
   // gestor/recepcionista — mesma regra de quem pode mudar status de pedido
   // (src/lib/permissoes.ts). Não está em LEITURA_PRODUCAO.rotas de propósito.
   { href: '/entregas',       label: 'Entregas',         icon: PackageCheck },
+  // Estoque de malha e tecido (Fase K). Gestão e corte — o corte está em
+  // CORTE.rotas (permissoes.ts), o resto da produção não vê.
+  { href: '/almoxarifado',   label: 'Almoxarifado',     icon: Warehouse },
   // Módulo separado da Produção: aqui são tarefas livres, lá é o progresso real
   // dos pedidos pelos 8 setores.
   { href: '/quadros',        label: 'Quadros',          icon: KanbanSquare },

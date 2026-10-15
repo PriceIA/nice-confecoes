@@ -145,6 +145,24 @@ type Permissoes = {
    * leem) é regra de RLS, não desta permissão.
    */
   usarRecados: boolean
+  /**
+   * Almoxarifado (Fase K): cadastrar e editar material — só isso. Só gestão.
+   *
+   * No banco, as policies de insert/update em `materiais` aceitam só gestor e
+   * recepcionista (migration 019) — isto aqui é a mesma regra na interface.
+   */
+  editarAlmoxarifado: boolean
+  /**
+   * Almoxarifado (Fase K): movimentar o estoque — dar entrada de compra,
+   * fechar corte (saída + sobra) e ajustar.
+   *
+   * Separado de `editarAlmoxarifado` porque o Marquinhos (corte) recebe a
+   * compra, lança a sobra e corrige o estoque, mas não cadastra material
+   * (respostas do Pedro, 15/10/2026). No banco, `estoque_mov_insert`
+   * (migration 020) aceita gestor, recepcionista e corte, e o trigger
+   * descarta o custo gravado pelo corte — ele não vê nem grava preço.
+   */
+  movimentarEstoque: boolean
 }
 
 /** Gestor: tudo, inclusive decidir sobre a exceção de pagamento. */
@@ -163,6 +181,8 @@ const ACESSO_TOTAL: Permissoes = {
   excluirTerceirizada: true,
   responderEntrega: true,
   usarRecados: true,
+  editarAlmoxarifado: true,
+  movimentarEstoque: true,
 }
 
 /**
@@ -204,6 +224,22 @@ const LEITURA_PRODUCAO: Permissoes = {
   excluirTerceirizada: false,
   responderEntrega: false,
   usarRecados: true,
+  editarAlmoxarifado: false,
+  movimentarEstoque: false,
+}
+
+/**
+ * Corte: o mesmo acesso do resto da produção, MAIS o almoxarifado (Fase K) —
+ * vê o estoque, dá entrada, fecha corte e ajusta, mas não cadastra nem edita
+ * material e não vê R$ (`verFinanceiro` continua `false`, herdado). É o
+ * primeiro perfil de produção a divergir de `LEITURA_PRODUCAO`, o caso
+ * previsto no comentário acima.
+ */
+const CORTE: Permissoes = {
+  ...LEITURA_PRODUCAO,
+  rotas: [...(LEITURA_PRODUCAO.rotas as string[]), '/almoxarifado'],
+  movimentarEstoque: true,
+  editarAlmoxarifado: false,
 }
 
 export const PERMISSOES: Record<Perfil, Permissoes> = {
@@ -213,7 +249,7 @@ export const PERMISSOES: Record<Perfil, Permissoes> = {
   recepcionista: RECEPCIONISTA,
 
   designer: LEITURA_PRODUCAO,
-  corte: LEITURA_PRODUCAO,
+  corte: CORTE,
   costureira: LEITURA_PRODUCAO,
   estamparia_serigrafia: LEITURA_PRODUCAO,
   estamparia_sublimacao: LEITURA_PRODUCAO,
