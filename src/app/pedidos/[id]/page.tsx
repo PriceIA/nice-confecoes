@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { ArrowLeft, Printer, ChevronRight, Pencil, Save, X, PlusCircle, Trash2, Hourglass } from 'lucide-react'
+import { ArrowLeft, Printer, ChevronRight, Pencil, Save, X, PlusCircle, Trash2, Hourglass, MessageCircle } from 'lucide-react'
 import { getPedidoById, atualizarPedido } from '@/lib/store'
 import { carregarEtapas, etapasDoPedido } from '@/lib/etapas'
 import { STATUS_CONFIG, COMPLEXIDADE_CONFIG, SETOR_LABELS, PERSONALIZACOES, totalPecas, CATALOGO, calcularComplexidade, formatarData } from '@/lib/helpers'
@@ -22,6 +22,7 @@ import CartaoEntrega from '@/components/entrega/CartaoEntrega'
 import { pedidoConcluido } from '@/lib/kanban-ui'
 import { estaAguardando } from '@/lib/aguardandoCliente'
 import { useMembro } from '@/components/AuthProvider'
+import { useRecados } from '@/components/recados/RecadosProvider'
 import clsx from 'clsx'
 import Link from 'next/link'
 
@@ -125,6 +126,7 @@ export default function DetalhePedidoPage() {
   const { id } = useParams()
   const router = useRouter()
   const { membro, permissoes } = useMembro()
+  const { abrirNova } = useRecados()
   const [pedido, setPedido] = useState<Pedido | null>(null)
 
   const [editando, setEditando] = useState(false)
@@ -419,6 +421,16 @@ export default function DetalhePedidoPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {permissoes.usarRecados && (
+            <button
+              onClick={() => abrirNova(pedido.id)}
+              aria-label="Mandar recado sobre este pedido"
+              className="btn-secondary"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span className="hidden sm:inline">Mandar recado</span>
+            </button>
+          )}
           {!editando && permissoes.editarPedido && (
             <button onClick={iniciarEdicao} className="btn-secondary">
               <Pencil className="w-4 h-4" /> Editar Pedido

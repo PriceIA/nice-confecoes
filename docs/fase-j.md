@@ -3,8 +3,8 @@
 **Spec escrita em 25/09/2026 pelo Claude (Cowork), com as respostas do Pedro.** Mockup:
 artifact "Recados — mockup" (6 telas).
 
-> **ETAPA ATUAL: commit da J1 → J2.** Uma etapa por vez. Terminou a J2? Registre em
-> `docs/fase-j-registro.md` e pare, sem commitar a J2.
+> **ETAPA ATUAL: J3.** J0, J1 e J2 feitas e commitadas. Uma etapa por vez. Terminou a J3?
+> Registre em `docs/fase-j-registro.md` e pare, sem commitar a J3.
 >
 > **Este arquivo é só do Cowork. O Claude Code NÃO edita `docs/fase-j.md`** — e ao commitar,
 > commite o arquivo **como está no disco**, sem regravar a partir de cópia antiga. Não rode
@@ -171,7 +171,7 @@ Commit (depois que o Felipe rodar e conferir):
 
 ---
 
-## J1 — Tipos + `src/lib/recados.ts` + permissão (sem tela)  — aprovada pelo Cowork; falta o commit
+## J1 — Tipos + `src/lib/recados.ts` + permissão (sem tela)  — feita (`cf6459c`)
 
 - `src/types/index.ts`: `Recado { id, remetenteId, destinatarioId, texto, pedidoId: string | null,
   criadoEm, lidoEm: string | null }` e `Conversa { outro: MembroEquipe, ultima: Recado,
@@ -198,7 +198,7 @@ Teste: `tsc`. Nenhuma tela muda. Commit: `feat: acesso a dados dos recados`
 
 ---
 
-## J2 — Painel de recados + conversa  ← ATUAL (depois do commit da J1)
+## J2 — Painel de recados + conversa  — feita (`ba88089`), testada ao vivo Pedro ↔ Nice
 
 Painel e conversa entram juntos: um sem o outro não dá para testar. Mockup telas 1, 2, 3 e 6.
 Arquivos novos em `src/components/recados/`.
@@ -261,16 +261,109 @@ Commit: `feat: recados — painel na sidebar e conversa estilo chat`
 
 ---
 
-## J3 — Aviso de chegada + recado a partir do pedido  (não executar ainda)
+## J3 — Aviso de chegada + clipe + recado a partir do pedido  ← ATUAL
 
-Mockup telas 4 e 5.
-- `AvisoRecado.tsx`: chegou recado e a conversa daquela pessoa não está aberta → cartão no canto
-  inferior direito (`role="status"`), com "Responder" (abre a conversa) e "Ok" (manda "Ok").
-  Some em 8 s ou no X. Vários seguidos: empilha no máximo 3.
-- Clipe na conversa para ligar um pedido (busca por número, `getPedidosLista`).
-- `/pedidos/[id]`: botão "Mandar recado" no cabeçalho (só com `usarRecados`) → `abrirNova(pedido.id)`.
+Mockup telas 2 (clipe), 4 (aviso) e 5 (pedido). Nada de migration: é só tela.
 
-Commit: `feat: aviso de recado novo e recado a partir do pedido`
+### 0. Acessibilidade que ficou da J2 (fazer primeiro, é pequeno)
+- `Conversa.tsx` e a lista do `PainelRecados.tsx`: o ✓ / ✓✓ ganha `aria-hidden="true"` e,
+  ao lado, `<span className="sr-only">enviado</span>` / `<span className="sr-only">visto</span>`.
+  Balão `pendente: 'enviando'` → sr-only "enviando".
+
+### 1. `src/components/recados/AvisoRecado.tsx` — o cartão de "chegou recado"
+- **Quando aparece:** no `aoInserir` do `RecadosProvider`, **só para recado que chegou pelo
+  Realtime** (nunca para os não lidos carregados ao abrir a página ou no `visibilitychange`),
+  e só se a conversa daquela pessoa **não** estiver aberta (mesma condição que hoje decide o
+  `marcarConversaLida`, invertida).
+- **Onde:** renderizado pelo `RecadosProvider` (ao lado do `<PainelRecados />`), `fixed`
+  no canto inferior direito (`bottom-4 right-4`, largura ~340px); no celular ocupa a largura
+  com `left-4 right-4`. Acima do conteúdo, abaixo de modais (`z-40`, conferir com os modais
+  existentes). Cores só por token (`bg-superficie`, borda e textos semânticos, detalhe
+  `nice-*`), igual ao painel.
+- **Conteúdo:** iniciais + nome de quem mandou, prévia do texto (1–2 linhas, `line-clamp-2`),
+  "Pedido #xxxx" se vier ligado a pedido (reusar `numerosDePedidos`), e três controles:
+  - **Responder** → `abrirConversa(remetenteId)` e fecha o cartão.
+  - **Ok** → manda "Ok" para essa pessoa **sem abrir o painel**, marca a conversa dela como
+    lida e fecha o cartão. Precisa de uma função nova no contexto, p.ex.
+    `responderRapido(destinatarioId, texto)`, que reaproveita `enviarPara` (balão otimista +
+    erro) — `enviar` atual depende de `conversaCom`, não serve.
+  - **X** (`aria-label="Fechar aviso"`) → só fecha.
+- **Tempo:** some sozinho em 8 s; o tempo **pausa** enquanto o mouse está em cima ou o foco
+  está dentro do cartão.
+- **Vários:** no máximo 3 empilhados, o mais novo embaixo (perto do canto); chegou o 4º, sai o
+  mais antigo. Se a **mesma pessoa** manda de novo com o cartão dela aberto, **troca** o cartão
+  dela (texto novo, reinicia os 8 s) em vez de empilhar outro.
+- **Some também** quando a pessoa abre aquela conversa por outro caminho (painel).
+- **Leitor de tela:** o contêiner da pilha é `role="status"` + `aria-live="polite"`. **Não
+  roubar foco** — o cartão aparece, mas o foco fica onde estava.
+- Sem som, sem notificação do navegador (fica para depois, se o Pedro pedir).
+
+### 2. Clipe na conversa — ligar um pedido
+- `Conversa.tsx`: botão `Paperclip` à esquerda do campo de texto (`aria-label="Ligar a um
+  pedido"`, 40px de alvo). Só aparece se o perfil pode abrir `/pedidos` — usar a função de
+  rota que já existe em `permissoes.ts` (a que compara por prefixo), não inventar regra nova.
+- Abre um popover acima do campo: busca (número ou cliente) + lista de até 8 pedidos.
+  Dados: `getPedidosLista({ statusExcluir: ['cancelado', 'entregue'] })` de `store.ts`,
+  carregado **só quando o clipe abre pela primeira vez** (guardar em estado, não recarregar
+  a cada abertura). Cada linha: número + cliente (nome ou empresa).
+- Escolher um pedido → chip do pedido anexado (o mesmo da J2, com "×"). Precisa de
+  `anexarPedido(id)` no contexto (hoje só existe `removerPedidoAnexado`). Um pedido por recado.
+- Esc ou clique fora fecha o popover e devolve o foco ao clipe. Setas + Enter escolhem na
+  lista seria ótimo; no mínimo, cada linha é um `<button>` alcançável por Tab.
+- Sem resultado: "Nenhum pedido encontrado".
+
+### 3. `/pedidos/[id]` — botão "Mandar recado"
+- No cabeçalho da página do pedido, junto das ações que já existem: botão secundário
+  `MessageCircle` + "Mandar recado", só com `permissoes.usarRecados`.
+- Clique → `abrirNova(pedido.id)`: o painel abre em "Nova conversa" e, ao escolher a pessoa,
+  a conversa abre com o chip do pedido já anexado (o `abrirConversa` não limpa
+  `pedidoAnexado` — conferir que continua assim).
+- No celular o botão pode ficar só com o ícone, com `aria-label="Mandar recado sobre este
+  pedido"`.
+
+### 4. Correções achadas no teste do Cowork (25/09, 21:20–21:47) — fazer antes de commitar
+
+**4a. Realtime não entrega nada (bug desde a J2 — o mais importante).** O teste mostrou que o
+recado **nunca** chega ao vivo: o contador só subia quando a página voltava a ficar visível
+(o recarregamento do `visibilitychange`). Por isso o cartão de aviso nunca aparece. No Supabase,
+`realtime.subscription` mostra as assinaturas do sistema (`destinatario_id=eq…` /
+`remetente_id=eq…`) com papel **`anon`**: o canal entra antes do token da sessão estar no
+cliente de Realtime, e a policy `recados_select` é `to authenticated` — então o banco descarta
+todo evento em silêncio.
+- Correção em `assinarRecados` (`src/lib/recados.ts`): antes de `.subscribe()`, pegar a sessão
+  (`await supabase.auth.getSession()`) e chamar `supabase.realtime.setAuth(session.access_token)`.
+  Como vira assíncrono, a função continua devolvendo a limpeza **na hora**: usar uma flag
+  `cancelado` e, se a limpeza rodar antes do canal existir, não criar o canal (ou removê-lo
+  assim que for criado). Sem sessão → não assina.
+- Conferir no `.subscribe((status, err) => …)`: em `CHANNEL_ERROR`/`TIMED_OUT`, `console.warn`
+  com o motivo (só log, sem banner). Token renovado depois: o supabase-js já repassa ao
+  Realtime no `TOKEN_REFRESHED` — conferir que a versão instalada faz isso; se não fizer, um
+  `onAuthStateChange` que chama `setAuth` de novo.
+- Conferência (Felipe roda depois, no SQL Editor): as assinaturas novas de `public.recados`
+  devem aparecer com `claims_role = authenticated`.
+
+**4b. Esc do clipe fecha o painel inteiro.** Com o popover do clipe aberto, Esc fecha o popover
+**e** a gaveta (os dois escutam `keydown` no `window`). Correção: em `ClipePedido`, registrar o
+`keydown` em fase de captura (`addEventListener('keydown', fn, true)`) e, no Esc,
+`e.preventDefault()` antes de fechar; em `PainelRecados`, só fechar se `!e.defaultPrevented`.
+
+**4c. Região do aviso sempre montada.** `AvisoRecado` hoje devolve `null` sem avisos — a região
+`role="status"` some da página e o leitor de tela pode não anunciar o primeiro cartão. Deixar o
+contêiner `role="status" aria-live="polite"` sempre renderizado (vazio quando não há aviso;
+sem padding/altura, para não bloquear clique na tela).
+
+### Teste (Cowork pelo navegador + Felipe)
+- **Recado de verdade só entre Pedro e o login Nice.** Nunca para outras pessoas.
+- Com o Nice numa página qualquer e o painel fechado: Pedro manda → cartão aparece no Nice;
+  "Ok" responde sem abrir o painel e o Pedro recebe; "Responder" abre a conversa certa.
+- Três recados seguidos do Pedro → um cartão só (troca), não três.
+- Recarregar a página com não lidos → **nenhum** cartão (só o contador).
+- Pedro abre um pedido, "Mandar recado" → escolhe Nice → chip do pedido → envia → no Nice o
+  balão tem o link "Pedido #xxxx" que abre o pedido certo.
+- Clipe: buscar por número e por cliente, anexar, remover com "×", Esc fecha.
+- `tsc` limpo; build só com o dev parado.
+
+Commit (só depois da revisão do Cowork): `feat: aviso de recado novo e recado a partir do pedido`
 
 ---
 

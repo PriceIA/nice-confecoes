@@ -1,8 +1,6 @@
 'use client'
 // A conversa em si (Fase J), dentro da gaveta de Recados: cabeçalho, balões,
-// respostas prontas e o campo de escrever. O clipe para ligar um pedido pelo
-// número fica para a J3 — aqui só existe o chip de leitura de um pedido já
-// anexado (vindo de `abrirNova(pedidoId)`, ainda sem tela que o dispare).
+// respostas prontas, o clipe pra ligar um pedido e o campo de escrever.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -11,9 +9,10 @@ import { ArrowLeft, Check, CheckCheck, RotateCw, Send, X } from 'lucide-react'
 import { useMembro } from '@/components/AuthProvider'
 import { useRecados } from './RecadosProvider'
 import { iniciaisDe, rotuloDia } from './formatacao'
+import ClipePedido from './ClipePedido'
 import { RESPOSTAS_RAPIDAS, TEXTO_MAX } from '@/lib/recados'
 import { numerosDePedidos } from '@/lib/kanban'
-import { PERFIL_LABEL } from '@/lib/permissoes'
+import { PERFIL_LABEL, podeAcessarRota } from '@/lib/permissoes'
 
 /** Altura máxima do textarea — cerca de 4 linhas de texto-sm mais padding. */
 const ALTURA_MAX_TEXTAREA = 112
@@ -21,8 +20,10 @@ const ALTURA_MAX_TEXTAREA = 112
 export default function Conversa() {
   const { membro } = useMembro()
   const {
-    equipe, conversaCom, recadosCom, pedidoAnexado, enviar, reenviar, removerPedidoAnexado, abrir, fechar,
+    equipe, conversaCom, recadosCom, pedidoAnexado, enviar, reenviar,
+    removerPedidoAnexado, anexarPedido, abrir, fechar,
   } = useRecados()
+  const podeLigarPedido = membro ? podeAcessarRota(membro.perfil, '/pedidos') : false
 
   const outro = equipe.find(m => m.id === conversaCom)
   const recados = useMemo(() => (conversaCom ? recadosCom(conversaCom) : []), [conversaCom, recadosCom])
@@ -135,12 +136,23 @@ export default function Conversa() {
                   <div className="flex items-center justify-end gap-1 mt-1">
                     <span className="text-[11px] text-fraco">{format(new Date(r.criadoEm), 'HH:mm')}</span>
                     {minha && r.pendente === 'enviando' && (
-                      <span className="text-[11px] text-fraco">enviando…</span>
+                      <span className="text-[11px] text-fraco">
+                        <span aria-hidden="true">enviando…</span>
+                        <span className="sr-only">enviando</span>
+                      </span>
                     )}
                     {minha && !r.pendente && (
-                      r.lidoEm
-                        ? <CheckCheck className="w-3.5 h-3.5 text-marca-texto shrink-0" />
-                        : <Check className="w-3.5 h-3.5 text-fraco shrink-0" />
+                      r.lidoEm ? (
+                        <>
+                          <CheckCheck aria-hidden="true" className="w-3.5 h-3.5 text-marca-texto shrink-0" />
+                          <span className="sr-only">visto</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check aria-hidden="true" className="w-3.5 h-3.5 text-fraco shrink-0" />
+                          <span className="sr-only">enviado</span>
+                        </>
+                      )
                     )}
                   </div>
                   {minha && r.pendente === 'erro' && (
@@ -180,6 +192,7 @@ export default function Conversa() {
         </div>
 
         <div className="flex items-end gap-2">
+          {podeLigarPedido && <ClipePedido onEscolher={anexarPedido} />}
           <textarea
             ref={areaRef}
             value={texto}

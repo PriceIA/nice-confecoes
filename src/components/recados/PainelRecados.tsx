@@ -19,7 +19,10 @@ export default function PainelRecados() {
   useEffect(() => {
     if (!aberto) return
     function aoTeclar(e: KeyboardEvent) {
-      if (e.key === 'Escape') fechar()
+      // `ClipePedido` escuta Esc em fase de CAPTURA e faz `preventDefault()`
+      // pra fechar só o popover — sem checar isso aqui, o mesmo Esc também
+      // fecharia a gaveta inteira (achado no teste da J3, item 4b).
+      if (e.key === 'Escape' && !e.defaultPrevented) fechar()
     }
     window.addEventListener('keydown', aoTeclar)
     return () => window.removeEventListener('keydown', aoTeclar)
@@ -115,9 +118,17 @@ export default function PainelRecados() {
                             </div>
                             <div className="flex items-center gap-1 text-sm text-suave">
                               {minhaUltima && (
-                                c.ultima.lidoEm
-                                  ? <CheckCheck className="w-3.5 h-3.5 text-marca-texto shrink-0" />
-                                  : <Check className="w-3.5 h-3.5 text-fraco shrink-0" />
+                                c.ultima.lidoEm ? (
+                                  <>
+                                    <CheckCheck aria-hidden="true" className="w-3.5 h-3.5 text-marca-texto shrink-0" />
+                                    <span className="sr-only">visto</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check aria-hidden="true" className="w-3.5 h-3.5 text-fraco shrink-0" />
+                                    <span className="sr-only">enviado</span>
+                                  </>
+                                )
                               )}
                               <span className="truncate">
                                 {minhaUltima ? 'Você: ' : ''}{c.ultima.texto}

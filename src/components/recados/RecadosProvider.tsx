@@ -23,6 +23,10 @@ import {
 } from '@/lib/recados'
 import type { Conversa, MembroEquipe, Recado } from '@/types'
 import PainelRecados from './PainelRecados'
+import AvisoRecado from './AvisoRecado'
+
+/** Cartões avisando "chegou recado", um por pessoa — no máximo 3 (Fase J3). */
+const MAX_AVISOS = 3
 
 /** Um recado como ele existe no client: igual ao do banco, mais o estado de
  * envio otimista. `pendente` só existe enquanto o recado ainda não foi
@@ -41,6 +45,8 @@ type RecadosCtx = {
   tela: TelaRecados
   conversaCom: string | null
   pedidoAnexado: string | null
+  /** Cartões de "chegou recado" ainda visíveis, um por pessoa (Fase J3). */
+  avisos: Recado[]
   abrir: () => void
   abrirConversa: (id: string) => void
   abrirNova: (pedidoId?: string) => void
@@ -48,6 +54,11 @@ type RecadosCtx = {
   enviar: (texto: string) => void
   reenviar: (idTemporario: string) => void
   removerPedidoAnexado: () => void
+  anexarPedido: (pedidoId: string) => void
+  /** Fecha o cartão de aviso daquela pessoa (X, ou depois de "Ok"/"Responder"). */
+  fecharAviso: (remetenteId: string) => void
+  /** Manda uma resposta rápida (ex.: "Ok") sem abrir o painel — usado pelo cartão de aviso. */
+  responderRapido: (destinatarioId: string, texto: string) => void
 }
 
 const valorPadrao: RecadosCtx = {
@@ -60,6 +71,7 @@ const valorPadrao: RecadosCtx = {
   tela: 'lista',
   conversaCom: null,
   pedidoAnexado: null,
+  avisos: [],
   abrir: () => {},
   abrirConversa: () => {},
   abrirNova: () => {},
@@ -67,6 +79,9 @@ const valorPadrao: RecadosCtx = {
   enviar: () => {},
   reenviar: () => {},
   removerPedidoAnexado: () => {},
+  anexarPedido: () => {},
+  fecharAviso: () => {},
+  responderRapido: () => {},
 }
 
 const Contexto = createContext<RecadosCtx>(valorPadrao)
@@ -89,6 +104,7 @@ export default function RecadosProvider({ children }: { children: React.ReactNod
   const [tela, setTela] = useState<TelaRecados>('lista')
   const [conversaCom, setConversaCom] = useState<string | null>(null)
   const [pedidoAnexado, setPedidoAnexado] = useState<string | null>(null)
+  const [avisos, setAvisos] = useState<Recado[]>([])
 
   // Lidos pela callback do Realtime, que é montada uma vez (não pode fechar
   // sobre estado desatualizado) — por isso refs em vez de ler `aberto`/`tela`/
@@ -153,6 +169,17 @@ export default function RecadosProvider({ children }: { children: React.ReactNod
     }
   }, [meuId, usarRecados])
 
+  // Um cartão de aviso por pessoa: chegou recado novo dela, substitui o que já
+  // tinha (texto e prazo dos 8s se renovam) em vez de empilhar outro. Corta
+  // pelo mais antigo além de MAX_AVISOS.
+  const adicionarAviso = useCallback((recado: Recado) => {
+    setAvisos(prev => [...prev.filter(a => a.remetenteId !== recado.remetenteId), recado].slice(-MAX_AVISOS))
+  }, [])
+
+  const fecharAviso = useCallback((remetenteId: string) => {
+    setAvisos(prev => prev.filter(a => a.remetenteId !== remetenteId))
+  }, [])
+
   // Realtime: um canal só, criado uma vez por sessão (não a cada troca de tela).
   useEffect(() => {
     if (!meuId || !usarRecados) return
@@ -160,8 +187,14 @@ export default function RecadosProvider({ children }: { children: React.ReactNod
     const parar = assinarRecados(meuId, {
       aoInserir(novo) {
         setRecados(prev => (prev.some(r => r.id === novo.id) ? prev : [...prev, novo]))
-        if (abertoRef.current && telaRef.current === 'conversa' && conversaComRef.current === novo.remetenteId) {
+        const conversaAberta =
+          abertoRef.current && telaRef.current === 'conversa' && conversaComRef.current === novo.remetenteId
+        if (conversaAberta) {
           marcarConversaLida(novo.remetenteId)
+        } else {
+          // Só recado que chegou AGORA pelo Realtime ganha aviso — o que já
+          // veio de `getMeusRecados` no carregamento inicial não passa por aqui.
+          adicionarAviso(novo)
         }
       },
       aoAtualizar(atualizado) {
@@ -170,7 +203,7 @@ export default function RecadosProvider({ children }: { children: React.ReactNod
     })
 
     return parar
-  }, [meuId, usarRecados, marcarConversaLida])
+  }, [meuId, usarRecados, marcarConversaLida, adicionarAviso])
 
   const naoLidas = useMemo(
     () => recados.filter(r => r.destinatarioId === meuId && r.lidoEm === null).length,
@@ -209,7 +242,10 @@ export default function RecadosProvider({ children }: { children: React.ReactNod
     setConversaCom(id)
     setAberto(true)
     marcarConversaLida(id)
-  }, [marcarConversaLida])
+    // Abrir a conversa por qualquer caminho (painel, "Responder" do aviso, o
+    // botão do pedido) fecha o cartão de aviso daquela pessoa, se houver.
+    fecharAviso(id)
+  }, [marcarConversaLida, fecharAviso])
 
   const abrirNova = useCallback((pedidoId?: string) => {
     setTela('nova')
@@ -221,6 +257,8 @@ export default function RecadosProvider({ children }: { children: React.ReactNod
   const fechar = useCallback(() => setAberto(false), [])
 
   const removerPedidoAnexado = useCallback(() => setPedidoAnexado(null), [])
+
+  const anexarPedido = useCallback((pedidoId: string) => setPedidoAnexado(pedidoId), [])
 
   const enviarPara = useCallback(async (destinatarioId: string, texto: string, pedidoId: string | null, idTemp: string) => {
     try {
@@ -258,6 +296,27 @@ export default function RecadosProvider({ children }: { children: React.ReactNod
     enviarPara(item.destinatarioId, item.texto, item.pedidoId, idTemp)
   }, [recados, enviarPara])
 
+  // Resposta rápida do cartão de aviso ("Ok"): manda sem abrir o painel, e sem
+  // depender de `conversaCom` — que só existe quando a conversa está aberta.
+  const responderRapido = useCallback((destinatarioId: string, texto: string) => {
+    if (!meuId) return
+    const idTemp = idTemporario()
+    const otimista: RecadoLocal = {
+      id: idTemp,
+      remetenteId: meuId,
+      destinatarioId,
+      texto: texto.trim(),
+      pedidoId: null,
+      criadoEm: new Date().toISOString(),
+      lidoEm: null,
+      pendente: 'enviando',
+    }
+    setRecados(prev => [...prev, otimista])
+    enviarPara(destinatarioId, texto, null, idTemp)
+    marcarConversaLida(destinatarioId)
+    fecharAviso(destinatarioId)
+  }, [meuId, enviarPara, marcarConversaLida, fecharAviso])
+
   const valor = useMemo<RecadosCtx>(() => ({
     usarRecados,
     naoLidas,
@@ -268,6 +327,7 @@ export default function RecadosProvider({ children }: { children: React.ReactNod
     tela,
     conversaCom,
     pedidoAnexado,
+    avisos,
     abrir,
     abrirConversa,
     abrirNova,
@@ -275,15 +335,20 @@ export default function RecadosProvider({ children }: { children: React.ReactNod
     enviar,
     reenviar,
     removerPedidoAnexado,
+    anexarPedido,
+    fecharAviso,
+    responderRapido,
   }), [
     usarRecados, naoLidas, conversas, recadosCom, equipe, aberto, tela, conversaCom,
-    pedidoAnexado, abrir, abrirConversa, abrirNova, fechar, enviar, reenviar, removerPedidoAnexado,
+    pedidoAnexado, avisos, abrir, abrirConversa, abrirNova, fechar, enviar, reenviar,
+    removerPedidoAnexado, anexarPedido, fecharAviso, responderRapido,
   ])
 
   return (
     <Contexto.Provider value={valor}>
       {children}
       <PainelRecados />
+      <AvisoRecado />
     </Contexto.Provider>
   )
 }

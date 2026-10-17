@@ -8,6 +8,31 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Fase J3 — aviso de recado novo e recado a partir do pedido
+
+Sessão de 16/10/2026. Spec em `docs/fase-j.md` (Claude do Cowork), registro em
+`docs/fase-j-registro.md` (Claude Code). Sem migration nova. As etapas anteriores da Fase J
+já estão em commits próprios: tabela `recados` (migrations 018/018b) `17f853c`, acesso a
+dados `cf6459c`, painel e conversa `ba88089`.
+
+**Adicionado:**
+- `src/components/recados/AvisoRecado.tsx`: cartão no canto quando chega recado com o painel
+  fechado. Some em 8 s, pausa com mouse em cima ou foco, um cartão só por remetente (recado
+  novo troca o texto). Botões "Ok" (responde e marca lido sem abrir o painel), "Responder"
+  (abre a conversa) e X (fecha só o cartão, sem marcar lido). Não aparece para recado que já
+  estava não lido ao carregar, nem com a conversa daquele remetente aberta.
+- `src/components/recados/ClipePedido.tsx`: clipe na conversa para anexar um pedido ao
+  recado, com busca por número ou cliente. O balão mostra o link para o pedido.
+- `/pedidos/[id]`: botão "Mandar recado", que abre uma conversa nova já com o pedido anexado.
+
+**Corrigido (durante o teste):**
+- O Realtime assinava como `anon` e nunca entregava recado ao vivo. `assinarRecados`
+  (`src/lib/recados.ts`) agora chama `realtime.setAuth(token)` antes do `.subscribe()` e
+  registra no console quando a assinatura falha.
+- Esc no clipe fechava a gaveta inteira; agora fecha só o popover.
+- A região `role="status"` do aviso fica sempre montada, para o leitor de tela anunciar o
+  primeiro recado.
+
 ### Fase I — "Aguardando o cliente" + correção de fuso nas datas
 
 Sessão de 23/09/2026. Spec em `docs/fase-i.md` (Claude do Cowork), registro em
