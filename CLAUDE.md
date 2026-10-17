@@ -32,6 +32,10 @@ A consequência é séria e vale para toda sessão:
 - Vale igual para `/producao` e para o Kanban — marcar setor num pedido real muda o pedido
   real, e ainda grava o seu nome em `atualizadoPor`.
 - Não existe "desfazer". A única reversão é outra edição manual.
+- **Teste pelo navegador (MCP chrome-devtools):** o login é sempre feito pelo Felipe, à mão.
+  O Claude Code nunca digita senha. Pode navegar, ler, filtrar e tirar screenshot à vontade.
+  Ação que grava no banco só no que a spec da fase autorizar (ex.: recados entre Pedro e
+  Nice, o material "TESTE — não usar"). Nada de criar pedido, cliente ou preço de teste.
 
 ## Identidade visual
 
