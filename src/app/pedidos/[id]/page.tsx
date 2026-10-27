@@ -233,10 +233,10 @@ export default function DetalhePedidoPage() {
         observacoes: editDados.observacoes,
         vetorizacao: editVetorizacao,
         parcelas: editParcelas,
-        // Regra 4: havendo parcelas, elas mandam no total e no pago, e enviar
-        // esses dois campos junto só criaria conflito. Sem parcelas, o total
-        // vem das peças e o pago é digitado à mão.
-        ...(temParcelas ? {} : { valorTotal: totalDasPecas(), valorPago: editDados.valorPago }),
+        // Regra 4 (revista): o total é o valor das peças + vetorização; o pago
+        // vem das parcelas pagas quando elas existem, ou é digitado à mão.
+        valorTotal: totalDasPecas(),
+        ...(temParcelas ? {} : { valorPago: editDados.valorPago }),
       })
       setEditando(false)
       carregar()
@@ -612,8 +612,9 @@ export default function DetalhePedidoPage() {
                     </div>
                   ))}
                   <p className="text-xs text-fraco">
-                    Havendo parcelas, elas são a fonte da verdade: total R$ {editParcelas.reduce((a, p) => a + (p.valor || 0), 0).toFixed(2)}
-                    {' · '}pago R$ {editParcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0).toFixed(2)}.
+                    Total do pedido R$ {Math.max(totalDasPecas(), editParcelas.reduce((a, p) => a + (p.valor || 0), 0)).toFixed(2)}
+                    {' · '}pago R$ {editParcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0).toFixed(2)}
+                    {' · '}falta R$ {Math.max(0, Math.max(totalDasPecas(), editParcelas.reduce((a, p) => a + (p.valor || 0), 0)) - editParcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)).toFixed(2)}.
                   </p>
                 </div>
               )}
@@ -771,6 +772,21 @@ export default function DetalhePedidoPage() {
                 </div>
               )
             })}
+            <button type="button" className="btn-secondary text-sm"
+              onClick={() => setEditPecas(prev => [...prev, {
+                id: crypto.randomUUID(),
+                categoria: 'Empresarial',
+                tipo: 'Camiseta PV',
+                cor: '',
+                tamanhos: [{ tamanho: 'M', quantidade: 1 }],
+                personalizacoes: [],
+                corPersonalizacao: '',
+                complexidade: 'P1',
+                observacoes: '',
+                fotos: [],
+              }])}>
+              <PlusCircle className="w-4 h-4" /> Adicionar peça
+            </button>
           </div>
 
           {erroSalvar && (

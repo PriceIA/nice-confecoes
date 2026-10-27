@@ -8,6 +8,56 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Valores do pedido (27/10/2026)
+- Novo pedido: o resumo mostra "Falta para acertar" (total − pago).
+- Pedido: total não vira mais a soma das parcelas (regra 4 revista); a edição mostra total, pago e falta.
+- Edição do pedido: botão "Adicionar peça", que recalcula o total ao salvar.
+- Pendente: "Preço atacado e varejo" (aguarda esclarecimento do Pedro).
+
+
+### Fase K (K3–K5) — Almoxarifado: Entrada, Fechar corte e Movimentações
+
+Sessão de 26–27/10/2026. Spec em `docs/fase-k.md`. Sem migration nova (a 019 e a 020 já tinham
+sido rodadas pelo Felipe). Commit de produção `a57290e`; a K0–K2 está em `cd2c4f9`.
+
+**O problema:** o Pedro reportou que o almoxarifado não funcionava. No GitHub só existia a
+K0–K2 (estoque, cadastro e detalhe do material). Os botões "Registrar entrada" e "Fechar corte"
+e as abas apontavam para `/almoxarifado/entrada`, `/corte` e `/movimentacoes`, que **não
+existiam** e caíam na página `[id]`, que tentava abrir um material chamado "entrada".
+
+**Adicionado:**
+- `/almoxarifado/entrada` (K3): compra recebida num único insert. Fornecedor (com sugestão dos
+  já usados), nota fiscal, pedido opcional, itens com material/quantidade/custo e resumo
+  "saldo atual → saldo depois". Custo e subtotal só para `verFinanceiro`. Mesmo material em
+  duas linhas é recusado. Se gravar falhar, o formulário NÃO é limpo.
+- `/almoxarifado/corte` (K4): feita para o celular. Escolhendo o pedido, vem uma linha por
+  material comprado para ele, com "Usou do estoque" pré-preenchido (comprado − já saiu) e
+  "Sobrou". Gera `saida` (usou) e `devolucao` (sobra) num insert só. Aviso amarelo quando o
+  saldo vai ficar negativo (não bloqueia). Sem pedido, a observação é obrigatória.
+- `/almoxarifado/movimentacoes` (K5): lista paginada (50), filtros de tipo, período (7 dias /
+  este mês / mês passado / tudo) e busca; cards de totais por tipo SEPARADOS POR UNIDADE;
+  atalho "Sobras da semana" com resumo por material; exportar CSV de todas as páginas do filtro
+  (custo só com `verFinanceiro`).
+- "Ajustar estoque" no detalhe do material (`AjustarModal`): "quanto tem na prateleira agora?",
+  motivo (Contagem / Saldo inicial / Perda / Outro) e movimento `ajuste` com a diferença. É por
+  aqui que se lança o saldo inicial.
+- `SeletorPedido` (busca por número ou cliente, só pedidos ativos, só leitura) e, em
+  `almoxarifado.ts`: `getFornecedores`, `getTodosMovimentos`, `somarPorUnidade`,
+  `textoSomaPorUnidade`.
+- Aviso verde "Entrada registrada: N itens" / "Corte fechado: …" ao voltar para o estoque
+  (`guardarAviso`/`lerAviso` em `components/almoxarifado/ui.tsx`, via `sessionStorage`).
+
+**Corrigido (durante o teste):**
+- O aviso de sucesso não aparecia: no modo de desenvolvimento o React roda o efeito duas vezes
+  e a segunda leitura (já vazia) apagava o aviso. Agora só grava se houver texto.
+
+**Teste (27/10/2026, no banco de produção, material `TESTE — não usar`, depois desativado):**
+entrada de 10 kg → 10; corte do mesmo pedido com Usou 10 e Sobrou 2 → 2; Usou 20 com 2 no
+sistema → aviso e saldo −18 com selo "Negativo — conferir"; ajuste para 0 → +18 com o nome de
+quem fez; totais de Movimentações conferidos. Testado também com o login do Marquinhos (corte).
+Ficaram 6 movimentos no histórico do material de teste (movimento não se apaga, regra K-2).
+Exportar CSV não foi testado por quem fez o teste automático.
+
 ### Fase J3 — aviso de recado novo e recado a partir do pedido
 
 Sessão de 16/10/2026. Spec em `docs/fase-j.md` (Claude do Cowork), registro em

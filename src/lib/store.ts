@@ -122,8 +122,13 @@ function mapCliente(row: any): Cliente {
  */
 function calcularValores(row: any): { valorTotal: number; valorPago: number } {
   const parcelas: Parcela[] = row.parcelas ?? []
+  // O total é o valor do pedido (peças + vetorização), gravado em valor_total.
+  // As parcelas dizem quanto já foi combinado/pago, não o quanto o pedido vale:
+  // uma entrada de 50% não pode virar o total. Se as parcelas somarem mais que
+  // o gravado, prevalece a soma delas.
+  const somaParcelas = parcelas.reduce((a: number, p: Parcela) => a + (p.valor || 0), 0)
   const valorTotal = parcelas.length > 0
-    ? parcelas.reduce((a: number, p: Parcela) => a + (p.valor || 0), 0)
+    ? Math.max(Number(row.valor_total) || 0, somaParcelas)
     : Number(row.valor_total) || 0
   const valorPago = parcelas.length > 0
     ? parcelas.filter((p: Parcela) => p.pago).reduce((a: number, p: Parcela) => a + (p.valor || 0), 0)
@@ -306,7 +311,7 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
 
   const parcelas = dados.parcelas ?? []
   const vTotal = parcelas.length > 0
-    ? parcelas.reduce((a, p) => a + (p.valor || 0), 0)
+    ? Math.max(dados.valorTotal ?? 0, parcelas.reduce((a, p) => a + (p.valor || 0), 0))
     : dados.valorTotal
   const vPago = parcelas.length > 0
     ? parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
@@ -319,7 +324,7 @@ export async function criarPedido(dados: Omit<Pedido, 'id' | 'numero' | 'dataEnt
     tipo: dados.tipo,
     status: dados.status,
     data_entrega: dados.dataEntrega,
-    valor_total: dados.valorTotal ?? vTotal,
+    valor_total: vTotal,
     valor_pago: vPago,
     observacoes: dados.observacoes,
     pecas: dados.pecas,
@@ -384,7 +389,9 @@ export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promi
   // a última parcela zerava valor_total e valor_pago do pedido em silêncio.
   const temParcelas = dados.parcelas !== undefined && dados.parcelas.length > 0
   if (temParcelas) {
-    update.valor_total = dados.parcelas!.reduce((a, p) => a + (p.valor || 0), 0)
+    const somaParcelas = dados.parcelas!.reduce((a, p) => a + (p.valor || 0), 0)
+    // O total vem das peças quando a tela o manda; as parcelas só o superam se somarem mais.
+    update.valor_total = Math.max(dados.valorTotal ?? 0, somaParcelas)
     update.valor_pago = dados.parcelas!.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
   } else {
     if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal

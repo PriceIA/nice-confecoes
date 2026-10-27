@@ -359,7 +359,7 @@ export default function NovoPedidoPage() {
   const totalGeral = totalPecas + (vetorizacao.necessaria ? vetorizacao.valor : 0)
   const totalParcelas = parcelas.reduce((a, p) => a + (p.valor || 0), 0)
   const totalPago = parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
-  const saldo = totalParcelas - totalPago
+  const saldo = Math.max(0, Math.max(totalGeral, totalParcelas) - totalPago)
   const consultorFinal = consultor === 'Outro' ? consultorCustom : consultor
 
   async function handleSubmit() {
@@ -886,7 +886,7 @@ export default function NovoPedidoPage() {
                   </div>
                   {saldo > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-suave">Saldo</span>
+                      <span className="text-suave">Falta para acertar</span>
                       <span className="font-semibold text-orange-600">R$ {saldo.toFixed(2)}</span>
                     </div>
                   )}

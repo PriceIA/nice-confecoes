@@ -142,6 +142,11 @@ Todas as páginas são `'use client'`, exceto onde indicado.
 | `/quadros/[id]` | `src/app/quadros/[id]/page.tsx` + `components/kanban/QuadroBoard.tsx` | O quadro: listas lado a lado, cartões, drag-and-drop |
 | `/terceirizadas` | `src/app/terceirizadas/page.tsx` | Envios, retornos e pagamentos de parceiros. Lançamento editável em todos os campos; excluir só o gestor (`excluirTerceirizada`). Seção **Prestadores**: cadastro com serviços e valor por prestador — o lançamento passa a escolher prestador + serviço num seletor (com "outro/avulso" pra não travar ninguém), que preenche quantidade × valor unitário automaticamente |
 | `/relatorios` | `src/app/relatorios/page.tsx` | Fechamento mensal: receita, unidades, complexidade, "Aguardando o cliente" (agora + histórico do mês) e Exportar CSV |
+| `/almoxarifado` | `src/app/almoxarifado/page.tsx` | Estoque de malha (kg) e tecido plano (m): cards de resumo, busca, filtros (guardados em `localStorage`), situação por material (`negativo` / `abaixo` / `ok`), cadastro. Aviso de sucesso vindo de Entrada/Corte. Gestor, recepcionista e **corte** (Fase K) |
+| `/almoxarifado/[id]` | `src/app/almoxarifado/[id]/page.tsx` | Detalhe do material: saldo, mínimo, movimentos paginados, **Ajustar estoque** (`movimentarEstoque`), editar/desativar (`editarAlmoxarifado`) |
+| `/almoxarifado/entrada` | `src/app/almoxarifado/entrada/page.tsx` | Compra recebida (K3): fornecedor, NF, pedido opcional, itens. Custo só para `verFinanceiro` |
+| `/almoxarifado/corte` | `src/app/almoxarifado/corte/page.tsx` | Fechar corte (K4), celular primeiro: o corte informa **o que usou** e **o que sobrou**, nunca pesa o que pega |
+| `/almoxarifado/movimentacoes` | `src/app/almoxarifado/movimentacoes/page.tsx` | Histórico (K5): filtros, totais por unidade, "Sobras da semana" e CSV |
 | `/configuracoes` | `src/app/configuracoes/page.tsx` | **Etapas de produção** — criar, renomear, reordenar, ativar/desativar; esta seção **vai para o banco** (`etapas_producao`). O catálogo de peças e personalizações, logo abaixo, continua gravando **só em `localStorage`**: não vai para o banco nem é compartilhado entre dispositivos. Peça registrada pelo `/novo-pedido` NÃO passa por aqui: vai para `tabela_precos` |
 | `/login` | `src/app/login/page.tsx` + `LoginForm.tsx` | Única rota pública. Usuário curto + senha; o e-mail é montado como `usuario@niceconfec.app` |
 | `/perfil` | `src/app/perfil/page.tsx` | Mostra nome e perfil do usuário logado e permite trocar a própria senha. Aberta a todos os perfis |
@@ -237,6 +242,15 @@ Código compartilhado:
   (migration 015, Fase D2.1): `getPrestadores`/`criarPrestador`/`atualizarPrestador` e
   `getServicos`/`criarServico`/`atualizarServico`. Nunca oferece excluir — só `ativo`.
   Consumido só por `/terceirizadas` (`components/terceirizadas/PrestadorModal.tsx`)
+- `src/lib/almoxarifado.ts` — materiais e movimentos de estoque (Fase K). **Client autenticado**,
+  função por função. `registrarMovimentos` grava VÁRIOS movimentos num único insert (ou entram
+  todos, ou nenhum) e aplica o sinal da quantidade (regra 14). `situacaoMaterial` é a ÚNICA regra
+  de "negativo / abaixo do mínimo / ok" — lista, detalhe e cards usam ela. `getMaterialDoPedido`
+  alimenta o pré-preenchimento do Fechar corte. `somarPorUnidade`/`textoSomaPorUnidade`: **nunca
+  some kg com m**. `CATEGORIAS_ATIVAS` = só `malha` e `tecido_plano` (as outras categorias existem
+  no banco, mas a tela ainda não as oferece)
+- `src/components/almoxarifado/` — `ui.tsx` (abas, badges, `lerNumero` pt-BR, aviso de sucesso),
+  `MaterialModal`, `AjustarModal`, `SeletorPedido`. O mesmo modal serve à lista e ao detalhe
 - `src/types/index.ts` — todos os tipos do domínio
 - `src/components/FotoUpload.tsx` — upload de arte por peça: imagem (com lightbox) ou PDF
   (abre em outra aba). O campo continua se chamando `fotos` por compatibilidade com o JSONB
@@ -271,7 +285,7 @@ dá **zero linhas em silêncio**.
 | Client | Onde | Sessão? | Usado por | Tabelas |
 |---|---|---|---|---|
 | Anônimo | `src/lib/supabase.ts` | **Não** | só `uploadFotoPeca` (`store.ts`), Storage de `pedido-fotos` | nenhuma tabela — só o bucket |
-| Autenticado | `src/lib/supabase/client.ts` (`@supabase/ssr`, cookies) | Sim | `store.ts`, `/tabela-precos`, `src/lib/kanban.ts`, auth | `pedidos`, `clientes`, `terceirizadas`, `tabela_precos`, `quadros`, `listas`, `cards` — todas **com RLS** |
+| Autenticado | `src/lib/supabase/client.ts` (`@supabase/ssr`, cookies) | Sim | `store.ts`, `/tabela-precos`, `src/lib/kanban.ts`, auth | `pedidos`, `clientes`, `terceirizadas`, `tabela_precos`, `quadros`, `listas`, `cards`, `materiais`, `estoque_movimentos` — todas **com RLS** |
 
 `store.ts` segue o padrão de `kanban.ts`: cada função exportada cria seu próprio
 `criarClienteBrowser()` localmente, em vez de um singleton no topo do arquivo.
@@ -288,7 +302,7 @@ liberadas pro `anon`).
 
 ## Modelo de dados
 
-Dez tabelas + um bucket de Storage. Schema versionado em `supabase/migrations/`.
+As tabelas abaixo (desde a Fase K, inclui `materiais` e `estoque_movimentos`; a tabela `recados` da Fase J ainda não está descrita aqui) + um bucket de Storage. Schema versionado em `supabase/migrations/`.
 
 ### `pedidos`
 
@@ -521,6 +535,31 @@ autenticado **sem** linha em `equipe` não entra: é devolvido para `/login`.
 Os valores de `perfil` estão espelhados em `Perfil` (`src/lib/permissoes.ts`) — ao mexer no
 CHECK, mexa no tipo junto.
 
+### `materiais` e `estoque_movimentos` — Almoxarifado (migrations 019 e 020, Fase K)
+
+```
+materiais            id uuid pk · nome · cor (''= sem cor) · categoria · unidade ('kg'|'m'|…)
+                     · saldo numeric · estoque_minimo · local · custo_unitario (último custo)
+                     · observacoes · ativo bool · created_at · updated_at
+                     · único (nome, cor)
+estoque_movimentos   id uuid pk · material_id fk→materiais · tipo ('entrada'|'saida'|'devolucao'|'ajuste')
+                     · quantidade numeric (COM SINAL) · saldo_depois · pedido_id fk→pedidos (opcional)
+                     · fornecedor · nota_fiscal · custo_unitario · observacao
+                     · feito_por fk→equipe · criado_em
+```
+
+- **`devolucao` aparece na tela como "Sobra".** Não é devolução ao fornecedor: é o tecido que
+  sobrou do corte e volta para a prateleira.
+- **`saldo` é derivado** pelo trigger `estoque_aplicar_movimento`; o trigger também preenche
+  `saldo_depois` e `feito_por`, e **apaga o custo** de movimento gravado pelo perfil `corte`
+  (migration 020). `materiais_guard` recusa `UPDATE` direto em `saldo` vindo do app.
+- **Não existe policy de update/delete em `estoque_movimentos`**: movimento não se edita nem se
+  apaga. RLS: select para qualquer perfil com linha em `equipe`; insert para gestor,
+  recepcionista e corte; `materiais` só gestor/recepcionista escrevem.
+- **`verFinanceiro` no almoxarifado é interface + trigger:** o corte não vê custo na tela e o
+  banco descarta o custo que ele mandar. Mas `materiais.custo_unitario` ainda trafega para o
+  navegador dele (mesma limitação de `pedidos`, ver Fase B2).
+
 ### Storage
 
 Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **pública**
@@ -534,7 +573,7 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
 - Os arquivos de migration têm **prefixos duplicados**: existem dois `002_` e dois `004_`.
   `004_pedido_imagem.sql` e `004_vetorizacao.sql` criam a mesma coluna `vetorizacao`
   (ambos com `if not exists`, então é idempotente, mas confuso). Já foram usadas até a
-  `017_` (Fase I). Numere a próxima a partir de `018_`. **Atenção:** a `016_cards_visibilidade.sql`
+  `020_` (Fase K; a 018 é dos recados, a 019/020 do almoxarifado). Numere a próxima a partir de `021_`. **Atenção:** a `016_cards_visibilidade.sql`
   rodou em 29/08 mas o arquivo não está em `supabase/migrations/` — recuperar se possível.
 - Colunas órfãs, criadas por migration e **não usadas em nenhum lugar do código**:
   `pedidos.imagem` e `clientes.responsavel_empresa`. Não assuma que estão populadas.
@@ -562,14 +601,12 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
 3. **Número do pedido é `AAAA-NNNN`**, sequencial derivado do `count` da tabela
    (`store.ts:73-79`). Duas criações simultâneas podem gerar o mesmo número — não há
    unique constraint.
-4. **HAVENDO parcelas, elas são a fonte da verdade.** `valor_total` e `valor_pago` passam a
-   ser derivados da soma das parcelas (`atualizarPedido` e `mapPedido` em `store.ts`),
-   ignorando o que vier nos campos avulsos.
-
-   O "havendo" é literal e vale nos dois sentidos: `parcelas = []` significa **não há
-   parcelas**, não "as parcelas somam zero". Até a Fase C2 a escrita não distinguia os dois
-   casos, e apagar a última parcela pela edição do pedido zerava `valor_total`/`valor_pago`
-   em silêncio. A leitura sempre esteve certa; foi a escrita que ganhou o `length > 0`.
+4. **O total é o valor do pedido; as parcelas dizem quanto foi pago** (revista em 27/10/2026,
+   pedido do Pedro). `valor_total` = peças + vetorização, gravado pela criação e pela edição.
+   Havendo parcelas, `valorTotal` = o MAIOR entre `valor_total` e a soma das parcelas, e
+   `valorPago` = soma das parcelas pagas (`calcularValores`, `store.ts`). **Falta para acertar =
+   total − pago.** Antes, a soma das parcelas virava o total, e uma entrada de 50% fazia
+   total = pago. `parcelas = []` continua significando "não há parcelas".
 5. **Prazo padrão de entrega = 25 dias úteis** a partir de hoje
    (`calcularDataEntrega`, `store.ts:325`).
 6. **Complexidade P1–P5 é calculada, não escolhida.** Derivada do tipo da peça + número de
@@ -695,6 +732,23 @@ Bucket **`pedido-fotos`**, caminho `{pecaId}/{uuid}.{ext}`, servido por URL **p�
       ("Ainda aguardando?"), ou só a partir de `previsaoRetirada` se o cliente combinou um dia.
     - **Dias parado** contam desde o que vier depois: prazo ou dia em que ficou pronto.
     - Quem responde: só gestor e recepcionista (`responderEntrega`; no banco, `pedidos_write`).
+
+14. **Almoxarifado: o saldo é derivado dos movimentos** (Fase K, 27/10/2026).
+    - **K-1.** `materiais.saldo` só muda pelo trigger de `estoque_movimentos`. A tela nunca
+      faz `update` em `saldo`.
+    - **K-2.** **Movimento não se edita nem se apaga.** Correção é um movimento novo do tipo
+      `ajuste`, com o nome de quem fez. Por isso, teste em produção só no material
+      `TESTE — não usar`, que depois é desativado.
+    - **K-3.** Material nunca é excluído pela tela, só desativado (`ativo = false`).
+    - **K-4.** O sinal da quantidade é fixo por tipo: entrada e devolução > 0, saída < 0,
+      ajuste ≠ 0. A tela sempre pede o número **positivo** e `registrarMovimentos` aplica o
+      sinal (ajuste é a exceção: já vem com sinal). Vale no banco (`estoque_movimentos_sinal`).
+    - **Saldo pode ficar negativo.** Saiu mais do que o sistema tinha: o fato aconteceu, então o
+      banco aceita e a tela marca "Negativo — conferir". Bloquear obrigaria a mentir na quantidade.
+    - **O corte informa a sobra, não a retirada.** A compra é "contada" e ligada ao pedido na
+      Entrada; no Fechar corte ele só diz o que usou e o que sobrou (≥ 80 cm). Mesma regra 10:
+      se gravar falhar, o formulário não é limpo.
+    - **Malha em kg, tecido plano em metro** (decisão do Pedro). Cada material tem a sua unidade.
 
 ## Convenções de trabalho
 
