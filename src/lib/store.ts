@@ -1,4 +1,4 @@
-import { Cliente, EntradaProgresso, Parcela, Pedido, PedidoLista, Progresso, StatusPedido, StatusSetor, Terceirizada } from '@/types'
+import { Cliente, EntradaProgresso, Parcela, Peca, Pedido, PedidoLista, Progresso, StatusPedido, StatusSetor, Terceirizada } from '@/types'
 import { addBusinessDays, format } from 'date-fns'
 import { supabase } from './supabase'
 import { criarClienteBrowser } from './supabase/client'
@@ -127,8 +127,13 @@ function calcularValores(row: any): { valorTotal: number; valorPago: number } {
   // uma entrada de 50% não pode virar o total. Se as parcelas somarem mais que
   // o gravado, prevalece a soma delas.
   const somaParcelas = parcelas.reduce((a: number, p: Parcela) => a + (p.valor || 0), 0)
+  // Pedido antigo pode ter o valor_total gravado como a soma das parcelas (o
+  // bug da regra 4 antiga): a soma das peças + vetorização o corrige na leitura.
+  const somaPecas = ((row.pecas ?? []) as Peca[]).reduce((a: number, pc: Peca) =>
+    a + (pc.valorUnitario ?? 0) * (pc.tamanhos ?? []).reduce((q, t) => q + (t.quantidade || 0), 0), 0)
+  const vetor = row.vetorizacao?.necessaria ? Number(row.vetorizacao.valor) || 0 : 0
   const valorTotal = parcelas.length > 0
-    ? Math.max(Number(row.valor_total) || 0, somaParcelas)
+    ? Math.max(Number(row.valor_total) || 0, somaParcelas, somaPecas + vetor)
     : Number(row.valor_total) || 0
   const valorPago = parcelas.length > 0
     ? parcelas.filter((p: Parcela) => p.pago).reduce((a: number, p: Parcela) => a + (p.valor || 0), 0)
@@ -257,7 +262,7 @@ export async function getPedidosLista(opts?: {
   let query = supabase
     .from('pedidos')
     .select(`
-      id, numero, consultor, tipo, status, pecas, parcelas,
+      id, numero, consultor, tipo, status, pecas, parcelas, vetorizacao,
       data_entrada, data_entrega, progresso, valor_total, valor_pago,
       tabela_preco, excecao_pagamento, aguardando_cliente,
       clientes ( nome, empresa, telefone )

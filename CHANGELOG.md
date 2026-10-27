@@ -10,7 +10,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ### Valores do pedido (27/10/2026)
 - Novo pedido: o resumo mostra "Falta para acertar" (total − pago).
-- Pedido: total não vira mais a soma das parcelas (regra 4 revista); a edição mostra total, pago e falta.
+- Pedido: total não vira mais a soma das parcelas (regra 4 revista; pedido antigo é corrigido na leitura pela soma das peças + vetorização); a edição mostra total, pago e falta.
 - Edição do pedido: botão "Adicionar peça", que recalcula o total ao salvar.
 - Pendente: "Preço atacado e varejo" (aguarda esclarecimento do Pedro).
 
