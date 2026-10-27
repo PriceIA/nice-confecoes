@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { format } from 'date-fns'
-import { AlertTriangle, ArrowLeft, Pencil, Power, RotateCcw, MapPin } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Pencil, Power, RotateCcw, MapPin, SlidersHorizontal } from 'lucide-react'
 import clsx from 'clsx'
 import { useMembro } from '@/components/AuthProvider'
 import {
@@ -15,6 +15,7 @@ import { useSkeletonDelay } from '@/lib/hooks'
 import EsqueletoBarra from '@/components/EsqueletoBarra'
 import Modal from '@/components/kanban/Modal'
 import MaterialModal from '@/components/almoxarifado/MaterialModal'
+import AjustarModal from '@/components/almoxarifado/AjustarModal'
 import { AbasAlmoxarifado, BadgeSituacao, BadgeTipo } from '@/components/almoxarifado/ui'
 import type { Material, MovimentoEstoque, UnidadeMaterial } from '@/types'
 
@@ -65,6 +66,7 @@ export default function MaterialDetalhePage() {
   const mostrarSkeletonMov = useSkeletonDelay(carregandoMov)
 
   const [editando, setEditando] = useState(false)
+  const [ajustando, setAjustando] = useState(false)
   const [confirmarDesativar, setConfirmarDesativar] = useState(false)
   const [salvandoAtivo, setSalvandoAtivo] = useState(false)
   const [erroAtivo, setErroAtivo] = useState<string | null>(null)
@@ -182,8 +184,14 @@ export default function MaterialDetalhePage() {
               </span>
             </div>
           </div>
-          {permissoes.editarAlmoxarifado && (
+          {(permissoes.editarAlmoxarifado || permissoes.movimentarEstoque) && (
             <div className="flex flex-wrap gap-2 shrink-0">
+              {permissoes.movimentarEstoque && material.ativo && (
+                <button type="button" onClick={() => setAjustando(true)} className="btn-primary">
+                  <SlidersHorizontal className="w-4 h-4" aria-hidden="true" /> Ajustar estoque
+                </button>
+              )}
+              {permissoes.editarAlmoxarifado && (<>
               <button type="button" onClick={() => setEditando(true)} className="btn-secondary">
                 <Pencil className="w-4 h-4" aria-hidden="true" /> Editar
               </button>
@@ -196,6 +204,7 @@ export default function MaterialDetalhePage() {
                   <RotateCcw className="w-4 h-4" aria-hidden="true" /> {salvandoAtivo ? 'Reativando…' : 'Reativar'}
                 </button>
               )}
+              </>)}
             </div>
           )}
         </div>
@@ -363,6 +372,13 @@ export default function MaterialDetalhePage() {
           </>
         )}
       </section>
+
+      <AjustarModal
+        aberto={ajustando}
+        material={material}
+        onFechar={() => setAjustando(false)}
+        onSalvo={() => { setAjustando(false); carregarMaterial(); setPagina(1); carregarMovimentos(1) }}
+      />
 
       <MaterialModal
         aberto={editando}

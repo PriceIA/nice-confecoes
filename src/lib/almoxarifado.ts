@@ -451,3 +451,73 @@ export async function getMaterialDoPedido(pedidoId: string): Promise<MaterialDoP
   }
   return Array.from(porMaterial.values())
 }
+
+// ---------------------------------------------------------------------------
+// Fase K3–K5: apoio das telas de Entrada, Corte e Movimentações
+// ---------------------------------------------------------------------------
+
+/**
+ * Fornecedores já usados nas entradas (sugestão do campo "Fornecedor" na K3).
+ * Sem `distinct` no PostgREST: busca os mais recentes e tira o repetido aqui.
+ */
+export async function getFornecedores(): Promise<string[]> {
+  const supabase = criarClienteBrowser()
+  const { data, error } = await supabase
+    .from('estoque_movimentos')
+    .select('fornecedor')
+    .not('fornecedor', 'is', null)
+    .order('criado_em', { ascending: false })
+    .limit(500)
+  if (error) throw error
+  const vistos = new Set<string>()
+  for (const r of (data ?? []) as any[]) {
+    const f = String(r.fornecedor ?? '').trim()
+    if (f) vistos.add(f)
+  }
+  return Array.from(vistos).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+}
+
+/**
+ * TODOS os movimentos de um filtro, não só a página — é o que o CSV e os cards
+ * de total da K5 precisam. Busca em blocos de 1000 (o teto do PostgREST).
+ */
+export async function getTodosMovimentos(
+  filtro: Omit<FiltroMovimentos, 'pagina' | 'porPagina'> = {},
+): Promise<MovimentoEstoque[]> {
+  const BLOCO = 1000
+  const todos: MovimentoEstoque[] = []
+  for (let pagina = 1; ; pagina++) {
+    const { movimentos, total } = await getMovimentos({ ...filtro, pagina, porPagina: BLOCO })
+    todos.push(...movimentos)
+    if (todos.length >= total || movimentos.length < BLOCO) break
+  }
+  return todos
+}
+
+/** Soma por unidade: nunca mistura kg com m. Ex.: { kg: 1240, m: 85 }. */
+export function somarPorUnidade(
+  movimentos: Pick<MovimentoEstoque, 'quantidade' | 'material'>[],
+): Partial<Record<UnidadeMaterial, number>> {
+  const soma: Partial<Record<UnidadeMaterial, number>> = {}
+  for (const m of movimentos) {
+    const un = m.material?.unidade
+    if (!un) continue
+    soma[un] = (soma[un] ?? 0) + m.quantidade
+  }
+  return soma
+}
+
+/** "+1.240 kg · +85 m" (com sinal) ou "—" quando vazio. */
+export function textoSomaPorUnidade(
+  soma: Partial<Record<UnidadeMaterial, number>>,
+  comSinal = true,
+): string {
+  const partes = (Object.keys(soma) as UnidadeMaterial[])
+    .filter(un => soma[un] !== undefined && soma[un] !== 0)
+    .map(un => {
+      const v = soma[un] as number
+      const sinal = comSinal && v > 0 ? '+' : ''
+      return `${sinal}${formatarQuantidade(v, un)}`
+    })
+  return partes.length ? partes.join(' · ') : '—'
+}

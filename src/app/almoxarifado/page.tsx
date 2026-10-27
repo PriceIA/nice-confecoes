@@ -16,7 +16,7 @@ import { classificarErro, sufixoCodigo } from '@/lib/erros'
 import { useSkeletonDelay } from '@/lib/hooks'
 import EsqueletoBarra from '@/components/EsqueletoBarra'
 import MaterialModal from '@/components/almoxarifado/MaterialModal'
-import { AbasAlmoxarifado, BadgeSituacao } from '@/components/almoxarifado/ui'
+import { AbasAlmoxarifado, BadgeSituacao, lerAviso } from '@/components/almoxarifado/ui'
 import type { CategoriaMaterial, Material } from '@/types'
 
 const PREFS_CHAVE = 'nice-filtros-almoxarifado'
@@ -57,6 +57,15 @@ export default function AlmoxarifadoPage() {
   const [mostrarDesativados, setMostrarDesativados] = useState(false)
 
   const [modalAberto, setModalAberto] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
+
+  // Aviso deixado por Entrada/Corte ao voltar para cá. Lê e apaga: aparece uma vez.
+  // `if (a)`: no modo de desenvolvimento o React roda o efeito duas vezes, e a
+  // segunda leitura (já vazia) apagaria o aviso que a primeira acabou de mostrar.
+  useEffect(() => {
+    const a = lerAviso()
+    if (a) setAviso(a)
+  }, [])
 
   const carregar = useCallback(async () => {
     setErro(null)
@@ -172,6 +181,13 @@ export default function AlmoxarifadoPage() {
       </div>
 
       <AbasAlmoxarifado />
+
+      {aviso && (
+        <div role="status" className="card border-green-200 bg-green-50 flex items-start gap-3 py-3">
+          <p className="text-sm text-green-800 flex-1">{aviso}</p>
+          <button type="button" onClick={() => setAviso(null)} className="text-green-800 text-xs font-semibold hover:underline shrink-0">fechar</button>
+        </div>
+      )}
 
       {erro && (
         <div role="alert" className="card border-red-200 bg-red-50 flex items-start gap-3 py-3">

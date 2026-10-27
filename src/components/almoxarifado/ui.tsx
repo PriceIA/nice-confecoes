@@ -100,3 +100,27 @@ export function lerNumero(texto: string): number | null {
 export function numeroParaCampo(v: number | null): string {
   return v == null ? '' : String(v).replace('.', ',')
 }
+
+// Aviso de "feito" que atravessa a navegação (entrada registrada → volta para
+// o estoque). sessionStorage porque some sozinho ao fechar a aba.
+const CHAVE_AVISO = 'nice-aviso-almoxarifado'
+
+export function guardarAviso(texto: string): void {
+  try { sessionStorage.setItem(CHAVE_AVISO, texto) } catch { /* sem storage: só não mostra o aviso */ }
+}
+
+/** Lê e apaga: o aviso aparece uma vez só. */
+export function lerAviso(): string | null {
+  try {
+    const t = sessionStorage.getItem(CHAVE_AVISO)
+    if (t) sessionStorage.removeItem(CHAVE_AVISO)
+    return t
+  } catch {
+    return null
+  }
+}
+
+/** Nome + cor: "PV · Branco", sem o ponto quando não tem cor. */
+export function nomeMaterial(m: { nome: string; cor?: string | null }): string {
+  return m.cor ? `${m.nome} · ${m.cor}` : m.nome
+}
