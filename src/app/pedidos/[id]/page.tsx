@@ -395,7 +395,10 @@ export default function DetalhePedidoPage() {
 
   const totalParcelas = pedido.parcelas.reduce((a, p) => a + (p.valor || 0), 0)
   const totalPago = pedido.parcelas.filter(p => p.pago).reduce((a, p) => a + (p.valor || 0), 0)
-  const saldo = totalParcelas - totalPago
+  // Total do pedido (peças + vetorização), não a soma das parcelas: a entrada
+  // de 50% não é o total. `valorTotal` já vem como o maior entre os dois.
+  const totalPedido = Math.max(pedido.valorTotal, totalParcelas)
+  const saldo = totalPedido - totalPago
 
   return (
     <>
@@ -995,7 +998,7 @@ export default function DetalhePedidoPage() {
               <div className="border-t pt-3 space-y-1.5 text-sm">
                 <div className="flex justify-between">
                   <span className="text-suave">Total</span>
-                  <span className="font-semibold text-marca-texto num">R$ {totalParcelas.toFixed(2)}</span>
+                  <span className="font-semibold text-marca-texto num">R$ {totalPedido.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-suave">Pago</span>
